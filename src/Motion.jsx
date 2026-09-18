@@ -247,7 +247,11 @@ export function MotionBento() {
             const product = bySlug(slug)
             if (!product) return null
             return (
+              /* O link e a area de hover e fica PARADO; quem levanta e a caixa de
+                 dentro. Se o proprio link subisse, o mouse na beirada de baixo
+                 faria o cartao pular sem parar (perde o hover, desce, ganha...). */
               <a className="bento-card" key={slug} href={productPath(product)}>
+                <div className="bento-card-inner">
                 <div className="bento-art">
                   <Art />
                 </div>
@@ -260,6 +264,7 @@ export function MotionBento() {
                   <em>
                     Ver {product.short.toLowerCase()} <i aria-hidden="true">↗</i>
                   </em>
+                </div>
                 </div>
               </a>
             )

@@ -718,3 +718,14 @@ summary:focus-visible {
   padding: 0 22px 20px;
   line-height: 1.7;
 }
+
+/* Hovers herdados que movem o PROPRIO elemento (translateY): com o mouse na
+   beirada ele sai de sob o cursor e fica pulando. O realce fica por conta da
+   cor e da sombra. */
+.btn:hover,
+.header-cta:hover,
+.pill:hover,
+.yr-ai-launcher:hover,
+.yr-contact-fab:hover {
+  transform: none;
+}

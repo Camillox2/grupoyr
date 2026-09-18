@@ -41,29 +41,44 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   }, [theme])
 
   const toggleTheme = (origin?: { x: number; y: number }) => {
-    const apply = () => setTheme((prev) => (prev === 'light' ? 'dark' : 'light'))
+    const next: Theme = theme === 'light' ? 'dark' : 'light'
+    const root = document.documentElement
+
+    // A classe `dark` e aplicada AQUI, de forma sincrona, e nao so no
+    // useEffect la de cima: efeito passivo nao roda dentro do flushSync, entao
+    // a View Transition tirava o retrato "novo" ainda com as cores antigas e
+    // elas trocavam de supetao no fim. O efeito continua existindo para o
+    // carregamento inicial e para gravar a preferencia.
+    const commit = () => {
+      root.classList.toggle('dark', next === 'dark')
+      flushSync(() => setTheme(next))
+    }
+
+    // Transicoes de cor desligadas enquanto o tema troca (ver index.css).
+    root.classList.add('theme-switching')
+    const release = () => {
+      requestAnimationFrame(() => requestAnimationFrame(() => root.classList.remove('theme-switching')))
+    }
 
     const doc = document as DocumentWithViewTransition
     const reduced = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
 
     // Sem suporte a View Transitions, ou com movimento reduzido: troca seca.
     if (!doc.startViewTransition || reduced) {
-      apply()
+      commit()
+      release()
       return
     }
 
-    const root = document.documentElement
     root.style.setProperty('--sweep-x', `${origin?.x ?? window.innerWidth / 2}px`)
     root.style.setProperty('--sweep-y', `${origin?.y ?? 0}px`)
     root.classList.add('theme-sweep')
 
-    // flushSync e obrigatorio aqui: startViewTransition tira o retrato "novo"
-    // assim que o callback retorna, e o setState do React so seria aplicado no
-    // proximo tick. Sem isso o circulo revela o tema ANTIGO e a troca pisca.
-    const transition = doc.startViewTransition(() => {
-      flushSync(apply)
+    const transition = doc.startViewTransition(commit)
+    transition.finished.finally(() => {
+      root.classList.remove('theme-sweep')
+      release()
     })
-    transition.finished.finally(() => root.classList.remove('theme-sweep'))
   }
 
   return <ThemeContext.Provider value={{ theme, toggleTheme }}>{children}</ThemeContext.Provider>

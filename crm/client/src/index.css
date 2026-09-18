@@ -449,7 +449,6 @@
 .action-btn--primary:hover:not(:disabled) {
   background: var(--yr-700);
   border-color: var(--yr-700);
-  transform: translateY(-1px);
 }
 .action-btn--ghost {
   background: var(--surface-raised);
@@ -477,16 +476,25 @@
   border: 1px solid var(--border-subtle);
   border-radius: 20px;
 }
+/* "Levantar" no hover SEM mover a caixa do cartao.
+   Se o proprio cartao sobe, com o mouse na beirada de baixo ele sai de sob o
+   cursor, perde o hover, desce, ganha o hover de novo... e fica pulando para
+   sempre. Aqui a caixa fica parada (a area de hover nunca muda): quem sobe e
+   o conteudo de dentro, e a sombra cresce. O efeito visual e o mesmo. */
 .card-lift {
   transition:
-    transform var(--dur-moderate) var(--ease-out),
     box-shadow var(--dur-moderate) ease,
     border-color var(--dur-fast) ease;
 }
+.card-lift > * {
+  transition: transform var(--dur-moderate) var(--ease-out);
+}
 .card-lift:hover {
-  transform: translateY(-3px);
   border-color: var(--yr-300);
   box-shadow: 0 26px 46px -30px rgba(16, 42, 76, 0.5);
+}
+.card-lift:hover > * {
+  transform: translateY(-2px);
 }
 
 /* ===========================================================================
@@ -697,22 +705,101 @@
 /* ===========================================================================
    View Transitions: troca de tema em circulo, a partir do proprio botao
    =========================================================================== */
+/* Durante a troca de tema NENHUMA transicao de cor roda. Sem isso o retrato
+   "novo" da View Transition pega os elementos no meio da transicao (ainda com
+   as cores antigas) e, quando a animacao acaba, as cores trocam de supetao. */
+.theme-switching,
+.theme-switching *,
+.theme-switching *::before,
+.theme-switching *::after {
+  transition: none !important;
+}
+
 .theme-sweep::view-transition-old(root) {
   animation: none;
   mix-blend-mode: normal;
   z-index: 1;
 }
+/* Troca de tema: o tema novo SOBE de baixo para cima em pixels.
+   O retrato novo fica por cima do antigo e e revelado por uma mascara de seis
+   camadas: um bloco solido que cresce a partir da base e, acima dele, cinco
+   fileiras de pixels de 16px cada vez mais ralas (dither de Bayer 4x4). A
+   borda anda em degraus (steps), entao ela "pula" de pixel em pixel em vez de
+   deslizar lisa. --theme-edge e a altura ja revelada. */
+@property --theme-edge {
+  syntax: '<length>';
+  inherits: false;
+  initial-value: 0px;
+}
+
 .theme-sweep::view-transition-new(root) {
-  animation: theme-reveal var(--dur-slow) var(--ease-out) both;
   mix-blend-mode: normal;
   z-index: 2;
+  animation: theme-pixels 900ms steps(56, end) both;
+  -webkit-mask-image:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='64' height='64'%3E%3Cpath d='M0 0h16v16h-16zM32 32h16v16h-16z'/%3E%3C/svg%3E"),
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='64' height='64'%3E%3Cpath d='M0 0h16v16h-16zM32 0h16v16h-16zM16 16h16v16h-16zM0 32h16v16h-16zM32 32h16v16h-16z'/%3E%3C/svg%3E"),
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='64' height='64'%3E%3Cpath d='M0 0h16v16h-16zM32 0h16v16h-16zM16 16h16v16h-16zM48 16h16v16h-16zM0 32h16v16h-16zM32 32h16v16h-16zM16 48h16v16h-16zM48 48h16v16h-16z'/%3E%3C/svg%3E"),
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='64' height='64'%3E%3Cpath d='M0 0h16v16h-16zM16 0h16v16h-16zM32 0h16v16h-16zM48 0h16v16h-16zM16 16h16v16h-16zM48 16h16v16h-16zM0 32h16v16h-16zM32 32h16v16h-16zM48 32h16v16h-16zM16 48h16v16h-16zM48 48h16v16h-16z'/%3E%3C/svg%3E"),
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='64' height='64'%3E%3Cpath d='M0 0h16v16h-16zM16 0h16v16h-16zM32 0h16v16h-16zM48 0h16v16h-16zM0 16h16v16h-16zM16 16h16v16h-16zM48 16h16v16h-16zM0 32h16v16h-16zM16 32h16v16h-16zM32 32h16v16h-16zM48 32h16v16h-16zM16 48h16v16h-16zM32 48h16v16h-16zM48 48h16v16h-16z'/%3E%3C/svg%3E"),
+    linear-gradient(#000, #000);
+  mask-image:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='64' height='64'%3E%3Cpath d='M0 0h16v16h-16zM32 32h16v16h-16z'/%3E%3C/svg%3E"),
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='64' height='64'%3E%3Cpath d='M0 0h16v16h-16zM32 0h16v16h-16zM16 16h16v16h-16zM0 32h16v16h-16zM32 32h16v16h-16z'/%3E%3C/svg%3E"),
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='64' height='64'%3E%3Cpath d='M0 0h16v16h-16zM32 0h16v16h-16zM16 16h16v16h-16zM48 16h16v16h-16zM0 32h16v16h-16zM32 32h16v16h-16zM16 48h16v16h-16zM48 48h16v16h-16z'/%3E%3C/svg%3E"),
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='64' height='64'%3E%3Cpath d='M0 0h16v16h-16zM16 0h16v16h-16zM32 0h16v16h-16zM48 0h16v16h-16zM16 16h16v16h-16zM48 16h16v16h-16zM0 32h16v16h-16zM32 32h16v16h-16zM48 32h16v16h-16zM16 48h16v16h-16zM48 48h16v16h-16z'/%3E%3C/svg%3E"),
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='64' height='64'%3E%3Cpath d='M0 0h16v16h-16zM16 0h16v16h-16zM32 0h16v16h-16zM48 0h16v16h-16zM0 16h16v16h-16zM16 16h16v16h-16zM48 16h16v16h-16zM0 32h16v16h-16zM16 32h16v16h-16zM32 32h16v16h-16zM48 32h16v16h-16zM16 48h16v16h-16zM32 48h16v16h-16zM48 48h16v16h-16z'/%3E%3C/svg%3E"),
+    linear-gradient(#000, #000);
+  -webkit-mask-position:
+    0 calc(100vh - var(--theme-edge) - 320px),
+    0 calc(100vh - var(--theme-edge) - 256px),
+    0 calc(100vh - var(--theme-edge) - 192px),
+    0 calc(100vh - var(--theme-edge) - 128px),
+    0 calc(100vh - var(--theme-edge) - 64px),
+    0 100%;
+  mask-position:
+    0 calc(100vh - var(--theme-edge) - 320px),
+    0 calc(100vh - var(--theme-edge) - 256px),
+    0 calc(100vh - var(--theme-edge) - 192px),
+    0 calc(100vh - var(--theme-edge) - 128px),
+    0 calc(100vh - var(--theme-edge) - 64px),
+    0 100%;
+  -webkit-mask-size:
+    64px 64px,
+    64px 64px,
+    64px 64px,
+    64px 64px,
+    64px 64px,
+    100% max(0px, var(--theme-edge));
+  mask-size:
+    64px 64px,
+    64px 64px,
+    64px 64px,
+    64px 64px,
+    64px 64px,
+    100% max(0px, var(--theme-edge));
+  -webkit-mask-repeat:
+    repeat-x,
+    repeat-x,
+    repeat-x,
+    repeat-x,
+    repeat-x,
+    no-repeat;
+  mask-repeat:
+    repeat-x,
+    repeat-x,
+    repeat-x,
+    repeat-x,
+    repeat-x,
+    no-repeat;
 }
-@keyframes theme-reveal {
+
+@keyframes theme-pixels {
   from {
-    clip-path: circle(0% at var(--sweep-x, 50%) var(--sweep-y, 50%));
+    --theme-edge: -336px;
   }
   to {
-    clip-path: circle(150% at var(--sweep-x, 50%) var(--sweep-y, 50%));
+    --theme-edge: calc(100vh + 16px);
   }
 }
 
