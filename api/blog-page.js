@@ -24,11 +24,13 @@ export default async function handler(req,res) {
     const [count]=await sql`SELECT COUNT(*)::int AS total FROM blog_posts WHERE status='published' AND (title ILIKE ${match} OR excerpt ILIKE ${match} OR category ILIKE ${match})`
     if(page>1 && (page-1)*9>=count.total) return notFound(res)
     const posts=await sql`SELECT * FROM blog_posts WHERE status='published' AND (title ILIKE ${match} OR excerpt ILIKE ${match} OR category ILIKE ${match}) ORDER BY published_at DESC,id LIMIT 9 OFFSET ${(page-1)*9}`
-    return res.end(req.method==='HEAD'?'':indexPage(posts,count.total,page,query))
+    // Assuntos para os atalhos do topo. Falhar aqui nao pode derrubar a pagina.
+    const categories=await sql`SELECT category FROM blog_posts WHERE status='published' GROUP BY category ORDER BY COUNT(*) DESC, category LIMIT 8`.then(rows=>rows.map(row=>row.category),()=>[])
+    return res.end(req.method==='HEAD'?'':indexPage(posts,count.total,page,query,categories))
   } catch(error) {
     console.error('Public blog failed',error.code||error.name)
     res.statusCode=503;res.setHeader('Retry-After','60');res.setHeader('X-Robots-Tag','noindex')
-    return res.end(layout({title:'Blog YR — voltamos em instantes',description:'O blog está temporariamente indisponível.',path:'/blog',noindex:true,html:'<section class="empty-state"><h1>Voltamos em instantes.</h1><p>Não foi possível carregar o blog agora. Tente novamente em alguns minutos.</p><a class="pill" href="/">Voltar à YR →</a></section>'}))
+    return res.end(layout({title:'Blog YR | Voltamos em instantes',description:'O blog está temporariamente indisponível.',path:'/blog',noindex:true,html:'<section class="empty-state"><h1>Voltamos em instantes.</h1><p>Não foi possível carregar o blog agora. Tente novamente em alguns minutos.</p><a class="pill" href="/">Voltar à YR</a></section>'}))
   }
 }
-function notFound(res) {res.statusCode=404;res.setHeader('X-Robots-Tag','noindex');return res.end(layout({title:'Artigo não encontrado | Blog YR',description:'Explore os artigos do Blog YR.',path:'/blog',noindex:true,html:'<section class="empty-state"><h1>Vamos encontrar outra leitura.</h1><p>Este artigo não está disponível.</p><a class="pill" href="/blog">Explorar o blog →</a></section>'}))}
+function notFound(res) {res.statusCode=404;res.setHeader('X-Robots-Tag','noindex');return res.end(layout({title:'Artigo não encontrado | Blog YR',description:'Explore os artigos do Blog YR.',path:'/blog',noindex:true,html:'<section class="empty-state"><h1>Vamos encontrar outra leitura.</h1><p>Este artigo não está disponível.</p><a class="pill" href="/blog">Explorar o blog</a></section>'}))}
