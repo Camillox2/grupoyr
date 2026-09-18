@@ -15,13 +15,16 @@ import {
 } from 'lucide-react'
 import { Lead, Message } from '../types'
 import { useSocket } from '../contexts/SocketContext'
-import { useIsMobile } from '../hooks/useMediaQuery'
+import { useIsMobile, useMediaQuery } from '../hooks/useMediaQuery'
+import { LeadSheet } from './LeadSheet'
 
 interface WhatsAppChatViewProps {
   leads: Lead[]
   selectedLead: Lead | null
   onSelectLead: (lead: Lead | null) => void
   onOpenNewContract: (lead: Lead) => void
+  /** Chamado quando a ficha gera o contrato. */
+  onContractCreated?: () => void
 }
 
 export const WhatsAppChatView: React.FC<WhatsAppChatViewProps> = ({
@@ -29,8 +32,12 @@ export const WhatsAppChatView: React.FC<WhatsAppChatViewProps> = ({
   selectedLead,
   onSelectLead,
   onOpenNewContract,
+  onContractCreated,
 }) => {
   const isMobile = useIsMobile()
+  // Em tela larga a ficha e uma coluna fixa; abaixo disso ela abre por cima.
+  const isWide = useMediaQuery('(min-width: 1280px)')
+  const [sheetOpen, setSheetOpen] = useState(false)
   const { whatsappStatus, socket } = useSocket()
   const [messages, setMessages] = useState<Message[]>([])
   const [inputText, setInputText] = useState('')
@@ -84,7 +91,10 @@ export const WhatsAppChatView: React.FC<WhatsAppChatViewProps> = ({
   }, [socket, selectedLead])
 
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+    // Rola SO a lista de mensagens. scrollIntoView rola todos os ancestrais
+    // rolaveis, inclusive a pagina: a tela inteira subia e voltava ao abrir.
+    const list = messagesEndRef.current?.parentElement
+    if (list) list.scrollTop = list.scrollHeight
   }, [messages])
 
   const handleFileSelection = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -234,7 +244,7 @@ export const WhatsAppChatView: React.FC<WhatsAppChatViewProps> = ({
     // `dvh` no lugar de `vh`: a barra do Chrome mobile nao corta o campo de envio.
     // No mobile mostra a LISTA ou a CONVERSA, nunca as duas com scroll aninhado.
     <div
-      className={`flex h-[calc(100dvh-112px)] sm:h-[calc(100dvh-150px)] min-h-[420px] overflow-hidden rounded-[14px] ${isMobile ? 'flex-col' : 'flex-row'}`}
+      className={`no-cascade flex h-[calc(100dvh-112px)] min-h-[420px] overflow-hidden rounded-[16px] ${isMobile ? 'flex-col' : 'flex-row'}`}
       style={{
         background: 'var(--surface-raised)',
         border: '1px solid var(--border-subtle)',
@@ -378,14 +388,16 @@ export const WhatsAppChatView: React.FC<WhatsAppChatViewProps> = ({
                 {aiEnabled ? 'IA Respondendo' : 'IA Pausada'}
               </button>
 
-              <button
-                onClick={() => onOpenNewContract(selectedLead)}
-                className="px-3 py-1.5 rounded-xl text-xs font-semibold bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800 hover:bg-amber-100 flex items-center gap-1.5 transition-all"
-                title="Gerar contrato de locação ou venda agora"
-              >
-                <FileSignature className="w-3.5 h-3.5" />
-                Gerar Contrato
-              </button>
+              {!isWide && (
+                <button
+                  onClick={() => setSheetOpen(true)}
+                  className="action-btn action-btn--primary inline-flex items-center gap-1.5 rounded-full px-3.5 py-2 text-xs font-extrabold"
+                  title="Abrir a ficha de fechamento deste cliente"
+                >
+                  <FileSignature className="w-3.5 h-3.5" />
+                  Ficha
+                </button>
+              )}
             </div>
           </div>
 
@@ -553,64 +565,28 @@ export const WhatsAppChatView: React.FC<WhatsAppChatViewProps> = ({
         </div>
       )}
 
-      {/* Right Drawer: AI Qualification Dossier */}
-      {selectedLead && (
-        <div className="hidden min-h-0 w-80 shrink-0 flex-col justify-between overflow-y-auto p-4 xl:flex" style={{ background: 'var(--surface-sunken)', borderLeft: '1px solid var(--border-subtle)' }}>
-          <div className="space-y-4">
-            <div className="flex items-center justify-between pb-2 border-b border-slate-200 dark:border-slate-800">
-              <h4 className="text-xs font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
-                <Sparkles className="w-3.5 h-3.5 text-purple-600" />
-                Dossiê de Qualificação IA
-              </h4>
-              <button
-                onClick={handleGenerateSummary}
-                disabled={generatingSummary}
-                className="text-[10px] font-bold text-purple-600 dark:text-purple-400 hover:underline flex items-center gap-1"
-                title="Atualizar síntese com IA agora"
-              >
-                {generatingSummary ? 'Gerando...' : 'Atualizar'}
-              </button>
-            </div>
-
-            {/* AI Summary Box */}
-            <div className="p-3.5 rounded-xl bg-purple-50/80 dark:bg-purple-950/40 border border-purple-100 dark:border-purple-900/60 text-xs text-purple-950 dark:text-purple-100 leading-relaxed space-y-2">
-              <p className="font-semibold text-[11px] text-purple-700 dark:text-purple-300 uppercase tracking-wider">
-                Síntese do Caso:
-              </p>
-              <p className="whitespace-pre-wrap">{(aiSummary ?? selectedLead.aiSummary) || 'Ainda sem resumo. Clique em Atualizar para analisar o diálogo.'}</p>
-            </div>
-
-            {/* Commercial Details */}
-            <div className="space-y-2 text-xs">
-              <div className="flex justify-between py-1.5 border-b border-slate-100 dark:border-slate-800">
-                <span className="text-slate-500">Canal de Origem:</span>
-                <span className="font-bold text-slate-900 dark:text-white">
-                  {selectedLead.origin}
-                </span>
-              </div>
-              <div className="flex justify-between py-1.5 border-b border-slate-100 dark:border-slate-800">
-                <span className="text-slate-500">Período Previsto:</span>
-                <span className="font-semibold text-slate-700 dark:text-slate-300">
-                  {selectedLead.estimatedPeriod}
-                </span>
-              </div>
-              <div className="flex justify-between py-1.5 border-b border-slate-100 dark:border-slate-800">
-                <span className="text-slate-500">Valor Estimado:</span>
-                <span className="font-bold text-emerald-600 dark:text-emerald-400">
-                  R$ {selectedLead.value.toFixed(2)}
-                </span>
-              </div>
-            </div>
-          </div>
-
-          <div className="pt-4 border-t border-slate-200 dark:border-slate-800">
-            <button
-              onClick={() => onOpenNewContract(selectedLead)}
-              className="w-full py-2.5 px-3 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-bold text-xs shadow-md shadow-blue-500/20 flex items-center justify-center gap-2 transition-all"
-            >
-              <FileSignature className="w-4 h-4" />
-              Emitir Contrato & Assinatura
-            </button>
+      {/* Ficha de fechamento: coluna fixa em tela larga, painel por cima nas demais */}
+      {selectedLead && isWide && (
+        <LeadSheet
+          lead={selectedLead}
+          aiSummary={aiSummary}
+          generatingSummary={generatingSummary}
+          onGenerateSummary={handleGenerateSummary}
+          onContractCreated={onContractCreated}
+        />
+      )}
+      {selectedLead && !isWide && sheetOpen && (
+        <div className="fixed inset-0 z-40 flex justify-end" role="presentation">
+          <div className="backdrop-in absolute inset-0 bg-[#0a1c33]/60" onClick={() => setSheetOpen(false)} aria-hidden="true" />
+          <div className="sheet-drawer relative z-10 h-full w-full max-w-[460px]">
+            <LeadSheet
+              lead={selectedLead}
+              aiSummary={aiSummary}
+              generatingSummary={generatingSummary}
+              onGenerateSummary={handleGenerateSummary}
+              onContractCreated={onContractCreated}
+              onClose={() => setSheetOpen(false)}
+            />
           </div>
         </div>
       )}

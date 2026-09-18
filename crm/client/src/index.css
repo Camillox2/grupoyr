@@ -473,17 +473,23 @@
 /* ---------------------------------------------------------------------------
    Funil: o quadro e a unica area de rolagem (ver KanbanView.tsx)
    --------------------------------------------------------------------------- */
-.kanban-board {
+/* A barra horizontal nativa sai de cena (quem aparece e a onda abaixo), mas a
+   vertical fica. Nao da para esconder so uma pelo CSS de barra: com
+   `scrollbar-width` definido (e ele esta, globalmente) o Chrome ignora as
+   regras ::-webkit-scrollbar. Entao o quadro e 24px mais alto que a moldura,
+   e a moldura corta essa sobra, que e justamente onde mora a barra horizontal. */
+.kanban-frame {
   height: calc(100dvh - 318px);
   min-height: 320px;
+  overflow: hidden;
+  border-radius: 16px;
+}
+.kanban-board {
+  box-sizing: border-box;
+  height: calc(100% + 24px);
+  padding-bottom: 30px;
   overflow: auto;
   overscroll-behavior: contain;
-  border-radius: 16px;
-  /* a barra horizontal nativa sai de cena: quem aparece e a onda abaixo */
-  scrollbar-width: thin;
-}
-.kanban-board::-webkit-scrollbar:horizontal {
-  height: 0;
 }
 /* Area de soltar ocupa a altura do quadro: da para largar o card em qualquer
    ponto da coluna, inclusive nas vazias. */
@@ -531,6 +537,447 @@
 .wave-scroll-thumb:active {
   cursor: grabbing;
   background: var(--yr-700);
+}
+
+/* ---------------------------------------------------------------------------
+   Ficha de fechamento (LeadSheet.tsx)
+   Coluna com cabecalho e rodape fixos e UMA area de rolagem no meio.
+   --------------------------------------------------------------------------- */
+.sheet {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  width: 420px;
+  flex: 0 0 420px;
+  height: 100%;
+  background: var(--surface-sunken);
+  border-left: 1px solid var(--border-subtle);
+}
+.sheet-drawer .sheet {
+  width: 100%;
+  flex-basis: auto;
+  border-left: 0;
+  box-shadow: var(--shadow-lg);
+  animation: sheet-side-in var(--dur-moderate) var(--ease-out) backwards;
+}
+@keyframes sheet-side-in {
+  from {
+    transform: translateX(100%);
+  }
+  to {
+    transform: none;
+  }
+}
+
+.sheet-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 16px 18px 10px;
+}
+.sheet-eyebrow {
+  margin: 0;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--yr-500);
+}
+.sheet-head h3 {
+  margin: 3px 0 0;
+  font-size: 22px;
+  line-height: 1.1;
+  color: var(--ink);
+}
+.sheet-save {
+  font-size: 10.5px;
+  font-weight: 800;
+  color: var(--ink-faint);
+  min-width: 62px;
+  text-align: right;
+}
+.sheet-save.is-saved {
+  color: var(--ok);
+}
+.sheet-save.is-error {
+  color: var(--alert);
+}
+.sheet-close {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  color: var(--ink-muted);
+  background: var(--surface-raised);
+  border: 1px solid var(--border-subtle);
+}
+
+/* barra de progresso do checklist */
+.sheet-progress {
+  height: 5px;
+  margin: 0 18px;
+  border-radius: 99px;
+  background: var(--border-subtle);
+  overflow: hidden;
+}
+.sheet-progress span {
+  display: block;
+  height: 100%;
+  border-radius: 99px;
+  background: var(--yr-500);
+  transition: width 520ms var(--ease-out);
+}
+.sheet-progress-label {
+  margin: 6px 18px 8px;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--ink-muted);
+}
+
+.sheet-scroll {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 4px 14px 14px;
+  display: grid;
+  gap: 10px;
+  align-content: start;
+}
+
+.sheet-section {
+  padding: 14px;
+  border-radius: 16px;
+  background: var(--surface-raised);
+  border: 1px solid var(--border-subtle);
+}
+.sheet-section h4 {
+  margin: 0 0 11px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12.5px;
+  font-weight: 800;
+  color: var(--ink);
+}
+.sheet-section-icon {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 8px;
+  background: var(--yr-050);
+  color: var(--yr-500);
+}
+.sheet-dot {
+  margin-left: auto;
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: 1.5px dashed var(--border-strong);
+  color: #fffdf9;
+  transition:
+    background var(--dur-fast) ease,
+    border-color var(--dur-fast) ease,
+    transform var(--dur-moderate) cubic-bezier(0.34, 1.7, 0.5, 1);
+}
+.sheet-dot.is-done {
+  background: var(--ok);
+  border: 1.5px solid var(--ok);
+  transform: scale(1.08);
+}
+
+.sheet-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 9px;
+}
+.sheet-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+.sheet-field.is-wide {
+  grid-column: 1 / -1;
+}
+.sheet-field > span {
+  font-size: 10.5px;
+  font-weight: 700;
+  color: var(--ink-muted);
+}
+.sheet-input {
+  width: 100%;
+  min-width: 0;
+  padding: 8px 10px;
+  border-radius: 10px;
+  font-size: 13px;
+  color: var(--ink);
+  background: var(--surface-sunken);
+  border: 1px solid var(--border-subtle);
+  outline: none;
+  font-family: inherit;
+  resize: vertical;
+}
+.sheet-input:disabled {
+  opacity: 0.65;
+}
+
+.sheet-sublabel {
+  margin: 12px 0 7px;
+  font-size: 10.5px;
+  font-weight: 700;
+  color: var(--ink-muted);
+}
+.sheet-chips {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 6px;
+}
+.sheet-chips button {
+  padding: 8px 4px;
+  border-radius: 10px;
+  font-size: 11.5px;
+  font-weight: 800;
+  color: var(--ink-muted);
+  background: var(--surface-sunken);
+  border: 1px solid var(--border-subtle);
+  transition:
+    background var(--dur-fast) ease,
+    color var(--dur-fast) ease,
+    border-color var(--dur-fast) ease;
+}
+.sheet-chips button.is-on {
+  background: var(--yr-700);
+  border-color: var(--yr-700);
+  color: #fffdf9;
+}
+.dark .sheet-chips button.is-on {
+  background: var(--yr-500);
+  border-color: var(--yr-500);
+}
+
+.sheet-summary {
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.6;
+  color: var(--ink-muted);
+  white-space: pre-wrap;
+}
+.sheet-link {
+  margin-top: 8px;
+  font-size: 11.5px;
+  font-weight: 800;
+  color: var(--yr-500);
+}
+.sheet-link:disabled {
+  opacity: 0.6;
+}
+.sheet-empty,
+.sheet-note {
+  margin: 0;
+  font-size: 11.5px;
+  color: var(--ink-faint);
+}
+.sheet-note {
+  margin-top: 6px;
+  color: var(--wait);
+  font-weight: 700;
+}
+
+.sheet-items {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 9px;
+}
+.sheet-items li {
+  padding: 10px;
+  border-radius: 12px;
+  background: var(--surface-sunken);
+  border: 1px solid var(--border-subtle);
+}
+.sheet-item-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.sheet-item-head strong {
+  font-size: 13px;
+  color: var(--ink);
+}
+.sheet-item-head button {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  color: var(--ink-faint);
+}
+.sheet-item-head button:hover {
+  color: var(--alert);
+  background: var(--alert-surface);
+}
+.sheet-item-row {
+  display: grid;
+  grid-template-columns: 1.25fr 0.6fr 1fr;
+  gap: 7px;
+}
+.sheet-items .sheet-input {
+  background: var(--surface-raised);
+}
+.sheet-add {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 10px;
+}
+.sheet-add button {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 6px 11px;
+  border-radius: 99px;
+  font-size: 11.5px;
+  font-weight: 800;
+  color: var(--yr-500);
+  background: var(--yr-050);
+  border: 1px dashed var(--yr-300);
+}
+.sheet-add button:hover {
+  border-style: solid;
+}
+
+.sheet-checklist {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 2px;
+}
+.sheet-checklist li,
+.sheet-checklist label {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  font-size: 12.5px;
+  color: var(--ink);
+}
+.sheet-checklist li {
+  padding: 5px 0;
+}
+/* `position: relative` e obrigatorio: o checkbox de dentro e absoluto e, sem
+   um ancestral posicionado, escapa do corte da area de rolagem da ficha e
+   estica a PAGINA inteira para baixo (dava para rolar ate a tela ficar vazia). */
+.sheet-checklist label {
+  position: relative;
+  cursor: pointer;
+  width: 100%;
+}
+.sheet-checklist input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+.sheet-checklist em {
+  font-style: normal;
+  color: var(--ink-faint);
+}
+.sheet-tick {
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 7px;
+  color: var(--ink-faint);
+  border: 1.5px solid var(--border-strong);
+  background: var(--surface-raised);
+  transition:
+    background var(--dur-fast) ease,
+    border-color var(--dur-fast) ease,
+    transform var(--dur-moderate) cubic-bezier(0.34, 1.7, 0.5, 1);
+}
+.sheet-tick.is-done {
+  background: var(--ok);
+  border-color: var(--ok);
+  color: #fffdf9;
+  transform: scale(1.06);
+}
+.sheet-checklist .is-auto .sheet-tick {
+  border-radius: 50%;
+}
+.sheet-checklist input:focus-visible + .sheet-tick {
+  outline: 2px solid var(--yr-500);
+  outline-offset: 2px;
+}
+.is-struck {
+  color: var(--ink-faint);
+  text-decoration: line-through;
+  text-decoration-color: var(--border-strong);
+}
+
+.sheet-foot {
+  flex: 0 0 auto;
+  padding: 12px 18px 16px;
+  background: var(--surface-raised);
+  border-top: 1px solid var(--border-subtle);
+}
+.sheet-foot dl {
+  margin: 0 0 11px;
+  display: grid;
+  gap: 3px;
+}
+.sheet-foot dl > div {
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+  color: var(--ink-muted);
+}
+.sheet-foot dt,
+.sheet-foot dd {
+  margin: 0;
+}
+.sheet-foot .is-total {
+  margin-top: 4px;
+  padding-top: 7px;
+  border-top: 1px dashed var(--border-strong);
+  font-size: 14px;
+  font-weight: 800;
+  color: var(--ink);
+}
+.sheet-error {
+  margin: 0 0 9px;
+  font-size: 11.5px;
+  font-weight: 700;
+  color: var(--alert);
+}
+.sheet-cta {
+  width: 100%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 13px 16px;
+  border-radius: 999px;
+  font-size: 13.5px;
+  font-weight: 800;
+}
+.sheet-cta:disabled {
+  background: var(--surface-sunken);
+  border-color: var(--border-strong);
+  color: var(--ink-muted);
+  box-shadow: none;
+  opacity: 1;
+  cursor: not-allowed;
 }
 
 /* Cartao padrao das telas */
@@ -630,6 +1077,15 @@
 .view-stage > * > *:nth-child(4) { animation-delay: 210ms; }
 .view-stage > * > *:nth-child(5) { animation-delay: 280ms; }
 .view-stage > * > *:nth-child(n + 6) { animation-delay: 340ms; }
+
+/* Telas que sao um painel unico (atendimento) entram inteiras. Em cascata, as
+   colunas subiam em tempos diferentes e parecia que a tela balancava. */
+.view-stage > .no-cascade {
+  animation: view-enter 460ms var(--ease-out) backwards;
+}
+.view-stage > .no-cascade > * {
+  animation: none;
+}
 
 /* Dialogos e camadas fixas que moram dentro da tela nao entram na cascata:
    transform em quem e position:fixed desloca o dialogo inteiro. */

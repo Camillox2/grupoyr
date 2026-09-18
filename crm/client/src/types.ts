@@ -27,6 +27,38 @@ export interface Lead {
   value: number
   notes: string
   createdAt: string
+
+  // Ficha de fechamento (ver LeadSheet.tsx e server/src/leadDetails.js)
+  cpf?: string
+  address?: string
+  addressData?: LeadAddress
+  access?: LeadAccess
+  floor?: string
+  quoteItems?: QuoteItem[]
+  freight?: number
+  rentalMonths?: number
+  deliveryDate?: string
+  deliveryNotes?: string
+  checklist?: Record<string, boolean>
+}
+
+export type LeadAccess = 'terreo' | 'escada' | 'elevador' | 'nao_sei'
+
+export interface LeadAddress {
+  cep: string
+  street: string
+  number: string
+  complement: string
+  district: string
+  city: string
+  state: string
+}
+
+export interface QuoteItem {
+  product: string
+  modality: 'locacao' | 'compra'
+  qty: number
+  unitPrice: number
 }
 
 export interface Message {

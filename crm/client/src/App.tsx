@@ -225,7 +225,12 @@ function MainContent() {
             rolagem sumir e voltar, e o conteudo "pulava". Quem entra animado e
             o palco interno, que ganha `key` novo a cada aba. */}
         <main ref={mainRef} className="app-main min-h-0 flex-1 overflow-y-auto p-4 sm:p-6">
-          <div key={activeTab} className="view-stage mx-auto max-w-7xl">
+          {/* Atendimento e funil sao telas de trabalho: usam a largura toda. As
+              demais ficam numa coluna confortavel de leitura. */}
+          <div
+            key={activeTab}
+            className={`view-stage mx-auto ${activeTab === 'whatsapp' || activeTab === 'kanban' ? 'max-w-none' : 'max-w-7xl'}`}
+          >
             {dataError && (
               <div className="mb-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-2xl border border-amber-200 bg-amber-50 p-3.5 text-xs text-amber-900 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-100">
                 <span>{dataError}</span>
@@ -279,6 +284,10 @@ function MainContent() {
                 selectedLead={selectedLead}
                 onSelectLead={setSelectedLead}
                 onOpenNewContract={handleOpenNewContract}
+                onContractCreated={() => {
+                  fetchAllData()
+                  setActiveTab('contracts')
+                }}
               />
             )}
 

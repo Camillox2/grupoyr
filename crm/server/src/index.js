@@ -19,6 +19,7 @@ import {
   ensureSigningToken,
   findContractBySigningToken,
 } from './contracts.js'
+import { sanitizeLeadDetails } from './leadDetails.js'
 
 const app = express()
 const server = http.createServer(app)
@@ -300,6 +301,18 @@ app.put('/api/leads/:id/stage', requireAuth(), (req, res) => {
   if (!updated) return res.status(404).json({ error: 'Lead não encontrado' })
 
   io.emit('lead:stage_changed', updated)
+  res.json(updated)
+})
+
+// Ficha de fechamento: dados do cliente, endereco, itens, entrega e checklist.
+// O corpo passa por sanitizeLeadDetails: so campos conhecidos, com tipo e
+// tamanho limitados, chegam ao banco.
+app.put('/api/leads/:id/details', requireAuth(), (req, res) => {
+  const existing = db.find('leads', (lead) => lead.id === req.params.id)
+  if (!existing) return res.status(404).json({ error: 'Lead não encontrado' })
+
+  const updated = db.update('leads', req.params.id, sanitizeLeadDetails(req.body))
+  io.emit('lead:updated', updated)
   res.json(updated)
 })
 

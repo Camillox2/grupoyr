@@ -341,6 +341,7 @@ export const KanbanView: React.FC<KanbanViewProps> = ({
             Com o quadro como rolagem unica, chegar com o card perto da borda
             esquerda ou direita rola o funil sozinho. Os cabecalhos das colunas
             ficam presos no topo (sticky) enquanto o quadro rola para baixo. */}
+        <div className="kanban-frame">
         <div ref={boardRef} className="kanban-board select-none">
           <div className="flex items-start gap-4 pb-2 pr-1">
             {COLUMNS.map((column) => {
@@ -402,6 +403,7 @@ export const KanbanView: React.FC<KanbanViewProps> = ({
               )
             })}
           </div>
+        </div>
         </div>
       </DragDropContext>
 
