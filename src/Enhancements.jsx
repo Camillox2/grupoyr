@@ -16,7 +16,11 @@ export default function Enhancements() {
   const hasWhatsapp = Boolean(siteConfig.whatsapp?.trim())
 
   useEffect(() => {
-    const targets = document.querySelectorAll('.solutions .section-heading, .solution-row, .products-header, .product-card, .how-grid, .contact-panel')
+    // Onde o navegador anima por scroll timeline, o CSS ja faz o trabalho no
+    // compositor: manter o observer aqui so duplicaria o efeito.
+    if (CSS.supports?.('animation-timeline: view()')) return undefined
+
+    const targets = document.querySelectorAll('.yr3-section-heading, .yr3-steps, .yr3-reasons, .yr3-guide, .yr3-contact, .yr3-about-image, .showroom-product, .equipment-info, .equipment-faq, .related-products')
     targets.forEach((el) => el.classList.add('yr-reveal'))
 
     if (!('IntersectionObserver' in window)) {

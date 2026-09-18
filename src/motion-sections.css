@@ -1,0 +1,959 @@
+/* ===========================================================================
+   Motion graphics das secoes da home (ver Motion.jsx)
+   Paleta: base pastel + azul da marca.
+   =========================================================================== */
+
+/* ------------------------------------------------------------------------
+   1. Faixa cinetica: duas linhas de palavras que deslizam em sentidos
+      opostos, presas a rolagem (--k vai de 0 a 1 enquanto a faixa cruza a tela)
+   ------------------------------------------------------------------------ */
+.kband {
+  --k: 0;
+  overflow: hidden;
+  background: var(--azul-900, #102a4c);
+  color: var(--creme, #f6f1e8);
+  padding: clamp(22px, 3.4vw, 46px) 0;
+  display: grid;
+  gap: clamp(6px, 1vw, 14px);
+  user-select: none;
+}
+.kband-row {
+  display: flex;
+  white-space: nowrap;
+  font-family: Georgia, 'Times New Roman', serif;
+  font-size: clamp(34px, 6.4vw, 96px);
+  line-height: 1.05;
+  letter-spacing: -0.035em;
+  transform: translate3d(calc(var(--k) * -34%), 0, 0);
+  will-change: transform;
+}
+.kband-row--outline {
+  transform: translate3d(calc(-40% + var(--k) * 34%), 0, 0);
+  color: transparent;
+  -webkit-text-stroke: 1.4px #7fb0ea;
+}
+.kband-row span {
+  display: inline-flex;
+  align-items: center;
+  flex: 0 0 auto;
+}
+/* separador: o "+" do logo */
+.kband-row i {
+  display: inline-block;
+  width: 0.34em;
+  height: 0.34em;
+  margin: 0 0.42em;
+  background:
+    linear-gradient(#4f93e0, #4f93e0) center / 100% 28% no-repeat,
+    linear-gradient(#4f93e0, #4f93e0) center / 28% 100% no-repeat;
+}
+
+/* ------------------------------------------------------------------------
+   2. Como cada peca funciona
+   ------------------------------------------------------------------------ */
+.bento-head {
+  margin-bottom: clamp(24px, 3vw, 44px);
+}
+.bento-head h2 {
+  margin: 10px 0 0;
+  font-size: clamp(32px, 4vw, 58px);
+}
+.bento-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: clamp(14px, 1.6vw, 24px);
+}
+.bento-card {
+  display: flex;
+  flex-direction: column;
+  border-radius: 26px;
+  overflow: hidden;
+  background: var(--papel, #fffdf9);
+  border: 1px solid var(--areia, #e2d6c2);
+  color: inherit;
+  text-decoration: none;
+  transition:
+    transform 420ms cubic-bezier(0.22, 1, 0.36, 1),
+    box-shadow 420ms cubic-bezier(0.22, 1, 0.36, 1),
+    border-color 200ms ease;
+}
+.bento-card:hover,
+.bento-card:focus-visible {
+  transform: translateY(-6px);
+  border-color: #b9d2f0;
+  box-shadow: 0 34px 60px -30px rgba(16, 42, 76, 0.45);
+}
+.bento-art {
+  background: linear-gradient(180deg, #dce9f8 0%, #eef5fd 100%);
+  padding: 18px 14px 0;
+}
+.bento-art .mg {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+.bento-copy {
+  padding: 20px 22px 22px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  flex: 1;
+}
+.bento-copy span {
+  font-size: 10.5px;
+  font-weight: 800;
+  letter-spacing: 0.11em;
+  text-transform: uppercase;
+  color: var(--azul-600, #1d5fae);
+}
+.bento-copy h3 {
+  margin: 0;
+  font-size: clamp(20px, 1.8vw, 26px);
+  line-height: 1.15;
+}
+.bento-copy p {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.65;
+}
+.bento-copy em {
+  margin-top: auto;
+  padding-top: 10px;
+  font-style: normal;
+  font-size: 13px;
+  font-weight: 800;
+  color: var(--azul-900, #102a4c);
+}
+.bento-copy em i {
+  font-style: normal;
+  display: inline-block;
+  transition: transform 260ms ease;
+}
+.bento-card:hover em i {
+  transform: translate(3px, -3px);
+}
+
+/* Todo loop nasce pausado e so roda com a secao na tela. */
+.bento .mg * {
+  animation-play-state: paused;
+}
+.bento.is-live .mg * {
+  animation-play-state: running;
+}
+
+/* 2a. manivela + encosto (mesma duracao, fases casadas) */
+.mg-crank-back {
+  transform-box: view-box;
+  transform-origin: 150px 150px;
+  animation: mg-back 5.6s cubic-bezier(0.65, 0, 0.35, 1) infinite;
+}
+.mg-crank-handle {
+  transform-box: view-box;
+  transform-origin: 296px 158px;
+  animation: mg-handle 5.6s cubic-bezier(0.65, 0, 0.35, 1) infinite;
+}
+@keyframes mg-back {
+  0%, 8% { transform: rotate(0deg); }
+  42%, 58% { transform: rotate(40deg); }
+  92%, 100% { transform: rotate(0deg); }
+}
+@keyframes mg-handle {
+  0%, 8% { transform: rotate(0deg); }
+  42%, 58% { transform: rotate(1080deg); }
+  92%, 100% { transform: rotate(0deg); }
+}
+
+/* 2b. celulas alternando + ar no tubo */
+.mg-cell {
+  transform-box: fill-box;
+  transform-origin: 50% 100%;
+  animation: mg-cell 3.4s ease-in-out infinite;
+}
+.mg-cell--b {
+  animation-delay: -1.7s;
+}
+@keyframes mg-cell {
+  0%, 100% { transform: scaleY(1); }
+  50% { transform: scaleY(0.5); }
+}
+.mg-air-flow {
+  animation: mg-flow 0.9s linear infinite;
+}
+@keyframes mg-flow {
+  to { stroke-dashoffset: 12; }
+}
+.mg-air-needle {
+  transform-box: view-box;
+  transform-origin: 278px 187px;
+  animation: mg-needle 3.4s ease-in-out infinite;
+}
+@keyframes mg-needle {
+  0%, 100% { transform: rotate(-50deg); }
+  50% { transform: rotate(50deg); }
+}
+.mg-air-led {
+  animation: mg-led 1.7s ease-in-out infinite;
+}
+@keyframes mg-led {
+  50% { opacity: 0.25; }
+}
+
+/* 2c. cadeira rola ate o chuveiro, a agua cai, ela volta */
+.mg-chair {
+  animation: mg-roll 7s cubic-bezier(0.65, 0, 0.35, 1) infinite;
+}
+@keyframes mg-roll {
+  0%, 6% { transform: translate(64px, 186px); }
+  38%, 74% { transform: translate(262px, 186px); }
+  96%, 100% { transform: translate(64px, 186px); }
+}
+.mg-wheel {
+  transform-box: view-box;
+  animation: mg-wheel 7s cubic-bezier(0.65, 0, 0.35, 1) infinite;
+}
+@keyframes mg-wheel {
+  0%, 6% { transform: rotate(0deg); }
+  38%, 74% { transform: rotate(1260deg); }
+  96%, 100% { transform: rotate(0deg); }
+}
+.mg-drops line {
+  animation: mg-drop 7s linear infinite;
+  opacity: 0;
+}
+.mg-drops line:nth-child(2) { animation-name: mg-drop-b; }
+.mg-drops line:nth-child(3) { animation-name: mg-drop-c; }
+@keyframes mg-drop {
+  0%, 40% { opacity: 0; transform: translateY(0); }
+  44% { opacity: 1; transform: translateY(0); }
+  52% { opacity: 0; transform: translateY(74px); }
+  53% { opacity: 1; transform: translateY(0); }
+  61% { opacity: 0; transform: translateY(74px); }
+  62% { opacity: 1; transform: translateY(0); }
+  70% { opacity: 0; transform: translateY(74px); }
+  100% { opacity: 0; }
+}
+@keyframes mg-drop-b {
+  0%, 43% { opacity: 0; transform: translateY(0); }
+  47% { opacity: 1; transform: translateY(0); }
+  55% { opacity: 0; transform: translateY(74px); }
+  56% { opacity: 1; transform: translateY(0); }
+  64% { opacity: 0; transform: translateY(74px); }
+  65% { opacity: 1; transform: translateY(0); }
+  72% { opacity: 0; transform: translateY(74px); }
+  100% { opacity: 0; }
+}
+@keyframes mg-drop-c {
+  0%, 41% { opacity: 0; transform: translateY(0); }
+  45% { opacity: 1; transform: translateY(0); }
+  53% { opacity: 0; transform: translateY(74px); }
+  54% { opacity: 1; transform: translateY(0); }
+  62% { opacity: 0; transform: translateY(74px); }
+  63% { opacity: 1; transform: translateY(0); }
+  71% { opacity: 0; transform: translateY(74px); }
+  100% { opacity: 0; }
+}
+
+/* ------------------------------------------------------------------------
+   3. Balanca do "comprar ou alugar"
+      Curva com passada (overshoot): a balanca balanca antes de assentar.
+      Prato e travessao usam a MESMA curva, entao o prato fica sempre a prumo.
+   ------------------------------------------------------------------------ */
+.dscale {
+  display: block;
+  width: min(100%, 330px);
+  height: auto;
+  margin: 2px auto 10px;
+}
+.dscale-beam,
+.dscale-pan {
+  transition: transform 900ms cubic-bezier(0.34, 1.7, 0.5, 1);
+}
+.dscale-bowl {
+  transition: fill 300ms ease;
+}
+.dscale-weight {
+  transition: opacity 300ms ease;
+}
+.dscale text {
+  font: 800 12px Manrope, sans-serif;
+  letter-spacing: 0.04em;
+  fill: #8fa6c4;
+  transition: fill 300ms ease;
+}
+.dscale text.is-on {
+  fill: #1d5fae;
+}
+
+/* ------------------------------------------------------------------------
+   4. Como funciona: estrada + van presas a rolagem
+   ------------------------------------------------------------------------ */
+.jroad {
+  --t: 0;
+  margin-top: clamp(20px, 3vw, 40px);
+}
+.jroad-svg {
+  display: block;
+  width: 100%;
+  height: auto;
+  overflow: visible;
+}
+.jroad-bed {
+  fill: none;
+  stroke: #d9e3ef;
+  stroke-width: 38;
+  stroke-linecap: round;
+}
+/* trecho ja percorrido */
+.jroad-done {
+  fill: none;
+  stroke: var(--azul-900, #102a4c);
+  stroke-width: 38;
+  stroke-linecap: round;
+}
+.jroad-dash {
+  fill: none;
+  stroke: #ffffff;
+  stroke-width: 2.5;
+  stroke-dasharray: 12 14;
+  opacity: 0.85;
+}
+.jroad-pin {
+  opacity: 0;
+  transition: opacity 300ms ease;
+}
+.jroad.is-ready .jroad-pin {
+  opacity: 1;
+}
+.jroad-pin circle {
+  fill: #ffffff;
+  stroke: #c4d3e6;
+  stroke-width: 3;
+  transition:
+    fill 320ms ease,
+    stroke 320ms ease,
+    r 420ms cubic-bezier(0.34, 1.7, 0.5, 1);
+}
+.jroad-pin text {
+  font: 800 13px Manrope, sans-serif;
+  fill: #8fa6c4;
+  transition: fill 320ms ease;
+}
+.jroad-pin.is-on circle {
+  fill: var(--azul-600, #1d5fae);
+  stroke: #ffffff;
+  r: 21px;
+}
+.jroad-pin.is-on text {
+  fill: #ffffff;
+}
+.jroad-wheel {
+  transform-box: view-box;
+  transform: rotate(var(--spin, 0deg));
+}
+.jroad-van {
+  filter: drop-shadow(0 8px 10px rgba(16, 42, 76, 0.28));
+}
+
+.jroad-steps {
+  list-style: none;
+  margin: clamp(6px, 1vw, 14px) 0 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: clamp(12px, 1.6vw, 22px);
+}
+.jroad-steps li {
+  padding: 20px 20px 22px;
+  border-radius: 20px;
+  background: var(--papel, #fffdf9);
+  border: 1px solid var(--areia, #e2d6c2);
+  opacity: 0.45;
+  transform: translateY(10px);
+  transition:
+    opacity 420ms ease,
+    transform 520ms cubic-bezier(0.22, 1, 0.36, 1),
+    border-color 300ms ease,
+    box-shadow 420ms ease;
+}
+.jroad-steps li.is-on {
+  opacity: 1;
+  transform: none;
+  border-color: #b9d2f0;
+  box-shadow: 0 22px 40px -28px rgba(16, 42, 76, 0.45);
+}
+.jroad-steps span {
+  font-family: Georgia, serif;
+  font-size: 15px;
+  color: var(--azul-600, #1d5fae);
+}
+.jroad-steps h3 {
+  margin: 6px 0 6px;
+  font-size: 19px;
+  line-height: 1.2;
+}
+.jroad-steps p {
+  margin: 0;
+  font-size: 13.5px;
+  line-height: 1.6;
+}
+
+/* ------------------------------------------------------------------------
+   5. Contato: conversa que se digita sozinha
+   ------------------------------------------------------------------------ */
+.chatcta {
+  background: var(--creme, #f6f1e8);
+  padding: clamp(40px, 6vw, 90px) 0;
+}
+.chatcta-box {
+  display: grid;
+  grid-template-columns: minmax(0, 1.05fr) minmax(0, 0.95fr);
+  gap: clamp(24px, 4vw, 64px);
+  align-items: center;
+  padding: clamp(28px, 4.4vw, 64px);
+  border-radius: 34px;
+  background:
+    radial-gradient(80% 90% at 100% 0%, #1d5fae 0%, rgba(29, 95, 174, 0) 62%),
+    var(--azul-900, #102a4c);
+  color: var(--creme, #f6f1e8);
+  overflow: hidden;
+}
+.chatcta-copy .yr3-eyebrow {
+  color: #9cc3f0;
+}
+.chatcta-copy h2 {
+  margin: 12px 0 16px;
+  color: #ffffff;
+  font-size: clamp(34px, 4.4vw, 64px);
+}
+.chatcta .chatcta-copy p:not(.yr3-eyebrow) {
+  margin: 0;
+  max-width: 44ch;
+  font-size: 16px;
+  line-height: 1.7;
+  color: #c9dbf0;
+}
+.chatcta-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 14px 22px;
+  margin-top: 28px;
+}
+
+.chat {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 18px 18px 20px;
+  border-radius: 26px;
+  background: #efe9df;
+  box-shadow: 0 30px 60px -24px rgba(0, 0, 0, 0.5);
+}
+.chat .chat-label {
+  margin: 0 0 6px;
+  align-self: center;
+  padding: 4px 11px;
+  border-radius: 99px;
+  background: rgba(16, 42, 76, 0.08);
+  font-size: 10.5px;
+  font-weight: 800;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: #5c6b80;
+}
+/* Vaga de cada mensagem: ocupa o espaco final desde o inicio, entao o card
+   NAO muda de altura enquanto a conversa acontece. */
+.chat-slot {
+  position: relative;
+  display: flex;
+}
+.chat-slot--them {
+  justify-content: flex-end;
+}
+.chat-slot--us {
+  justify-content: flex-start;
+}
+.chat .chat-msg {
+  margin: 0;
+  max-width: 84%;
+  padding: 10px 14px;
+  border-radius: 16px;
+  font-size: 14px;
+  line-height: 1.5;
+  color: #14233a;
+  opacity: 0;
+  transform: translateY(10px) scale(0.97);
+}
+.chat .chat-msg--them {
+  background: #d5f0c9;
+  border-bottom-right-radius: 5px;
+  transform-origin: 100% 100%;
+}
+.chat .chat-msg--us {
+  background: #ffffff;
+  border-bottom-left-radius: 5px;
+  transform-origin: 0 100%;
+}
+
+/* Indicador de digitacao: absoluto, no canto da vaga da resposta. Nao empurra nada. */
+.chat-typing {
+  position: absolute;
+  left: 0;
+  top: 0;
+  display: flex;
+  gap: 4px;
+  padding: 14px;
+  border-radius: 16px;
+  border-bottom-left-radius: 5px;
+  background: #ffffff;
+  opacity: 0;
+  pointer-events: none;
+}
+.chat-typing i {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #8fa6c4;
+  animation: chat-dot 900ms ease-in-out infinite;
+}
+.chat-typing i:nth-child(2) { animation-delay: 150ms; }
+.chat-typing i:nth-child(3) { animation-delay: 300ms; }
+@keyframes chat-dot {
+  0%, 100% { transform: translateY(0); opacity: 0.5; }
+  40% { transform: translateY(-4px); opacity: 1; }
+}
+
+/* Roteiro: mensagem do cliente, digitando, resposta, e de novo. */
+.chat.is-live .chat-msg {
+  animation: chat-in 460ms cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+.chat.is-live .chat-typing {
+  animation: chat-typing 1300ms ease forwards;
+}
+.chat.is-live .chat-s0 .chat-msg { animation-delay: 300ms; }
+.chat.is-live .chat-s1 .chat-typing { animation-delay: 1000ms; }
+.chat.is-live .chat-s1 .chat-msg { animation-delay: 2300ms; }
+.chat.is-live .chat-s2 .chat-msg { animation-delay: 3500ms; }
+.chat.is-live .chat-s3 .chat-typing { animation-delay: 4200ms; }
+.chat.is-live .chat-s3 .chat-msg { animation-delay: 5500ms; }
+@keyframes chat-in {
+  to { opacity: 1; transform: none; }
+}
+@keyframes chat-typing {
+  0% { opacity: 0; }
+  12%, 86% { opacity: 1; }
+  100% { opacity: 0; }
+}
+
+/* ------------------------------------------------------------------------
+   6. Duvidas
+   ------------------------------------------------------------------------ */
+.faqm-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.2fr);
+  gap: clamp(28px, 5vw, 80px);
+  align-items: start;
+}
+.faqm-side {
+  position: sticky;
+  top: calc(var(--yr-header-h, 70px) + 28px);
+}
+.faqm-side h2 {
+  margin: 10px 0 14px;
+  font-size: clamp(32px, 4vw, 56px);
+}
+.faqm-side .yr3-body {
+  margin: 0 0 8px;
+}
+
+/* balao com o icone do assunto aberto */
+.faqm-bubble {
+  position: relative;
+  width: min(100%, 300px);
+  margin: 18px 0 22px;
+  color: var(--azul-600, #1d5fae);
+}
+.faqm-bubble-shape {
+  display: block;
+  width: 100%;
+  height: auto;
+  animation: faqm-bob 5s ease-in-out infinite;
+}
+.faqm-bubble-shape path {
+  fill: #dce9f8;
+  stroke: #b9d2f0;
+  stroke-width: 2;
+}
+.faqm-bubble-icon {
+  position: absolute;
+  left: 31%;
+  top: 14%;
+  width: 38%;
+  height: auto;
+  animation: faqm-bob 5s ease-in-out infinite;
+}
+@keyframes faqm-bob {
+  0%, 100% { translate: 0 0; }
+  50% { translate: 0 -7px; }
+}
+/* o traco do icone se desenha, um caminho depois do outro */
+.faqm-bubble-icon path {
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+  animation: faqm-draw 700ms cubic-bezier(0.22, 1, 0.36, 1) forwards;
+  animation-delay: calc(var(--i) * 140ms + 80ms);
+}
+@keyframes faqm-draw {
+  to { stroke-dashoffset: 0; }
+}
+.faqm-plus {
+  position: absolute;
+  width: 20px;
+  height: 20px;
+  opacity: 0.55;
+  background:
+    linear-gradient(#1d5fae, #1d5fae) center / 100% 30% no-repeat,
+    linear-gradient(#1d5fae, #1d5fae) center / 30% 100% no-repeat;
+  animation: herobed-float 7s ease-in-out infinite;
+}
+.faqm-plus--a { right: -4%; top: -6%; }
+.faqm-plus--b { left: -7%; bottom: 22%; width: 13px; height: 13px; animation-delay: -3s; }
+
+/* sanfona */
+.faqm-list {
+  display: grid;
+  gap: 10px;
+}
+.faqm-item {
+  border-radius: 20px;
+  background: var(--papel, #fffdf9);
+  border: 1px solid var(--areia, #e2d6c2);
+  transition:
+    border-color 300ms ease,
+    box-shadow 420ms ease;
+}
+.faqm-item.is-open {
+  border-color: #b9d2f0;
+  box-shadow: 0 24px 44px -30px rgba(16, 42, 76, 0.45);
+}
+.faqm-item h3 {
+  margin: 0;
+  font: inherit;
+}
+.faqm-item button {
+  width: 100%;
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr) 28px;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 18px 14px 14px;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  border-radius: 20px;
+}
+.faqm-chip {
+  width: 44px;
+  height: 44px;
+  border-radius: 14px;
+  display: grid;
+  place-items: center;
+  background: #eef4fc;
+  color: var(--azul-600, #1d5fae);
+  transition:
+    background 300ms ease,
+    color 300ms ease,
+    transform 420ms cubic-bezier(0.34, 1.7, 0.5, 1);
+}
+.faqm-chip svg {
+  width: 24px;
+  height: 24px;
+}
+.faqm-item.is-open .faqm-chip {
+  background: var(--azul-600, #1d5fae);
+  color: #ffffff;
+  transform: rotate(-6deg) scale(1.06);
+}
+.faqm-q {
+  font-family: Georgia, 'Times New Roman', serif;
+  font-size: clamp(17px, 1.5vw, 21px);
+  line-height: 1.25;
+  letter-spacing: -0.015em;
+  color: var(--azul-900, #102a4c);
+}
+/* + que vira - : a barra vertical deita */
+.faqm-toggle {
+  position: relative;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: #eef4fc;
+}
+.faqm-toggle::before,
+.faqm-toggle::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 12px;
+  height: 2px;
+  border-radius: 2px;
+  background: var(--azul-600, #1d5fae);
+  transform: translate(-50%, -50%);
+  transition: transform 420ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+.faqm-toggle::after {
+  transform: translate(-50%, -50%) rotate(90deg);
+}
+.faqm-item.is-open .faqm-toggle::after {
+  transform: translate(-50%, -50%) rotate(0deg);
+}
+.faqm-panel {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows 460ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+.faqm-item.is-open .faqm-panel {
+  grid-template-rows: 1fr;
+}
+.faqm-panel > div {
+  min-height: 0;
+  overflow: hidden;
+}
+.faqm .faqm-panel p {
+  margin: 0;
+  padding: 0 22px 20px 72px;
+  font-size: 15px;
+  line-height: 1.7;
+  opacity: 0;
+  transition: opacity 300ms ease;
+}
+.faqm-item.is-open .faqm-panel p {
+  opacity: 1;
+  transition-delay: 160ms;
+}
+
+/* ------------------------------------------------------------------------
+   Seletor de equipamento do "Conheca de perto"
+   Era um select nativo com rotulo claro sobre fundo claro (invisivel).
+   ------------------------------------------------------------------------ */
+.inspector-heading p {
+  color: var(--tinta-2, #4a5550);
+}
+.inspector-picker {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+}
+.inspector-picker button {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  padding: 5px 15px 5px 5px;
+  border-radius: 999px;
+  border: 1px solid var(--areia, #e2d6c2);
+  background: var(--papel, #fffdf9);
+  color: var(--azul-900, #102a4c);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 800;
+  cursor: pointer;
+  min-height: 44px;
+  transition:
+    background 200ms ease,
+    border-color 200ms ease,
+    color 200ms ease;
+}
+.inspector-picker button img {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  object-fit: cover;
+  flex: 0 0 auto;
+}
+.inspector-picker button:hover {
+  border-color: #b9d2f0;
+}
+.inspector-picker button.is-active {
+  background: var(--azul-900, #102a4c);
+  border-color: var(--azul-900, #102a4c);
+  color: #ffffff;
+}
+
+/* ------------------------------------------------------------------------
+   Sublinhado desenhado nos titulos do quarto (mesmo traco do titulo do hero)
+   ------------------------------------------------------------------------ */
+.room-mark {
+  position: relative;
+  display: inline-block;
+}
+.room-mark svg {
+  position: absolute;
+  left: -1%;
+  bottom: -0.2em;
+  width: 102%;
+  height: 0.24em;
+  overflow: visible;
+  pointer-events: none;
+}
+.room-mark path {
+  fill: none;
+  stroke: var(--azul-600, #1d5fae);
+  stroke-width: 5;
+  stroke-linecap: round;
+  stroke-dasharray: 320;
+  stroke-dashoffset: 320;
+  opacity: 0.6;
+  transition: stroke-dashoffset 900ms cubic-bezier(0.22, 1, 0.36, 1) 160ms;
+}
+.room-beat.is-current .room-mark path {
+  stroke-dashoffset: 0;
+}
+
+/* ----------------------------------------------------------------- celular */
+@media (max-width: 900px) {
+  .bento-grid {
+    grid-template-columns: 1fr;
+  }
+  .bento-card {
+    border-radius: 22px;
+  }
+
+  /* No celular a estrada vira uma linha vertical que se preenche, e os
+     passos descem ao lado dela. A van fica so no desktop. */
+  .jroad-svg {
+    display: none;
+  }
+  .jroad-steps {
+    grid-template-columns: 1fr;
+    gap: 12px;
+    position: relative;
+    padding-left: 30px;
+  }
+  .jroad-steps::before,
+  .jroad-steps::after {
+    content: '';
+    position: absolute;
+    left: 9px;
+    top: 8px;
+    bottom: 8px;
+    width: 4px;
+    border-radius: 99px;
+    background: #d9e3ef;
+  }
+  .jroad-steps::after {
+    background: var(--azul-600, #1d5fae);
+    transform-origin: 50% 0;
+    transform: scaleY(var(--t));
+  }
+  .jroad-steps li {
+    padding: 16px 18px 18px;
+  }
+
+  .chatcta-box {
+    grid-template-columns: 1fr;
+    border-radius: 26px;
+  }
+
+  .faqm-grid {
+    grid-template-columns: 1fr;
+    gap: 22px;
+  }
+  .faqm-side {
+    position: static;
+  }
+  .faqm-bubble {
+    width: 150px;
+    margin: 10px 0 14px;
+  }
+  .faqm-item button {
+    grid-template-columns: 38px minmax(0, 1fr) 26px;
+    gap: 11px;
+    padding: 12px 14px 12px 12px;
+  }
+  .faqm-chip {
+    width: 38px;
+    height: 38px;
+    border-radius: 12px;
+  }
+  .faqm .faqm-panel p {
+    padding: 0 16px 18px 16px;
+    font-size: 14.5px;
+  }
+
+  /* pilulas do inspetor rolam de lado em vez de quebrar em varias linhas */
+  .inspector-picker {
+    justify-content: flex-start;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    margin: 14px -22px 0;
+    padding: 2px 22px 8px;
+    scrollbar-width: none;
+  }
+  .inspector-picker::-webkit-scrollbar {
+    display: none;
+  }
+  .inspector-picker button {
+    flex: 0 0 auto;
+  }
+  .chatcta-actions .yr3-button {
+    flex: 1 1 100%;
+    justify-content: center;
+  }
+}
+
+/* ------------------------------------------------------ movimento reduzido */
+@media (prefers-reduced-motion: reduce) {
+  .kband-row,
+  .kband-row--outline {
+    transform: none;
+  }
+  .bento .mg *,
+  .bento.is-live .mg * {
+    animation: none;
+  }
+  .mg-chair {
+    transform: translate(150px, 186px);
+  }
+  .dscale-beam,
+  .dscale-pan,
+  .bento-card,
+  .jroad-steps li {
+    transition: none;
+  }
+  .jroad-steps li {
+    opacity: 1;
+    transform: none;
+  }
+  .chat .chat-msg {
+    opacity: 1;
+    transform: none;
+    animation: none !important;
+  }
+  .chat-typing {
+    display: none;
+  }
+  .faqm-bubble-shape,
+  .faqm-bubble-icon,
+  .faqm-plus {
+    animation: none;
+  }
+  .faqm-bubble-icon path {
+    animation: none;
+    stroke-dashoffset: 0;
+  }
+  .faqm-panel,
+  .faqm-panel p,
+  .faqm-chip,
+  .faqm-toggle::after {
+    transition: none;
+  }
+  .room-mark path {
+    transition: none;
+    stroke-dashoffset: 0;
+  }
+}

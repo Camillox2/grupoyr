@@ -5,7 +5,9 @@ const SelectionContext = createContext(null)
 const storageKey = 'yr-showroom-selection-v1'
 const initial = { slug: null, mode: 'Comprar', place: 'all', period: '' }
 export const placeLabels = { all: 'Ambiente a definir', home: 'Em casa', clinic: 'Clínica ou instituição' }
-export const fitsPlace = (product, place) => place !== 'home' || [1, 4, 5, 6].includes(product.id)
+// O catalogo passou a ser inteiro de cuidado em casa: nao ha mais recorte
+// por ambiente. Mantido como funcao para nao quebrar quem ainda importa.
+export const fitsPlace = () => true
 
 export function SelectionProvider({ children }) {
   const [selection, setSelection] = useState(initial)

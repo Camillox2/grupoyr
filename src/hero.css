@@ -1,0 +1,389 @@
+/* ===========================================================================
+   Hero da home: titulo direto + cama vetorial interativa
+
+   Base pastel (creme) com o AZUL da marca como cor de contraste: botao
+   principal, sublinhado do titulo, colchao da ilustracao e controles.
+   =========================================================================== */
+
+.herobed {
+  position: relative;
+  background:
+    radial-gradient(90% 70% at 85% 35%, #e3eefb 0%, rgba(227, 238, 251, 0) 60%),
+    var(--creme, #f6f1e8);
+  overflow: hidden;
+}
+
+.herobed-inner {
+  width: min(1240px, calc(100% - 48px));
+  margin: 0 auto;
+  min-height: calc(100svh - var(--yr-header-h, 70px));
+  display: grid;
+  grid-template-columns: minmax(0, 1.02fr) minmax(0, 1fr);
+  align-items: center;
+  gap: clamp(24px, 4vw, 64px);
+  padding: 40px 0 48px;
+}
+
+/* ------------------------------------------------------------------ texto */
+/* Prefixo .herobed: `.yr3 p` das camadas antigas zera margem com mais peso. */
+.herobed .herobed-eyebrow {
+  margin: 0 0 24px;
+  display: flex;
+  width: max-content;
+  max-width: 100%;
+  align-items: center;
+  gap: 9px;
+  padding: 7px 14px 7px 11px;
+  border-radius: 999px;
+  background: #ffffff;
+  border: 1px solid #d5e3f5;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  color: var(--azul-900, #102a4c);
+}
+.herobed-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #1fa971;
+  box-shadow: 0 0 0 0 rgba(31, 169, 113, 0.5);
+  animation: herobed-ping 2.2s ease-out infinite;
+}
+@keyframes herobed-ping {
+  0% { box-shadow: 0 0 0 0 rgba(31, 169, 113, 0.5); }
+  70%, 100% { box-shadow: 0 0 0 9px rgba(31, 169, 113, 0); }
+}
+
+.herobed h1 {
+  margin: 0;
+  font-family: Georgia, 'Times New Roman', serif;
+  font-weight: 400;
+  font-size: clamp(38px, 5.2vw, 76px);
+  line-height: 1.02;
+  letter-spacing: -0.04em;
+  color: var(--azul-900, #102a4c);
+  text-wrap: balance;
+}
+
+/* Sublinhado desenhado a mao, em azul, que se traca no carregamento. */
+.herobed-mark {
+  position: relative;
+  display: inline-block;
+  color: var(--azul-600, #1d5fae);
+  white-space: nowrap;
+}
+.herobed-mark svg {
+  position: absolute;
+  left: -1%;
+  bottom: -0.16em;
+  width: 102%;
+  height: 0.22em;
+  overflow: visible;
+}
+.herobed-mark path {
+  fill: none;
+  stroke: var(--azul-600, #1d5fae);
+  stroke-width: 5;
+  stroke-linecap: round;
+  stroke-dasharray: 320;
+  stroke-dashoffset: 320;
+  opacity: 0.55;
+  animation: herobed-draw 900ms 500ms cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+@keyframes herobed-draw {
+  to { stroke-dashoffset: 0; }
+}
+
+.herobed .herobed-lede {
+  /* folga para o sublinhado desenhado, que desce abaixo da linha do titulo */
+  margin: 40px 0 0;
+  max-width: 50ch;
+  font-size: clamp(16px, 1.3vw, 19px);
+  line-height: 1.65;
+  color: #44546a;
+}
+
+.herobed-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 30px;
+}
+.herobed .herobed-cta {
+  background: var(--azul-600, #1d5fae);
+  border-color: var(--azul-600, #1d5fae);
+  color: #fff;
+  padding: 16px 26px;
+  font-size: 15px;
+  box-shadow: 0 14px 30px -10px rgba(29, 95, 174, 0.6);
+}
+.herobed .herobed-cta:hover {
+  background: var(--azul-900, #102a4c);
+  border-color: var(--azul-900, #102a4c);
+}
+.herobed-actions .yr3-button--soft {
+  padding: 16px 24px;
+  font-size: 15px;
+  background: #fff;
+}
+
+.herobed-proof {
+  list-style: none;
+  margin: 28px 0 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 20px;
+}
+.herobed-proof li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 700;
+  color: #44546a;
+}
+.herobed-proof li::before {
+  content: '';
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%231d5fae' stroke-width='3.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 12.5 4 4 8-9'/%3E%3C/svg%3E")
+      center / 11px no-repeat,
+    #dce9f8;
+}
+
+/* -------------------------------------------------------------- ilustracao */
+.herobed-play {
+  position: relative;
+  display: grid;
+  gap: 0;
+}
+
+.herobed-scene {
+  position: relative;
+  border-radius: 36px 36px 0 0;
+  padding: 26px 18px 0;
+  background: linear-gradient(180deg, #dce9f8 0%, #eaf2fc 100%);
+  border: 1px solid #cfe0f4;
+  border-bottom: 0;
+  overflow: hidden;
+}
+/* "piso" da cena */
+.herobed-scene::after {
+  content: '';
+  position: absolute;
+  inset: auto 0 0 0;
+  height: 13%;
+  background: #cfe0f4;
+}
+.herobed-svg {
+  position: relative;
+  z-index: 1;
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+/* O "+" do logo da YR, flutuando devagar ao fundo. */
+.herobed-plus {
+  position: absolute;
+  width: 26px;
+  height: 26px;
+  opacity: 0.5;
+  background:
+    linear-gradient(#1d5fae, #1d5fae) center / 100% 30% no-repeat,
+    linear-gradient(#1d5fae, #1d5fae) center / 30% 100% no-repeat;
+  border-radius: 3px;
+  animation: herobed-float 7s ease-in-out infinite;
+}
+.herobed-plus--a { left: 9%; top: 14%; }
+.herobed-plus--b { right: 12%; top: 22%; width: 18px; height: 18px; opacity: 0.35; animation-delay: -2.4s; }
+.herobed-plus--c { right: 30%; top: 9%; width: 14px; height: 14px; opacity: 0.28; animation-delay: -4.6s; }
+@keyframes herobed-float {
+  0%, 100% { transform: translateY(0) rotate(0deg); }
+  50% { transform: translateY(-12px) rotate(12deg); }
+}
+
+/* ---------------------------------------------------------------- controle */
+.herobed-remote {
+  position: relative;
+  z-index: 2;
+  border-radius: 0 0 28px 28px;
+  background: #ffffff;
+  border: 1px solid #cfe0f4;
+  padding: 16px 20px 14px;
+  box-shadow: 0 30px 60px -28px rgba(16, 42, 76, 0.4);
+}
+.herobed-remote-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 6px;
+}
+.herobed-remote-head strong {
+  font-size: 14px;
+  letter-spacing: -0.01em;
+  color: var(--azul-900, #102a4c);
+}
+.herobed-remote-head button {
+  border: 1px solid #cfe0f4;
+  background: #f3f8fe;
+  color: var(--azul-600, #1d5fae);
+  font: inherit;
+  font-size: 11.5px;
+  font-weight: 800;
+  border-radius: 999px;
+  padding: 6px 13px;
+  cursor: pointer;
+  min-height: 32px;
+}
+.herobed-remote-head button:hover {
+  background: #dce9f8;
+}
+
+.herobed-slider {
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr) minmax(90px, 42%);
+  align-items: center;
+  gap: 12px;
+  padding: 9px 0;
+  border-top: 1px solid #edf2f8;
+  cursor: pointer;
+}
+.herobed-slider-icon {
+  width: 34px;
+  height: 34px;
+  border-radius: 11px;
+  display: grid;
+  place-items: center;
+  background: #eaf2fc;
+  color: var(--azul-600, #1d5fae);
+}
+.herobed-slider-icon svg {
+  width: 18px;
+  height: 18px;
+}
+.herobed-slider-copy {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.herobed-slider-copy strong {
+  font-size: 13.5px;
+  color: var(--azul-900, #102a4c);
+}
+.herobed-slider-copy em {
+  font-style: normal;
+  font-size: 11.5px;
+  color: #6b7c92;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.herobed-slider input[type='range'] {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 28px;
+  background: transparent;
+  cursor: grab;
+  touch-action: pan-y;
+}
+.herobed-slider input[type='range']:active {
+  cursor: grabbing;
+}
+.herobed-slider input[type='range']::-webkit-slider-runnable-track {
+  height: 8px;
+  border-radius: 99px;
+  background: linear-gradient(90deg, #1d5fae var(--fill, 0%), #dce9f8 var(--fill, 0%));
+}
+.herobed-slider input[type='range']::-moz-range-track {
+  height: 8px;
+  border-radius: 99px;
+  background: #dce9f8;
+}
+.herobed-slider input[type='range']::-moz-range-progress {
+  height: 8px;
+  border-radius: 99px;
+  background: #1d5fae;
+}
+.herobed-slider input[type='range']::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 24px;
+  height: 24px;
+  margin-top: -8px;
+  border-radius: 50%;
+  background: #fff;
+  border: 3px solid #1d5fae;
+  box-shadow: 0 3px 10px rgba(16, 42, 76, 0.28);
+}
+.herobed-slider input[type='range']::-moz-range-thumb {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #fff;
+  border: 3px solid #1d5fae;
+  box-shadow: 0 3px 10px rgba(16, 42, 76, 0.28);
+}
+
+.herobed .herobed-note {
+  margin: 8px 0 0;
+  font-size: 10.5px;
+  color: #8b9ab0;
+}
+
+/* ----------------------------------------------------------------- celular */
+@media (max-width: 900px) {
+  .herobed-inner {
+    grid-template-columns: 1fr;
+    min-height: 0;
+    padding: 26px 0 34px;
+    gap: 26px;
+    width: calc(100% - 36px);
+  }
+  .herobed h1 {
+    font-size: clamp(36px, 10.4vw, 52px);
+  }
+  .herobed-mark {
+    white-space: normal;
+  }
+  .herobed .herobed-lede {
+    margin-top: 30px;
+  }
+  .herobed-actions {
+    margin-top: 22px;
+  }
+  .herobed-actions .yr3-button {
+    flex: 1 1 auto;
+    justify-content: center;
+    text-align: center;
+  }
+  .herobed-scene {
+    border-radius: 26px 26px 0 0;
+    padding: 16px 8px 0;
+  }
+  .herobed-slider {
+    grid-template-columns: 34px minmax(0, 1fr) 44%;
+    gap: 10px;
+  }
+  .herobed-slider-copy em {
+    display: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .herobed-dot,
+  .herobed-plus {
+    animation: none;
+  }
+  .herobed-mark path {
+    animation: none;
+    stroke-dashoffset: 0;
+  }
+}

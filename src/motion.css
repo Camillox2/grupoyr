@@ -1,0 +1,279 @@
+/* ===========================================================================
+   Grupo YR - Fundacao de movimento das landing pages
+   Mesma familia do CRM: tokens de duracao/curva, movimento com proposito.
+
+   Importado por ultimo em main.jsx para assentar sobre as camadas herdadas
+   sem precisar de !important.
+
+   Os seletores abaixo foram conferidos contra o HTML gerado por
+   `npm run build` (dist/index.html e dist/equipamentos/*.html). Classe que
+   nao existe no markup nao anima nada e vira codigo morto silencioso.
+   =========================================================================== */
+
+:root {
+  --yr-dur-fast: 200ms;
+  --yr-dur-moderate: 320ms;
+  --yr-dur-slow: 600ms;
+  --yr-ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+/* ---------------------------------------------------------------------------
+   1. Revelacao por scroll, nativa (animation-timeline)
+
+   Roda no compositor, sem JavaScript e sem jank. O @supports e OBRIGATORIO:
+   sem ele, um navegador sem suporte manteria a secao em opacity 0 para
+   sempre, escondendo conteudo real do visitante e do buscador.
+   --------------------------------------------------------------------------- */
+@supports (animation-timeline: view()) {
+  .yr3-section-heading,
+  .yr3-steps,
+  .yr3-reasons,
+  .yr3-guide,
+  .yr3-contact,
+  .yr3-about-image,
+  .showroom-product,
+  .equipment-info,
+  .equipment-faq,
+  .related-products,
+  .compare-guide > section,
+  .comparison-table,
+  .guide-next {
+    animation: yr-reveal-up linear both;
+    animation-timeline: view();
+    animation-range: entry 0% cover 30%;
+  }
+
+  @keyframes yr-reveal-up {
+    from {
+      opacity: 0;
+      transform: translateY(26px);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+
+  /* Os seis cards do catalogo entram em cascata, nao todos de uma vez. */
+  .showroom-product:nth-child(2n) {
+    animation-range: entry 0% cover 34%;
+  }
+  .showroom-product:nth-child(3n) {
+    animation-range: entry 0% cover 38%;
+  }
+
+  /* O hero ja esta visivel no carregamento: revelar seria piscar a tela. */
+  .yr3-hero,
+  .yr3-hero *,
+  .yr3-header,
+  .yr3-header * {
+    animation-timeline: none;
+  }
+}
+
+/* Fallback para navegador sem scroll-driven: mesmo efeito por classe,
+   aplicada pelo IntersectionObserver de Enhancements.jsx. */
+@supports not (animation-timeline: view()) {
+  .yr-reveal {
+    opacity: 0;
+    transform: translateY(26px);
+    transition:
+      opacity var(--yr-dur-slow) var(--yr-ease-out),
+      transform var(--yr-dur-slow) var(--yr-ease-out);
+  }
+  .yr-reveal.yr-visible {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* ---------------------------------------------------------------------------
+   2. Profundidade no hero
+
+   O cartao da marca e a galeria andam em velocidades diferentes ao rolar,
+   entao o hero ganha camada em vez de ser um bloco chapado. 34px no total,
+   e so onde ha ponteiro fino: no toque o scroll ja tem inercia propria e o
+   efeito vira tremor.
+   --------------------------------------------------------------------------- */
+@supports (animation-timeline: scroll()) {
+  @media (pointer: fine) {
+    .yr3-brand-card {
+      animation: yr-drift-slow linear both;
+      animation-timeline: scroll(root);
+      animation-range: 0 70vh;
+    }
+    .showcase-track {
+      animation: yr-drift-fast linear both;
+      animation-timeline: scroll(root);
+      animation-range: 0 70vh;
+    }
+
+    @keyframes yr-drift-slow {
+      to {
+        transform: translateY(14px);
+      }
+    }
+    @keyframes yr-drift-fast {
+      to {
+        transform: translateY(-20px);
+      }
+    }
+  }
+}
+
+/* ---------------------------------------------------------------------------
+   3. View Transitions entre paginas
+
+   `navigation: auto` liga a transicao entre documentos: a foto do equipamento
+   no catalogo CRESCE e vira a foto da pagina do produto, em vez de a pagina
+   piscar. O nome e aplicado no clique por `viewTransitions.js`, porque so um
+   elemento por documento pode carregar o mesmo view-transition-name.
+   --------------------------------------------------------------------------- */
+@view-transition {
+  navigation: auto;
+}
+
+/* So UM elemento vivo pode carregar este nome. Se a foto da pagina e um
+   card de "continue conhecendo" carregarem o mesmo, o Chrome aborta a
+   transicao inteira e some ate o crossfade. Por isso a foto da pagina cede a
+   vez assim que o clique marca outro alvo. */
+[data-yr-morph],
+.equipment-image img {
+  view-transition-name: yr-equipamento;
+  contain: layout;
+}
+/* Quando o clique marca outro alvo, a foto da pagina cede o nome. */
+body:has([data-yr-morph]) .equipment-image img:not([data-yr-morph]) {
+  view-transition-name: none;
+}
+
+::view-transition-old(yr-equipamento),
+::view-transition-new(yr-equipamento) {
+  animation-duration: var(--yr-dur-moderate);
+  animation-timing-function: var(--yr-ease-out);
+}
+
+/* O resto da pagina faz um crossfade curto por baixo da foto que morfa. */
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation-duration: var(--yr-dur-fast);
+  animation-timing-function: ease;
+}
+
+/* ---------------------------------------------------------------------------
+   4. Foto do catalogo respondendo ao ponteiro
+
+   Aproximacao discreta e sombra ganhando profundidade: comunica que o card
+   inteiro e clicavel, sem deslocar nada em volta.
+   --------------------------------------------------------------------------- */
+@media (pointer: fine) {
+  .showroom-product-photo img,
+  .related-grid a img {
+    transition: transform var(--yr-dur-slow) var(--yr-ease-out);
+    will-change: transform;
+  }
+  .showroom-product-photo:hover img,
+  .showroom-product-photo:focus-visible img,
+  .related-grid a:hover img,
+  .related-grid a:focus-visible img {
+    transform: scale(1.035);
+  }
+  .showroom-product-photo,
+  .related-grid a img {
+    overflow: hidden;
+  }
+}
+
+/* ---------------------------------------------------------------------------
+   5. Barra de progresso de leitura do artigo
+   --------------------------------------------------------------------------- */
+@supports (animation-timeline: scroll()) {
+  .yr-read-progress {
+    position: fixed;
+    top: 0;
+    left: 0;
+    height: 3px;
+    width: 100%;
+    transform-origin: 0 50%;
+    background: var(--blue, #206ba1);
+    z-index: 90;
+    animation: yr-read-progress linear both;
+    animation-timeline: scroll(root);
+  }
+
+  @keyframes yr-read-progress {
+    from {
+      transform: scaleX(0);
+    }
+    to {
+      transform: scaleX(1);
+    }
+  }
+}
+
+/* ---------------------------------------------------------------------------
+   6. Imagem nitidificando ao carregar, em vez de aparecer de supetao.
+      O atributo e aplicado por viewTransitions.js nas fotos que carregam
+      com atraso (loading="lazy"); a foto do hero fica de fora de proposito.
+   --------------------------------------------------------------------------- */
+img[data-yr-blurup] {
+  filter: blur(14px);
+  transform: scale(1.02);
+  transition:
+    filter var(--yr-dur-slow) var(--yr-ease-out),
+    transform var(--yr-dur-slow) var(--yr-ease-out);
+}
+img[data-yr-blurup].yr-loaded {
+  filter: none;
+  transform: none;
+}
+
+/* ---------------------------------------------------------------------------
+   7. Movimento reduzido desliga tudo.
+      Nao e so acessibilidade: parallax passa mal quem tem enxaqueca
+      vestibular. O conteudo continua inteiro e legivel com movimento zero.
+   --------------------------------------------------------------------------- */
+@media (prefers-reduced-motion: reduce) {
+  .yr3-section-heading,
+  .yr3-steps,
+  .yr3-reasons,
+  .yr3-guide,
+  .yr3-contact,
+  .yr3-about-image,
+  .showroom-product,
+  .equipment-info,
+  .equipment-faq,
+  .related-products,
+  .compare-guide > section,
+  .comparison-table,
+  .guide-next,
+  .yr3-brand-card,
+  .showcase-track,
+  .yr-read-progress,
+  .yr-reveal {
+    animation: none !important;
+    opacity: 1 !important;
+    transform: none !important;
+  }
+
+  .showroom-product-photo img,
+  .related-grid a img {
+    transition: none;
+  }
+  .showroom-product-photo:hover img,
+  .related-grid a:hover img {
+    transform: none;
+  }
+
+  img[data-yr-blurup] {
+    filter: none;
+    transform: none;
+    transition: none;
+  }
+
+  ::view-transition-group(*),
+  ::view-transition-old(*),
+  ::view-transition-new(*) {
+    animation: none !important;
+  }
+}

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useSelection, placeLabels } from './SelectionContext.jsx'
+import { DecisionScale } from './Motion.jsx'
 
 export default function DecisionGuide({ onContinue }) {
   const { selection, setPlace, update } = useSelection()
@@ -30,6 +31,7 @@ export default function DecisionGuide({ onContinue }) {
         <fieldset><legend>02 / Por quanto tempo?</legend><div className="choice-row choice-row--three">
           {['Temporário', 'Contínuo', 'Ainda não sei'].map(value => <label key={value} className={period === value ? 'choice is-selected' : 'choice'}><input type="radio" name="periodo-de-uso" value={value} checked={period === value} onChange={() => { setPeriod(value); update({ period: value }) }} /><span>{value}</span></label>)}
         </div></fieldset>
+        <DecisionScale lean={result.interest} />
         <div className="decision-result" aria-live="polite" aria-atomic="true"><div key={period} className="decision-result__content"><h3>{result.title}</h3><p>{result.text}</p></div></div>
         <button className="btn btn--primary" onClick={() => onContinue(context)}>Levar minha escolha à YR <span aria-hidden="true">→</span></button>
       </div>

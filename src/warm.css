@@ -1,0 +1,720 @@
+/* ===========================================================================
+   "Papel Quente" aplicado ao restante da landing page
+
+   A abertura (o quarto) ja nasceu nesta paleta. Este arquivo leva a mesma
+   direcao para tudo que vem depois: catalogo, sobre, jornada, duvidas,
+   contato, rodape, cabecalho e as paginas de produto.
+
+   Carregado por ULTIMO em main.jsx, para assentar sobre as camadas antigas
+   (experience-v3, showroom, refinements) sem precisar de !important.
+   =========================================================================== */
+
+:root {
+  --creme: #f6f1e8;
+  --creme-2: #efe7da;
+  --papel: #fffdf9;
+  --areia: #e2d6c2;
+  --areia-2: #d4c5ab;
+  --petroleo: #102a4c;
+  --petroleo-2: #1d5fae;
+  --terracota: #1d5fae;
+  --terracota-2: #174d8f;
+  --tinta: #1f2420;
+  --tinta-2: #4a5550;
+  --ease-warm: cubic-bezier(0.22, 1, 0.36, 1);
+
+  /* Azul da marca (tirado do logo): e o contraste sobre a base pastel.
+     Os nomes --petroleo/--terracota ficaram da primeira versao da paleta e
+     hoje apontam para estes azuis. */
+  --azul-900: #102a4c;
+  --azul-600: #1d5fae;
+  --azul-100: #dce9f8;
+
+  /* Altura do cabecalho fixo. A cena do quarto usa este valor para saber
+     quanta tela sobra de verdade. */
+  --yr-header-h: 70px;
+}
+
+body,
+.yr3 {
+  background: var(--creme);
+  color: var(--tinta);
+}
+
+/* ----------------------------------------------------------------- titulos
+   Serifa nos titulos e o que tira a cara de SaaS generico. O corpo do texto
+   continua em Manrope, que le melhor em paragrafo. */
+.yr3 h2,
+.yr3 h3,
+.compare-guide h1,
+.compare-guide h2,
+.equipment-copy h1,
+.equipment-info h2,
+.equipment-faq h2,
+.related-products h2,
+.not-found h1 {
+  font-family: Georgia, 'Times New Roman', serif;
+  font-weight: 400;
+  letter-spacing: -0.03em;
+  color: var(--petroleo);
+}
+.yr3 h2 {
+  line-height: 1.08;
+}
+
+.yr3-eyebrow,
+.equipment-category,
+.showroom-category {
+  color: var(--terracota);
+  font-weight: 800;
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
+}
+
+.yr3-body,
+.yr3 p,
+.equipment-description {
+  color: var(--tinta-2);
+}
+
+/* --------------------------------------------------------------- cabecalho
+   A logo vinha com 142x110px (showroom.css), o que deixava o cabecalho com
+   ~140px e comia um sexto da tela antes de qualquer conteudo. */
+.yr3-header-inner {
+  min-height: var(--yr-header-h);
+  gap: 22px;
+}
+.yr3-header .brand-original,
+.site-header .brand-original {
+  width: 78px;
+  height: 58px;
+  border-radius: 8px;
+  background: transparent;
+}
+.yr3-header .brand-original img,
+.site-header .brand-original img {
+  width: 92px;
+  height: 92px;
+  left: -7px;
+  top: -17px;
+  mix-blend-mode: multiply;
+}
+.yr3-header .yr3-button,
+.yr3-header-contact {
+  padding-top: 11px;
+  padding-bottom: 11px;
+}
+
+@media (max-width: 900px) {
+  :root {
+    --yr-header-h: 62px;
+  }
+  .yr3-header-inner {
+    min-height: var(--yr-header-h);
+  }
+  .yr3-header .brand-original,
+  .site-header .brand-original {
+    width: 68px;
+    height: 50px;
+  }
+  .yr3-header .brand-original img,
+  .site-header .brand-original img {
+    width: 80px;
+    height: 80px;
+    left: -6px;
+    top: -15px;
+  }
+}
+
+.yr3-header,
+.site-header {
+  /* quase opaco: translucido demais fica cinza ao passar sobre a faixa azul */
+  background: color-mix(in srgb, var(--creme) 96%, transparent);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--areia);
+}
+.yr3-nav a,
+.detail-nav a {
+  color: var(--tinta-2);
+  font-weight: 700;
+}
+.yr3-nav a:hover,
+.detail-nav a:hover {
+  color: var(--terracota);
+}
+
+/* Botao do menu no celular ainda vinha no azul da paleta antiga. */
+.yr3-menu-toggle {
+  background: var(--creme-2);
+  color: var(--petroleo);
+  border: 1px solid var(--areia);
+  border-radius: 14px;
+}
+.yr3-nav.is-open {
+  background: var(--creme);
+  border-bottom: 1px solid var(--areia);
+}
+
+/* ------------------------------------------------------------------ botoes */
+.yr3-button,
+.btn--primary,
+.header-cta,
+.pill {
+  background: var(--petroleo);
+  color: var(--creme);
+  border: 1px solid var(--petroleo);
+  border-radius: 999px;
+  font-weight: 800;
+  transition: background 200ms var(--ease-warm), border-color 200ms var(--ease-warm);
+}
+.yr3-button:hover,
+.btn--primary:hover,
+.header-cta:hover {
+  background: var(--terracota);
+  border-color: var(--terracota);
+}
+
+.yr3-button--soft,
+.btn--secondary {
+  background: transparent;
+  color: var(--petroleo);
+  border: 1px solid var(--areia-2);
+}
+.yr3-button--soft:hover,
+.btn--secondary:hover {
+  background: var(--creme-2);
+  border-color: var(--petroleo-2);
+  color: var(--petroleo);
+}
+
+.yr3-button--white {
+  background: var(--creme);
+  color: var(--petroleo);
+  border-color: var(--creme);
+}
+.yr3-button--white:hover {
+  background: #fff;
+  border-color: #fff;
+  color: var(--terracota-2);
+}
+
+.inline-link {
+  color: var(--petroleo-2);
+  font-weight: 800;
+}
+.inline-link:hover {
+  color: var(--terracota);
+}
+
+/* ----------------------------------------------------------------- secoes */
+.yr3-section {
+  background: transparent;
+}
+.yr3-about,
+.equipment-info {
+  background: var(--creme-2);
+}
+.yr3-journey {
+  background: var(--creme);
+}
+
+.yr3-section-heading p,
+.yr3-journey p {
+  color: var(--tinta-2);
+}
+
+/* Numerais das razoes e dos passos: terracota, tabulares. */
+.yr3-reasons span,
+.yr3-steps span {
+  color: var(--terracota);
+  font-variant-numeric: tabular-nums;
+  font-family: Georgia, serif;
+}
+
+.yr3-steps article,
+.yr3-reasons > div {
+  background: var(--papel);
+  border: 1px solid var(--areia);
+  border-radius: 16px;
+}
+
+.yr3-about-image img,
+.yr3-brand-card {
+  border-radius: 18px;
+  border: 1px solid var(--areia);
+}
+.yr3-brand-card {
+  background: var(--papel);
+}
+
+/* --------------------------------------------------------------- catalogo */
+.showroom-catalog {
+  background: var(--creme);
+}
+.yr3-catalog-controls {
+  border-bottom: 1px solid var(--areia);
+}
+.yr3-segments {
+  background: var(--creme-2);
+  border: 1px solid var(--areia);
+  border-radius: 999px;
+}
+.yr3-segments button {
+  color: var(--tinta-2);
+  font-weight: 800;
+  border-radius: 999px;
+}
+.yr3-segments button.is-active {
+  background: var(--petroleo);
+  color: var(--creme);
+}
+.yr3-segments button span {
+  font-variant-numeric: tabular-nums;
+  opacity: 0.7;
+}
+
+.yr3-search {
+  background: var(--papel);
+  border: 1px solid var(--areia);
+  border-radius: 999px;
+  color: var(--tinta-2);
+}
+.yr3-search input {
+  color: var(--tinta);
+}
+.yr3-result-count {
+  color: #8a9490;
+  font-weight: 700;
+}
+
+.showroom-product {
+  background: var(--papel);
+  border: 1px solid var(--areia);
+  border-radius: 20px;
+  overflow: hidden;
+  transition: border-color 220ms var(--ease-warm), box-shadow 220ms var(--ease-warm);
+}
+.showroom-product:hover {
+  border-color: var(--petroleo-2);
+  box-shadow: 0 18px 40px rgba(31, 36, 32, 0.09);
+}
+.showroom-product h3 a {
+  color: var(--petroleo);
+  font-family: Georgia, serif;
+  letter-spacing: -0.02em;
+}
+.showroom-product p {
+  color: var(--tinta-2);
+}
+.showroom-product-photo {
+  background: var(--creme-2);
+}
+
+/* ------------------------------------------------------------------ faq */
+.yr3-faq details {
+  background: var(--papel);
+  border: 1px solid var(--areia);
+  border-radius: 14px;
+  margin-bottom: 9px;
+  overflow: hidden;
+}
+.yr3-faq summary {
+  color: var(--petroleo);
+  font-weight: 800;
+  cursor: pointer;
+  list-style: none;
+}
+.yr3-faq summary::-webkit-details-marker {
+  display: none;
+}
+.yr3-faq summary span {
+  color: var(--terracota);
+}
+.yr3-faq details p {
+  color: var(--tinta-2);
+}
+
+/* -------------------------------------------------------- contato e rodape */
+.yr3-contact {
+  background: var(--creme);
+}
+.yr3-contact-box {
+  background: var(--petroleo);
+  color: var(--creme);
+  border-radius: 24px;
+}
+.yr3-contact-box h2 {
+  color: var(--creme);
+}
+.yr3-contact-box p {
+  color: color-mix(in srgb, var(--creme) 76%, transparent);
+}
+.yr3-contact-box .yr3-eyebrow {
+  color: #9cc3f0;
+}
+.yr3-email {
+  color: var(--creme);
+  text-decoration: underline;
+  text-underline-offset: 4px;
+}
+
+.yr3-footer,
+.detail-footer {
+  background: var(--creme-2);
+  border-top: 1px solid var(--areia);
+  color: var(--tinta-2);
+}
+.yr3-footer strong,
+.detail-footer strong {
+  color: var(--petroleo);
+}
+.yr3-footer a,
+.yr3-footer button,
+.detail-footer a {
+  color: var(--tinta-2);
+  font-weight: 600;
+}
+.yr3-footer a:hover,
+.yr3-footer button:hover,
+.detail-footer a:hover {
+  color: var(--terracota);
+}
+.yr3-footer-bottom {
+  color: #8a9490;
+  border-top: 1px solid var(--areia);
+}
+
+/* ------------------------------------------------- paginas de equipamento */
+.breadcrumb,
+.breadcrumb a {
+  color: #8a9490;
+}
+.breadcrumb a:hover {
+  color: var(--terracota);
+}
+.equipment-image img {
+  border-radius: 20px;
+  border: 1px solid var(--areia);
+  background: var(--creme-2);
+}
+.equipment-image span {
+  color: #8a9490;
+}
+.equipment-copy ul li,
+.checklist li,
+.guide-list li {
+  color: var(--tinta-2);
+}
+.equipment-faq details,
+.compare-guide details {
+  background: var(--papel);
+  border: 1px solid var(--areia);
+  border-radius: 14px;
+}
+.comparison-table {
+  background: var(--papel);
+  border: 1px solid var(--areia);
+  border-radius: 16px;
+  overflow: hidden;
+}
+.comparison-table th {
+  background: var(--creme-2);
+  color: var(--petroleo);
+}
+.comparison-table td,
+.comparison-table th {
+  border-color: var(--areia);
+  color: var(--tinta-2);
+}
+.related-grid a {
+  background: var(--papel);
+  border: 1px solid var(--areia);
+  border-radius: 16px;
+  overflow: hidden;
+  color: var(--tinta);
+}
+.related-grid a:hover {
+  border-color: var(--petroleo-2);
+}
+.related-grid h3 {
+  color: var(--petroleo);
+}
+.guide-next {
+  background: var(--creme-2);
+  border: 1px solid var(--areia);
+  border-radius: 20px;
+}
+
+/* --------------------------------------------------------------- selecao */
+.quote-dock,
+.yr-quote-bar {
+  background: var(--petroleo);
+  color: var(--creme);
+  border-color: var(--petroleo);
+}
+
+::selection {
+  background: var(--terracota);
+  color: #fff;
+}
+
+/* Foco visivel na paleta nova. */
+a:focus-visible,
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+summary:focus-visible {
+  outline: 2px solid var(--terracota);
+  outline-offset: 3px;
+}
+
+/* ===========================================================================
+   Restos da paleta fria
+   Levantados por grep nos fundos claros azulados de experience-v3.css e
+   showroom.css.
+   =========================================================================== */
+.yr3-hero,
+.yr3-catalog,
+.yr3-guide,
+.yr3-journey,
+.showroom-catalog,
+.showroom-inspector,
+.yr3-inspect {
+  background: var(--creme);
+}
+
+.catalog-heading {
+  margin-bottom: 30px;
+}
+
+/* Guia comprar x alugar */
+.yr3-guide .decision-studio {
+  background: var(--creme-2);
+  border: 1px solid var(--areia);
+}
+.yr3-guide .choice {
+  background: var(--papel);
+  border-color: var(--areia);
+  color: var(--tinta);
+}
+.yr3-guide .choice.is-selected {
+  background: #eef4fc;
+  border-color: var(--terracota);
+}
+.yr3-guide .decision-result {
+  background: var(--papel);
+  border: 1px solid var(--areia);
+}
+
+/* Chips numerados "01 02 03" */
+.yr3-reasons > div {
+  padding: 14px 16px;
+  align-items: center;
+}
+.yr3-reasons > div > span {
+  background: #eef4fc;
+  color: var(--terracota);
+  border: 1px solid #d5e3f5;
+}
+.yr3-reasons h3 {
+  margin: 0 0 3px;
+}
+.yr3-reasons p {
+  margin: 0;
+}
+
+/* Conheca de perto */
+.inspector-point {
+  background: var(--papel);
+  color: var(--petroleo);
+  border: 2px solid var(--terracota);
+  box-shadow: 0 6px 18px rgba(31, 36, 32, 0.22);
+}
+.inspector-point.is-active,
+.inspector-point[aria-pressed='true'] {
+  background: var(--terracota);
+  color: #fff;
+}
+.inspector-topics button {
+  background: var(--creme-2);
+  color: var(--petroleo);
+  border: 1px solid var(--areia);
+  font-weight: 800;
+}
+.inspector-topics button.is-active {
+  background: var(--petroleo);
+  border-color: var(--petroleo);
+  color: var(--creme);
+}
+.inspector-selection,
+.inspector-explanation {
+  background: var(--creme-2);
+  border: 1px solid var(--areia);
+}
+.inspector-explanation span {
+  color: var(--terracota);
+}
+.inspector-close {
+  background: var(--petroleo);
+  color: var(--creme);
+}
+
+.catalog-context button,
+.showcase-controls button {
+  background: var(--creme-2);
+  color: var(--petroleo);
+}
+.yr3-nav a:hover {
+  background: var(--creme-2);
+}
+.related-grid > a {
+  background: var(--papel);
+  border-color: var(--areia);
+}
+.yr3-empty {
+  background: var(--papel);
+  border: 1px dashed var(--areia-2);
+  border-radius: 18px;
+}
+
+/* ===========================================================================
+   Pagina de equipamento ("ver detalhes")
+   A foto era quadrada dentro de uma caixa larga com object-fit: contain: sobrava
+   barra bege dos dois lados e a legenda ficava solta numa tira branca.
+   =========================================================================== */
+.site-header .header-inner {
+  min-height: var(--yr-header-h);
+}
+.equipment-hero {
+  align-items: center;
+  gap: clamp(28px, 4vw, 64px);
+  padding-top: 8px;
+}
+.equipment-image {
+  position: relative;
+  padding: 0;
+  border: 0;
+  background: none;
+  border-radius: 28px;
+  overflow: hidden;
+  box-shadow: 0 40px 80px -34px rgba(16, 42, 76, 0.45);
+}
+.equipment-image img {
+  display: block;
+  width: 100%;
+  height: auto;
+  aspect-ratio: 5 / 4.4;
+  object-fit: cover;
+  border: 0;
+  border-radius: 0;
+}
+.equipment-image span {
+  position: absolute;
+  left: 14px;
+  bottom: 14px;
+  margin: 0;
+  padding: 7px 12px;
+  border-radius: 999px;
+  background: color-mix(in srgb, #fff 88%, transparent);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--azul-900);
+}
+.equipment-copy h1 {
+  font-size: clamp(36px, 4.4vw, 62px);
+  line-height: 1.03;
+}
+.equipment-copy ul {
+  border-top: 1px solid var(--areia);
+}
+.equipment-copy ul li {
+  border-bottom: 1px solid var(--areia);
+}
+.equipment-copy ul li::before,
+.checklist li::before {
+  color: var(--azul-600);
+}
+.equipment-cta .btn--primary {
+  background: var(--azul-600);
+  border-color: var(--azul-600);
+  box-shadow: 0 14px 30px -12px rgba(29, 95, 174, 0.6);
+}
+.equipment-cta .btn--primary:hover {
+  background: var(--azul-900);
+  border-color: var(--azul-900);
+}
+.equipment-note {
+  color: #6b7c92;
+}
+@media (max-width: 900px) {
+  .equipment-image {
+    border-radius: 20px;
+  }
+  .equipment-image img {
+    aspect-ratio: 4 / 3.2;
+  }
+}
+
+/* Logo do rodape: mesmo tratamento do cabecalho (sem a caixa branca). */
+.yr3-footer .brand-original,
+.detail-footer .brand-original {
+  background: transparent;
+}
+.yr3-footer .brand-original img,
+.detail-footer .brand-original img {
+  mix-blend-mode: multiply;
+}
+
+/* Sanfona das paginas de produto e do guia: o texto encostava na borda e o
+   marcador era o triangulo nativo do navegador. */
+.equipment-faq details,
+.compare-guide details {
+  padding: 0;
+  margin-bottom: 10px;
+  overflow: hidden;
+}
+.equipment-faq summary,
+.compare-guide summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 18px 22px;
+  list-style: none;
+  cursor: pointer;
+  font-family: Georgia, 'Times New Roman', serif;
+  font-size: clamp(17px, 1.4vw, 20px);
+  letter-spacing: -0.015em;
+  color: var(--azul-900);
+}
+.equipment-faq summary::-webkit-details-marker,
+.compare-guide summary::-webkit-details-marker {
+  display: none;
+}
+.equipment-faq summary::after,
+.compare-guide summary::after {
+  content: "+";
+  flex: 0 0 auto;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: #eef4fc;
+  color: var(--azul-600);
+  font: 800 16px/1 Manrope, sans-serif;
+}
+.equipment-faq details[open] summary::after,
+.compare-guide details[open] summary::after {
+  content: "–";
+}
+.equipment-faq details p,
+.compare-guide details p {
+  margin: 0;
+  padding: 0 22px 20px;
+  line-height: 1.7;
+}

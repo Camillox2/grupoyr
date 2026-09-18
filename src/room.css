@@ -1,0 +1,715 @@
+/* ===========================================================================
+   "O quarto se monta" - abertura da home
+
+   Uma moldura grande com a foto do quarto, fixa na tela; o texto rola ao lado
+   (desktop) ou por baixo (celular). Tudo que se move aqui e funcao de uma
+   variavel escrita pelo scroll em TheRoom.jsx:
+
+     --focus     0..1  nitidez da primeira foto (nasce desfocada)
+     --r1..--r3  0..1  quanto cada cortina ja subiu
+     --progress  0..1  avanco total, para a barra lateral
+
+   Por ser preso ao scroll, nao ha duracao nem atraso: parou de rolar, para.
+   =========================================================================== */
+
+.room {
+  --creme: #f6f1e8;
+  --creme-2: #efe7da;
+  --papel: #fffdf9;
+  --areia: #e2d6c2;
+  --petroleo: #102a4c;
+  --petroleo-2: #1d5fae;
+  --terracota: #1d5fae;
+  --tinta: #1f2420;
+
+  --focus: 0;
+  --r1: 0;
+  --r2: 0;
+  --r3: 0;
+  --progress: 0;
+
+  /* Tela util = viewport menos o cabecalho fixo (--yr-header-h, em warm.css). */
+  --room-h: calc(100svh - var(--yr-header-h, 70px));
+  --frame-radius: 28px;
+
+  position: relative;
+  background: var(--creme);
+  color: var(--tinta);
+}
+
+/* ------------------------------------------------------------ moldura fixa */
+.room-stage {
+  position: sticky;
+  top: var(--yr-header-h, 70px);
+  height: var(--room-h);
+  width: 57%;
+  padding: 26px 0 26px clamp(18px, 3.2vw, 56px);
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  z-index: 0;
+}
+
+.room-frame {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+  border-radius: var(--frame-radius);
+  overflow: hidden;
+  background: var(--creme-2);
+  box-shadow:
+    0 40px 80px -30px rgba(16, 42, 76, 0.35),
+    0 0 0 1px rgba(16, 42, 76, 0.06);
+  isolation: isolate;
+}
+
+.room-layer {
+  position: absolute;
+  inset: 0;
+}
+.room-layer > img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+/* A primeira foto nasce fora de foco e o quarto "entra em cena". */
+.room-layer--base > img {
+  filter: blur(calc((1 - var(--focus)) * 16px)) saturate(calc(0.5 + var(--focus) * 0.5))
+    brightness(calc(1.08 - var(--focus) * 0.08));
+  transform: scale(calc(1.16 - var(--focus) * 0.16));
+}
+
+/* Cortina: a camada e recortada de baixo para cima; a foto dentro dela chega
+   um pouco maior e assenta, o que da a sensacao de peso. */
+.room-layer--rise {
+  clip-path: inset(calc((1 - var(--r)) * 100%) 0 0 0);
+  will-change: clip-path;
+}
+.room-layer--rise > img {
+  transform: scale(calc(1.18 - var(--r) * 0.18)) translateY(calc((1 - var(--r)) * 6%));
+  will-change: transform;
+}
+/* Fio de luz na borda da cortina enquanto ela sobe. */
+.room-layer--rise::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: calc((1 - var(--r)) * 100%);
+  height: 2px;
+  background: rgba(255, 253, 249, 0.9);
+  opacity: calc(var(--r) * (1 - var(--r)) * 4);
+  z-index: 2;
+}
+
+/* ---------------------------------------------------------------- mosaico
+   Conjunto final. Quatro celulas iguais por construcao; o rotulo vai por cima
+   da foto, entao nome comprido nunca desalinha a grade. */
+.room-mosaic {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  grid-template-rows: 1fr 1fr;
+  gap: 3px;
+  background: var(--papel);
+}
+.room-mosaic a {
+  position: relative;
+  overflow: hidden;
+  display: block;
+  color: #fff;
+  text-decoration: none;
+  min-height: 0;
+}
+.room-mosaic a > img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  transition: transform 700ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+.room-mosaic a:hover > img,
+.room-mosaic a:focus-visible > img {
+  transform: scale(1.05);
+}
+.room-mosaic a > span {
+  position: absolute;
+  inset: auto 0 0 0;
+  padding: 34px 16px 13px;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  background: linear-gradient(180deg, transparent, rgba(12, 28, 52, 0.72));
+}
+.room-mosaic strong {
+  font-size: clamp(12px, 1.1vw, 15px);
+  letter-spacing: -0.015em;
+}
+.room-mosaic em {
+  font-style: normal;
+  font-size: 9.5px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  opacity: 0.85;
+  white-space: nowrap;
+}
+
+/* ------------------------------------------------------- numeral do passo */
+.room-number {
+  position: absolute;
+  top: 18px;
+  right: 26px;
+  z-index: 5;
+  width: 3em;
+  height: clamp(70px, 9vw, 132px);
+  font-size: clamp(70px, 9vw, 132px);
+  /* Recorta so na vertical (o numeral entra subindo); na horizontal sobra
+     folga, senao o ultimo algarismo perde a ponta. */
+  clip-path: inset(0 -0.3em 0 -0.3em);
+  pointer-events: none;
+}
+.room-number span {
+  display: block;
+  position: absolute;
+  right: 0.06em;
+  top: 0;
+  font-family: Georgia, 'Times New Roman', serif;
+  font-size: inherit;
+  line-height: 1;
+  letter-spacing: -0.05em;
+  color: var(--papel);
+  text-shadow: 0 6px 30px rgba(12, 28, 52, 0.35);
+  opacity: 0;
+  transform: translateY(60%);
+  transition:
+    opacity 420ms ease,
+    transform 520ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+.room-number span.is-current {
+  opacity: 0.96;
+  transform: none;
+}
+
+/* ---------------------------------------------------- etiqueta da peca */
+.room-tag {
+  position: absolute;
+  left: 18px;
+  bottom: 18px;
+  z-index: 6;
+  min-width: 230px;
+  opacity: 0;
+  transform: translateY(10px);
+  transition:
+    opacity 320ms ease,
+    transform 420ms cubic-bezier(0.22, 1, 0.36, 1);
+  pointer-events: none;
+}
+.room-tag.is-on {
+  opacity: 1;
+  transform: none;
+  pointer-events: auto;
+}
+.room-tag > div {
+  display: none;
+  align-items: center;
+  gap: 18px;
+  padding: 11px 12px 11px 16px;
+  border-radius: 16px;
+  background: color-mix(in srgb, var(--papel) 90%, transparent);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  box-shadow: 0 12px 34px rgba(12, 28, 52, 0.22);
+}
+.room-tag > div.is-current {
+  display: flex;
+}
+.room-tag p {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+}
+.room-tag strong {
+  font-size: 14px;
+  letter-spacing: -0.02em;
+  color: var(--petroleo);
+}
+.room-tag em {
+  font-style: normal;
+  font-size: 9.5px;
+  font-weight: 800;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--terracota);
+}
+.room-tag button {
+  border: 0;
+  border-radius: 999px;
+  background: var(--petroleo);
+  color: var(--creme);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 800;
+  padding: 10px 15px;
+  cursor: pointer;
+  white-space: nowrap;
+  min-height: 40px;
+  transition: background 200ms ease;
+}
+.room-tag button:hover {
+  background: var(--terracota);
+}
+
+/* --------------------------------------- a outra cama, cartao sobreposto */
+.room-alt {
+  position: absolute;
+  right: 18px;
+  bottom: 18px;
+  z-index: 6;
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  padding: 8px 14px 8px 8px;
+  border-radius: 16px;
+  background: color-mix(in srgb, var(--papel) 90%, transparent);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  box-shadow: 0 12px 34px rgba(12, 28, 52, 0.22);
+  color: var(--petroleo);
+  text-decoration: none;
+  opacity: 0;
+  transform: translateY(14px) scale(0.96);
+  transition:
+    opacity 320ms ease,
+    transform 460ms cubic-bezier(0.22, 1, 0.36, 1);
+  pointer-events: none;
+}
+.room-alt.is-on {
+  opacity: 1;
+  transform: none;
+  pointer-events: auto;
+  transition-delay: 140ms;
+}
+.room-alt img {
+  width: 54px;
+  height: 54px;
+  border-radius: 11px;
+  object-fit: cover;
+  flex: 0 0 auto;
+}
+.room-alt span {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.room-alt small {
+  font-size: 9.5px;
+  font-weight: 800;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--terracota);
+}
+.room-alt strong {
+  font-size: 13.5px;
+  letter-spacing: -0.015em;
+}
+.room-alt i {
+  font-style: normal;
+  font-weight: 800;
+  opacity: 0.55;
+}
+
+/* ------------------------------------------------ barra lateral de avanco */
+.room-progress {
+  position: absolute;
+  right: 12px;
+  top: 50%;
+  width: 3px;
+  height: 34%;
+  transform: translateY(-50%);
+  border-radius: 99px;
+  background: rgba(255, 253, 249, 0.38);
+  z-index: 5;
+  overflow: hidden;
+  /* No mosaico final ela some: encostaria nos rotulos da coluna direita. */
+  opacity: calc(1 - var(--r3) * 1.6);
+}
+.room-progress span {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border-radius: 99px;
+  background: var(--papel);
+  transform-origin: 50% 0;
+  transform: scaleY(var(--progress));
+}
+
+/* -------------------------------------------- faixa "ja esta no quarto" */
+.room-strip {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  height: 46px;
+  padding-left: 6px;
+  opacity: 0;
+  transition: opacity 320ms ease;
+}
+.room-strip.is-on {
+  opacity: 1;
+}
+.room-strip > span {
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
+  color: #8a9490;
+}
+.room-strip ul {
+  display: flex;
+  gap: 7px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.room-strip li {
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  overflow: hidden;
+  border: 2px solid var(--papel);
+  box-shadow: 0 4px 12px rgba(31, 36, 32, 0.16);
+  animation: strip-pop 460ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+.room-strip li img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+@keyframes strip-pop {
+  from {
+    opacity: 0;
+    transform: scale(0.5) translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* --------------------------------------------------------- texto que rola */
+.room-script {
+  position: relative;
+  z-index: 1;
+  margin-top: calc(-1 * var(--room-h));
+  margin-left: 57%;
+  pointer-events: none;
+}
+
+.room-beat {
+  min-height: var(--room-h);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 16px;
+  padding: 40px clamp(20px, 4vw, 72px) 40px clamp(28px, 4.4vw, 80px);
+  opacity: 0.22;
+  transition: opacity 420ms ease;
+  /* Ancora #passo-N para o bloco logo abaixo do cabecalho fixo. */
+  scroll-margin-top: var(--yr-header-h, 70px);
+}
+.room-beat.is-current {
+  opacity: 1;
+}
+.room-beat > * {
+  pointer-events: auto;
+  max-width: 470px;
+}
+
+.room-eyebrow {
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  color: var(--terracota);
+}
+.room-eyebrow b {
+  font-family: Georgia, serif;
+  font-weight: 400;
+  font-size: 15px;
+  letter-spacing: 0;
+  padding-right: 10px;
+  border-right: 1px solid var(--areia);
+}
+
+.room-beat h1,
+.room-beat h2 {
+  margin: 0;
+  font-family: Georgia, 'Times New Roman', serif;
+  font-weight: 400;
+  font-size: clamp(32px, 3.9vw, 60px);
+  line-height: 1.04;
+  letter-spacing: -0.035em;
+  color: var(--petroleo);
+}
+.room-beat h1 span,
+.room-beat h2 span {
+  display: block;
+}
+
+.room-text {
+  margin: 0;
+  font-size: clamp(15px, 1.15vw, 17px);
+  line-height: 1.72;
+  color: #4a5550;
+}
+
+.room-options {
+  list-style: none;
+  margin: 4px 0 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+.room-options a {
+  display: flex;
+  align-items: center;
+  gap: 13px;
+  padding: 9px 15px 9px 9px;
+  border-radius: 15px;
+  background: var(--papel);
+  border: 1px solid var(--areia);
+  color: inherit;
+  text-decoration: none;
+  transition:
+    border-color 200ms ease,
+    box-shadow 200ms ease;
+}
+.room-options a:hover {
+  border-color: var(--petroleo-2);
+  box-shadow: 0 10px 26px rgba(31, 36, 32, 0.08);
+}
+.room-options img {
+  width: 48px;
+  height: 48px;
+  border-radius: 10px;
+  object-fit: cover;
+  flex: 0 0 auto;
+}
+.room-options div {
+  flex: 1;
+  min-width: 0;
+}
+.room-options strong {
+  display: block;
+  font-size: 14.5px;
+  letter-spacing: -0.015em;
+  color: var(--petroleo);
+}
+.room-options span {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--terracota);
+}
+.room-options i {
+  font-style: normal;
+  font-weight: 800;
+  color: #8a9490;
+}
+
+.room-cta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 4px;
+}
+
+.room-hint {
+  margin: 8px 0 0;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
+  color: #8a9490;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.room-hint span {
+  animation: room-nudge 1.8s ease-in-out infinite;
+}
+@keyframes room-nudge {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(5px);
+  }
+}
+
+/* ------------------------------------------------------------ tela curta
+   Notebook baixo: a moldura continua inteira, o texto so aperta um pouco. */
+@media (min-width: 901px) and (max-height: 720px) {
+  .room-stage {
+    padding-top: 16px;
+    padding-bottom: 14px;
+    gap: 8px;
+  }
+  .room-beat {
+    gap: 11px;
+  }
+  .room-beat h1,
+  .room-beat h2 {
+    font-size: clamp(28px, 3.2vw, 44px);
+  }
+}
+
+/* --------------------------------------------------------------- celular
+   A moldura cola logo abaixo do cabecalho e o texto passa por baixo dela.
+   Quem rola e a pagina: nao existe area de scroll aninhada. */
+@media (max-width: 900px) {
+  .room {
+    --frame-radius: 20px;
+  }
+  .room-stage {
+    width: 100%;
+    height: clamp(300px, 46svh, 460px);
+    padding: 10px 12px 8px;
+    gap: 0;
+    z-index: 2;
+    background: var(--creme);
+    box-shadow: 0 14px 22px -16px rgba(31, 36, 32, 0.28);
+  }
+  .room-script {
+    margin: 0;
+  }
+  /* Altura natural: com min-height de 62svh sobrava meia tela vazia entre um
+     passo e o seguinte. O ultimo bloco ganha folga embaixo so para o passo
+     final alcancar a linha de foco antes de a moldura ir embora. */
+  .room-beat {
+    min-height: 0;
+    padding: 28px 22px 32px;
+    gap: 12px;
+    border-top: 1px solid var(--areia);
+  }
+  .room-beat:first-child {
+    border-top: 0;
+  }
+  /* No celular o texto rola por baixo da moldura e fica pouco tempo na tela:
+     esmaecer o passo seguinte so atrapalha a leitura. */
+  .room-beat,
+  .room-beat.is-current {
+    opacity: 1;
+  }
+  .room-beat:last-child {
+    padding-bottom: 16svh;
+  }
+  .room-beat > * {
+    max-width: none;
+  }
+  .room-beat:first-child {
+    min-height: 0;
+    padding-top: 30px;
+    padding-bottom: 46px;
+  }
+  .room-beat h1,
+  .room-beat h2 {
+    font-size: clamp(30px, 8.6vw, 42px);
+  }
+
+  .room-number {
+    top: 10px;
+    right: 16px;
+    height: 62px;
+    font-size: 62px;
+  }
+
+  /* A etiqueta encolhe; o botao some porque a lista logo abaixo, no texto,
+     ja leva ao produto e a moldura e pequena. */
+  .room-tag {
+    left: 10px;
+    bottom: 10px;
+    min-width: 0;
+  }
+  .room-tag > div {
+    padding: 8px 12px;
+    border-radius: 12px;
+  }
+  .room-tag button {
+    display: none;
+  }
+  .room-tag strong {
+    font-size: 12.5px;
+  }
+  .room-alt {
+    display: none;
+  }
+  .room-progress {
+    right: 8px;
+  }
+  .room-mosaic em {
+    display: none;
+  }
+  .room-mosaic a > span {
+    padding: 22px 10px 8px;
+  }
+
+  /* A faixa vai para dentro da moldura, no canto, para nao gastar altura. */
+  .room-strip {
+    position: absolute;
+    right: 22px;
+    bottom: 18px;
+    z-index: 7;
+    height: auto;
+    padding: 0;
+    gap: 0;
+  }
+  .room-strip > span {
+    display: none;
+  }
+  .room-strip ul {
+    gap: 5px;
+  }
+  .room-strip li {
+    width: 32px;
+    height: 32px;
+    border-radius: 9px;
+  }
+}
+
+/* ------------------------------------------------------ movimento reduzido
+   TheRoom.jsx ja troca o progresso continuo por troca seca de passo; aqui
+   saem o zoom das fotos e as transicoes que sobraram. */
+@media (prefers-reduced-motion: reduce) {
+  .room-layer--base > img,
+  .room-layer--rise > img {
+    transform: none;
+    filter: none;
+  }
+  .room-layer--rise::before {
+    display: none;
+  }
+  .room-number span,
+  .room-tag,
+  .room-alt,
+  .room-strip,
+  .room-strip li,
+  .room-beat,
+  .room-mosaic a > img {
+    transition: none;
+    animation: none;
+  }
+  .room-hint span {
+    animation: none;
+  }
+}

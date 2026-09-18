@@ -19,7 +19,7 @@ function ProductPage({ product }) {
   const related = products.filter(item => item.id !== product.id).sort((a,b) => Number(b.category === product.category) - Number(a.category === product.category)).slice(0,3)
   return <PageFrame><Breadcrumb title={product.name} />
     <section className="container equipment-hero">
-      <div className="equipment-image"><img src={product.image} alt={product.name} width="1000" height="1000" fetchPriority="high" /><span>Imagem de referência. Confirme o modelo na cotação.</span></div>
+      <div className="equipment-image"><img src={product.scene || product.image} alt={product.name} width="1400" height="1100" fetchPriority="high" style={{ objectPosition: product.focus }} /><span>Imagem de referência. Confirme o modelo na cotação.</span></div>
       <div className="equipment-copy"><p className="equipment-category">{product.category} / {product.rent ? 'Compra e locação' : 'Compra'}</p><h1>{product.name}</h1><p className="equipment-description">{product.description}</p><ul>{product.benefits.map(item => <li key={item}>{item}</li>)}</ul>
         <div className="equipment-cta"><button className="btn btn--primary" onClick={() => choose(product,'Comprar')}>Cotar compra <span aria-hidden="true">→</span></button>{product.rent && <button className="btn btn--secondary" onClick={() => choose(product,'Alugar')}>Cotar locação <span aria-hidden="true">→</span></button>}</div>
         <p className="equipment-note">Preço, modelo, disponibilidade e entrega sob consulta. Você recebe as condições antes de decidir.</p>

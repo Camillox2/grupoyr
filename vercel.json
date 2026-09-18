@@ -6,32 +6,104 @@
   "cleanUrls": true,
   "trailingSlash": false,
   "rewrites": [
-    { "source": "/blog", "destination": "/api/blog-page" },
-    { "source": "/blog/capa/:id", "destination": "/api/blog-media?id=:id" },
-    { "source": "/blog/:slug", "destination": "/api/blog-page?slug=:slug" },
-    { "source": "/sitemap.xml", "destination": "/api/blog-sitemap" },
-    { "source": "/sitemap-pages.xml", "destination": "/api/blog-sitemap?page=static" },
-    { "source": "/sitemap-blog-:page.xml", "destination": "/api/blog-sitemap?page=:page" }
+    {
+      "source": "/blog",
+      "destination": "/api/blog-page"
+    },
+    {
+      "source": "/blog/capa/:id",
+      "destination": "/api/blog-media?id=:id"
+    },
+    {
+      "source": "/blog/:slug",
+      "destination": "/api/blog-page?slug=:slug"
+    },
+    {
+      "source": "/sitemap.xml",
+      "destination": "/api/blog-sitemap"
+    },
+    {
+      "source": "/sitemap-pages.xml",
+      "destination": "/api/blog-sitemap?page=static"
+    },
+    {
+      "source": "/sitemap-blog-:page.xml",
+      "destination": "/api/blog-sitemap?page=:page"
+    }
   ],
-  "functions": { "api/blog-*.js": { "maxDuration": 30 } },
-  "redirects": [{
-    "source": "/:path*",
-    "has": [{ "type": "host", "value": "grupo-yr-hospitalar.vercel.app" }],
-    "destination": "https://site.grupoyrhospitalar.com.br/:path*",
-    "permanent": true
-  }],
-  "headers": [{
-    "source": "/admin(.*)",
-    "headers": [
-      { "key": "X-Robots-Tag", "value": "noindex, nofollow" },
-      { "key": "Cache-Control", "value": "private, no-store" },
-      { "key": "Content-Security-Policy", "value": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' blob: data:; font-src 'self'; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'" }
-    ]
-  },{
-    "source": "/(.*)",
-    "headers": [
-      { "key": "X-Content-Type-Options", "value": "nosniff" },
-      { "key": "Referrer-Policy", "value": "strict-origin-when-cross-origin" }
-    ]
-  }]
+  "functions": {
+    "api/blog-*.js": {
+      "maxDuration": 30
+    }
+  },
+  "redirects": [
+    {
+      "source": "/equipamentos/cama-hospitalar-articulada",
+      "destination": "/equipamentos/cama-eletrica-luxo",
+      "permanent": true
+    },
+    {
+      "source": "/equipamentos/carrinho-de-emergencia",
+      "destination": "/",
+      "permanent": false
+    },
+    {
+      "source": "/equipamentos/maca-hidraulica",
+      "destination": "/",
+      "permanent": false
+    },
+    {
+      "source": "/equipamentos/biombo-hospitalar",
+      "destination": "/",
+      "permanent": false
+    },
+    {
+      "source": "/equipamentos/mesa-de-refeicao-hospitalar",
+      "destination": "/",
+      "permanent": false
+    },
+    {
+      "source": "/:path*",
+      "has": [
+        {
+          "type": "host",
+          "value": "grupo-yr-hospitalar.vercel.app"
+        }
+      ],
+      "destination": "https://site.grupoyrhospitalar.com.br/:path*",
+      "permanent": true
+    }
+  ],
+  "headers": [
+    {
+      "source": "/admin(.*)",
+      "headers": [
+        {
+          "key": "X-Robots-Tag",
+          "value": "noindex, nofollow"
+        },
+        {
+          "key": "Cache-Control",
+          "value": "private, no-store"
+        },
+        {
+          "key": "Content-Security-Policy",
+          "value": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' blob: data:; font-src 'self'; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'"
+        }
+      ]
+    },
+    {
+      "source": "/(.*)",
+      "headers": [
+        {
+          "key": "X-Content-Type-Options",
+          "value": "nosniff"
+        },
+        {
+          "key": "Referrer-Policy",
+          "value": "strict-origin-when-cross-origin"
+        }
+      ]
+    }
+  ]
 }
