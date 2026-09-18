@@ -551,7 +551,15 @@
   }
 }
 .view-stage > * > * {
-  animation: view-enter 520ms var(--ease-out) both;
+  /* `backwards`, NUNCA `both`/`forwards`: enquanto uma animacao de transform
+     continua aplicada (mesmo so segurando o quadro final), o elemento se
+     comporta como `will-change: transform` e vira a referencia de posicao de
+     todo `position: fixed` dentro dele. A biblioteca de arrastar do funil
+     posiciona o card com fixed: com `both` ele ficava deslocado do mouse pela
+     largura do menu + altura da barra. Como o quadro final e o estado natural
+     do elemento, `backwards` da o mesmo resultado visual e solta o elemento
+     assim que a entrada termina. */
+  animation: view-enter 520ms var(--ease-out) backwards;
 }
 .view-stage > * > *:nth-child(1) { animation-delay: 0ms; }
 .view-stage > * > *:nth-child(2) { animation-delay: 70ms; }
@@ -735,7 +743,12 @@
 .theme-sweep::view-transition-new(root) {
   mix-blend-mode: normal;
   z-index: 2;
-  animation: theme-pixels 900ms steps(56, end) both;
+  /* Cada degrau anda EXATAMENTE 32px (dois pixels da grade). O numero de
+     degraus e o ponto final vem do ThemeContext, calculados pela altura real
+     da tela: com degrau de tamanho quebrado (ex.: 22px) o pontilhado caia
+     desalinhado a cada passo e a borda tremia. A duracao acompanha o numero
+     de degraus, entao a velocidade e a mesma em qualquer tela. */
+  animation: theme-pixels calc(var(--theme-steps, 40) * 18ms) steps(var(--theme-steps, 40), end) both;
   -webkit-mask-image:
     url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='64' height='64'%3E%3Cpath d='M0 0h16v16h-16zM32 32h16v16h-16z'/%3E%3C/svg%3E"),
     url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='64' height='64'%3E%3Cpath d='M0 0h16v16h-16zM32 0h16v16h-16zM16 16h16v16h-16zM0 32h16v16h-16zM32 32h16v16h-16z'/%3E%3C/svg%3E"),
@@ -796,10 +809,10 @@
 
 @keyframes theme-pixels {
   from {
-    --theme-edge: -336px;
+    --theme-edge: var(--theme-from, -352px);
   }
   to {
-    --theme-edge: calc(100vh + 16px);
+    --theme-edge: var(--theme-to, 928px);
   }
 }
 

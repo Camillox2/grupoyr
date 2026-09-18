@@ -72,6 +72,15 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
     root.style.setProperty('--sweep-x', `${origin?.x ?? window.innerWidth / 2}px`)
     root.style.setProperty('--sweep-y', `${origin?.y ?? 0}px`)
+    // Borda em pixels: o percurso e sempre multiplo de 32px (dois pixels da
+    // grade de 16px), para o pontilhado cair no mesmo alinhamento a cada degrau.
+    const STRIDE = 32
+    const from = -352 // fileiras pontilhadas (320px) + folga, ja multiplo de 32
+    const to = Math.ceil((window.innerHeight + 16) / STRIDE) * STRIDE
+    root.style.setProperty('--theme-from', `${from}px`)
+    root.style.setProperty('--theme-to', `${to}px`)
+    root.style.setProperty('--theme-steps', String((to - from) / STRIDE))
+
     root.classList.add('theme-sweep')
 
     const transition = doc.startViewTransition(commit)
