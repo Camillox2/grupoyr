@@ -574,10 +574,13 @@
 }
 
 /* Dialogo no desktop. */
+/* Sem `scale`: quando a escala termina o navegador re-rasteriza a camada e as
+   bordas de 1px dos campos de dentro do dialogo dao um estalo visivel. So
+   deslocamento e opacidade mantem o conteudo nitido do inicio ao fim. */
 @keyframes dialog-in {
   from {
     opacity: 0;
-    transform: scale(0.98) translateY(6px);
+    transform: translateY(14px);
   }
   to {
     opacity: 1;

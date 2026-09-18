@@ -240,7 +240,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     return (
       <div className="fixed inset-0 z-50 flex" role="presentation">
         <div
-          className="backdrop-in absolute inset-0 bg-[#0a1c33]/55 backdrop-blur-sm"
+          className="backdrop-in absolute inset-0 bg-[#0a1c33]/60"
           onClick={onCloseMobile}
           aria-hidden="true"
         />

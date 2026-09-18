@@ -99,8 +99,10 @@ export const Modal: React.FC<ModalProps> = ({
       }`}
       role="presentation"
     >
+      {/* Fundo em tinta solida, SEM backdrop-filter: animar a opacidade de um
+          elemento com blur faz o conteudo de tras tremer no Chrome. */}
       <div
-        className="backdrop-in absolute inset-0 bg-[#06121e]/55 backdrop-blur-sm"
+        className="backdrop-in absolute inset-0 bg-[#0a1c33]/60"
         onClick={onClose}
         aria-hidden="true"
       />
