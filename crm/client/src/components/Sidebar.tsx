@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { useEffect } from 'react'
 import {
   LayoutDashboard,
   KanbanSquare,
@@ -10,6 +10,7 @@ import {
   Settings,
   X,
 } from 'lucide-react'
+import { useIsMobile } from '../hooks/useMediaQuery'
 
 export type TabType =
   | 'dashboard'
@@ -33,133 +34,163 @@ interface SidebarProps {
 export const Sidebar: React.FC<SidebarProps> = ({
   activeTab,
   onTabChange,
-  unreadCount = 2,
-  pendingContractsCount = 1,
+  unreadCount = 0,
+  pendingContractsCount = 0,
   mobileOpen = false,
   onCloseMobile,
 }) => {
+  const isMobile = useIsMobile()
+
   const menuItems = [
-    { id: 'dashboard' as TabType, label: 'Visão Geral', icon: LayoutDashboard },
-    { id: 'kanban' as TabType, label: 'Funil Kanban', icon: KanbanSquare },
-    { id: 'whatsapp' as TabType, label: 'WhatsApp & IA', icon: MessageSquare, badge: unreadCount },
+    { id: 'dashboard' as TabType, label: 'Visão geral', icon: LayoutDashboard },
+    { id: 'kanban' as TabType, label: 'Funil', icon: KanbanSquare },
+    { id: 'whatsapp' as TabType, label: 'WhatsApp e IA', icon: MessageSquare, badge: unreadCount },
     { id: 'equipments' as TabType, label: 'Equipamentos', icon: Bed },
     {
       id: 'contracts' as TabType,
-      label: 'Contratos & Assinatura',
+      label: 'Contratos',
       icon: FileSignature,
       badge: pendingContractsCount,
-      badgeColor: 'bg-amber-500 text-white',
+      urgent: true,
     },
-    { id: 'finance' as TabType, label: 'Financeiro & Cobrança', icon: DollarSign },
-    { id: 'blog' as TabType, label: 'Blog YR Integrado', icon: BookOpen },
+    { id: 'finance' as TabType, label: 'Financeiro', icon: DollarSign },
+    { id: 'blog' as TabType, label: 'Blog', icon: BookOpen },
     { id: 'settings' as TabType, label: 'Configurações', icon: Settings },
   ]
 
   const handleSelectTab = (tab: TabType) => {
     onTabChange(tab)
-    if (onCloseMobile) onCloseMobile()
+    onCloseMobile?.()
   }
 
-  const content = (
-    <div className="flex flex-col justify-between h-full p-4">
-      <div className="space-y-1">
-        <div className="px-3 pt-2 pb-5 border-b border-blue-100 dark:border-slate-800 mb-3">
-          <img
-            src="https://site.grupoyrhospitalar.com.br/yr-hospitalar-logo.jpg"
-            alt="Grupo YR Hospitalar"
-            className="w-16 h-16 object-contain rounded-lg bg-white border border-slate-100"
-          />
-          <p className="mt-3 text-xs font-semibold text-slate-800 dark:text-slate-100">Operação e locações</p>
-          <p className="mt-1 text-[11px] leading-relaxed text-slate-500 dark:text-slate-400">Gestão comercial e atendimento</p>
-        </div>
-        <div className="flex items-center justify-between px-3 py-2">
-          <span className="text-[11px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">
-            Menu Principal
-          </span>
-          {onCloseMobile && (
-            <button
-              onClick={onCloseMobile}
-              className="md:hidden p-1 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
-            >
-              <X className="w-4 h-4" />
-            </button>
-          )}
-        </div>
-        {menuItems.map((item) => {
-          const Icon = item.icon
-          const isActive = activeTab === item.id
+  // Escape fecha o drawer e o fundo nao rola enquanto ele esta aberto.
+  useEffect(() => {
+    if (!mobileOpen) return
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') onCloseMobile?.()
+    }
+    const previous = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    document.addEventListener('keydown', onKeyDown)
+    return () => {
+      document.body.style.overflow = previous
+      document.removeEventListener('keydown', onKeyDown)
+    }
+  }, [mobileOpen, onCloseMobile])
 
-          return (
-            <button
-              key={item.id}
-              onClick={() => handleSelectTab(item.id)}
-              className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-semibold transition-all group ${
-                isActive
-                  ? 'bg-blue-600 text-white shadow-md shadow-blue-500/25'
-                  : 'text-slate-700 dark:text-slate-400 hover:bg-blue-100/70 dark:hover:bg-slate-800/60 hover:text-[#123b63] dark:hover:text-white'
-              }`}
-            >
-              <div className="flex items-center gap-3">
-                <Icon
-                  className={`w-4 h-4 ${
-                    isActive ? 'text-white' : 'text-blue-500 group-hover:text-[#123b63] dark:group-hover:text-slate-200'
-                  }`}
-                />
-                <span>{item.label}</span>
-              </div>
-              {item.badge ? (
-                <span
-                  className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                    item.badgeColor ||
-                    (isActive ? 'bg-white/20 text-white' : 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300')
-                  }`}
-                >
-                  {item.badge}
-                </span>
-              ) : null}
-            </button>
-          )
-        })}
+  const content = (
+    <div className="screen p-3">
+      {/* A marca vive na Navbar. Repeti-la aqui era a mesma logo duas vezes,
+          uma embaixo da outra. */}
+      <div
+        className="screen-bar flex items-center gap-3 px-3 pb-3 pt-1"
+        style={{ borderBottom: '1px solid var(--border-subtle)' }}
+      >
+        <p
+          className="text-[10px] font-extrabold uppercase tracking-[0.11em]"
+          style={{ color: 'var(--ink-faint)' }}
+        >
+          Operação
+        </p>
+        {isMobile && onCloseMobile && (
+          <button
+            onClick={onCloseMobile}
+            aria-label="Fechar menu"
+            className="ml-auto grid h-9 w-9 shrink-0 place-items-center rounded-[8px]"
+            style={{ color: 'var(--ink-muted)' }}
+          >
+            <X className="h-4 w-4" />
+          </button>
+        )}
       </div>
 
-      {/* Quick Summary Card */}
-      <div className="p-3.5 rounded-xl bg-blue-50/80 dark:bg-slate-800/50 border border-blue-100 dark:border-slate-700/60 space-y-2 mt-4">
-        <div className="flex items-center justify-between">
-          <span className="text-[11px] font-bold text-blue-900 dark:text-blue-200">
-            Região de Atendimento
-          </span>
-          <span className="w-2 h-2 rounded-full bg-teal-600" />
-        </div>
-        <p className="text-[11px] text-slate-600 dark:text-slate-400 leading-relaxed">
-          Curitiba & Região Metropolitana com pronta entrega e montagem ágil para altas hospitalares.
-        </p>
-        <div className="pt-1 flex items-center justify-between text-[10px] text-slate-500 font-medium">
-          <span>Plantão Comercial:</span>
-          <span className="text-[#123b63] dark:text-sky-300 font-bold">(41) 99724-4279</span>
-        </div>
+      <nav className="screen-scroll mt-3" aria-label="Navegação principal">
+        <ul className="space-y-0.5">
+          {menuItems.map((item) => {
+            const Icon = item.icon
+            const active = activeTab === item.id
+            const badge = item.badge ?? 0
+
+            return (
+              <li key={item.id}>
+                <button
+                  onClick={() => handleSelectTab(item.id)}
+                  aria-current={active ? 'page' : undefined}
+                  className="relative flex w-full items-center gap-3 rounded-[10px] px-3 py-2.5 text-left text-[13px] font-bold transition-colors"
+                  style={
+                    active
+                      ? { background: 'var(--yr-700)', color: 'var(--ink-on-brand)' }
+                      : { color: 'var(--ink-muted)' }
+                  }
+                  onMouseEnter={(event) => {
+                    if (!active) event.currentTarget.style.background = 'var(--surface-sunken)'
+                  }}
+                  onMouseLeave={(event) => {
+                    if (!active) event.currentTarget.style.background = 'transparent'
+                  }}
+                >
+                  <Icon className="h-[18px] w-[18px] shrink-0" aria-hidden="true" />
+                  <span className="min-w-0 flex-1 truncate">{item.label}</span>
+                  {badge > 0 && (
+                    <span
+                      className="tap-exempt grid h-5 min-w-5 shrink-0 place-items-center rounded-full px-1.5 text-[10px] font-extrabold tabular-nums"
+                      style={
+                        active
+                          ? { background: 'rgba(255,255,255,0.22)', color: 'var(--ink-on-brand)' }
+                          : item.urgent
+                            ? { background: 'var(--wait-surface)', color: 'var(--wait)' }
+                            : { background: 'var(--yr-100)', color: 'var(--yr-700)' }
+                      }
+                    >
+                      {badge > 99 ? '99+' : badge}
+                    </span>
+                  )}
+                </button>
+              </li>
+            )
+          })}
+        </ul>
+      </nav>
+
+      <div
+        className="screen-bar mt-3 flex items-center gap-2 px-3 pt-3 text-[11px] font-semibold"
+        style={{ borderTop: '1px solid var(--border-subtle)', color: 'var(--ink-faint)' }}
+      >
+        <span className="h-1.5 w-1.5 rounded-full" style={{ background: 'var(--ok)' }} />
+        Operação ativa
       </div>
     </div>
   )
 
-  return (
-    <>
-      {/* Desktop Sidebar */}
-      <aside className="hidden md:flex w-64 border-r border-blue-100 dark:border-slate-800 bg-[#eaf3fb] dark:bg-slate-900/50 backdrop-blur-md flex-col justify-between shrink-0">
-        {content}
-      </aside>
+  // Drawer no mobile: entra da esquerda, fecha por Escape, backdrop ou item.
+  if (isMobile) {
+    if (!mobileOpen) return null
+    return (
+      <div className="fixed inset-0 z-50 flex" role="presentation">
+        <div
+          className="backdrop-in absolute inset-0 bg-[#06121e]/55 backdrop-blur-sm"
+          onClick={onCloseMobile}
+          aria-hidden="true"
+        />
+        <aside
+          className="drawer-in relative z-10 h-full w-[272px] max-w-[82vw]"
+          style={{ background: 'var(--surface-raised)', boxShadow: 'var(--shadow-lg)' }}
+        >
+          {content}
+        </aside>
+      </div>
+    )
+  }
 
-      {/* Mobile Drawer Overlay */}
-      {mobileOpen && (
-        <div className="fixed inset-0 z-50 md:hidden flex">
-          <div
-            className="fixed inset-0 bg-black/60 backdrop-blur-sm transition-opacity"
-            onClick={onCloseMobile}
-          />
-          <aside className="relative w-72 max-w-[80vw] bg-[#eaf3fb] dark:bg-slate-900 shadow-2xl flex flex-col justify-between h-full z-10">
-            {content}
-          </aside>
-        </div>
-      )}
-    </>
+  return (
+    <aside
+      className="w-60 shrink-0"
+      style={{
+        background: 'var(--surface-raised)',
+        borderRight: '1px solid var(--border-subtle)',
+      }}
+    >
+      {content}
+    </aside>
   )
 }

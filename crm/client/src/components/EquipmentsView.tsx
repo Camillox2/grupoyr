@@ -1,20 +1,14 @@
 import React, { useState } from 'react'
 import {
   Bed,
-  CheckCircle2,
-  AlertTriangle,
-  Sparkles,
   Plus,
   Search,
-  Filter,
   ShieldCheck,
   MapPin,
-  Tag,
-  DollarSign,
-  Layers,
   X,
 } from 'lucide-react'
 import { Equipment } from '../types'
+import { EquipmentStatus } from './ui/Status'
 
 interface EquipmentsViewProps {
   equipments: Equipment[]
@@ -99,7 +93,7 @@ export const EquipmentsView: React.FC<EquipmentsViewProps> = ({
             Frota e Inventário de Equipamentos Hospitalares
           </h2>
           <p className="text-xs text-slate-500 mt-0.5">
-            Controle de camas articuladas, macas, carrinhos de emergência e certificados de higienização ANVISA.
+            Controle de camas articuladas, macas, carrinhos de emergência e do ciclo de higienização.
           </p>
         </div>
 
@@ -130,7 +124,7 @@ export const EquipmentsView: React.FC<EquipmentsViewProps> = ({
             },
             {
               id: 'higienizacao',
-              label: 'Higienização ANVISA',
+              label: 'Higienização',
               count: equipments.filter((e) => e.status === 'higienizacao').length,
             },
             {
@@ -177,8 +171,6 @@ export const EquipmentsView: React.FC<EquipmentsViewProps> = ({
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
         {filtered.map((eq) => {
           const isAlugado = eq.status === 'alugado'
-          const isDisponivel = eq.status === 'disponivel'
-          const isHigienizacao = eq.status === 'higienizacao'
 
           return (
             <div
@@ -191,25 +183,7 @@ export const EquipmentsView: React.FC<EquipmentsViewProps> = ({
                   <span className="font-mono text-xs font-bold text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/60 px-2 py-0.5 rounded-md border border-blue-200 dark:border-blue-800">
                     {eq.serialNumber}
                   </span>
-                  <span
-                    className={`text-[10px] font-bold px-2.5 py-1 rounded-full border ${
-                      isAlugado
-                        ? 'bg-blue-50 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-800'
-                        : isDisponivel
-                        ? 'bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800'
-                        : isHigienizacao
-                        ? 'bg-amber-50 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-800'
-                        : 'bg-rose-50 text-rose-700 border-rose-200'
-                    }`}
-                  >
-                    {isAlugado
-                      ? 'Alugado'
-                      : isDisponivel
-                      ? 'Pronta Entrega'
-                      : isHigienizacao
-                      ? 'Higienização'
-                      : 'Manutenção'}
-                  </span>
+                  <EquipmentStatus status={eq.status} />
                 </div>
 
                 {/* Name & Category */}
@@ -236,7 +210,7 @@ export const EquipmentsView: React.FC<EquipmentsViewProps> = ({
                   </div>
                   <div className="flex items-center gap-1.5 text-slate-500 text-[10px]">
                     <ShieldCheck className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
-                    <span>ANVISA: {eq.sanitizationCert}</span>
+                    <span>Controle interno: {eq.sanitizationCert}</span>
                   </div>
                 </div>
               </div>

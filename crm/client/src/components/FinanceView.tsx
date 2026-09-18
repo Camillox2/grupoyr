@@ -2,8 +2,6 @@ import React, { useState, useMemo } from 'react'
 import {
   DollarSign,
   TrendingUp,
-  Clock,
-  AlertCircle,
   CheckCircle2,
   Send,
   Plus,
@@ -18,6 +16,8 @@ import {
   Search,
   X,
 } from 'lucide-react'
+import { ResponsiveTable, EmptyState } from './ui/ResponsiveTable'
+import { InvoiceStatus } from './ui/Status'
 import {
   BarChart,
   Bar,
@@ -610,99 +610,107 @@ export const FinanceView: React.FC<FinanceViewProps> = ({ invoices, leads, onRef
         </div>
       </div>
 
-      {/* 6. Tabela Completa de Faturas com Régua de Cobrança */}
-      <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 overflow-hidden shadow-sm">
-        <div className="p-5 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
-          <div>
-            <h3 className="text-xs font-bold text-slate-900 dark:text-white uppercase tracking-wider">
-              Extrato Detalhado de Cobranças & Faturas ({filteredInvoices.length})
-            </h3>
-            <p className="text-[11px] text-slate-500 mt-0.5">
-              Dispare lembretes instantâneos no WhatsApp e confirme pagamentos Pix com 1 clique
-            </p>
-          </div>
+      {/* 6. Extrato de faturas: tabela no desktop, cards no mobile */}
+      <section className="mt-6">
+        <div className="mb-3">
+          <h3 className="text-[15px] font-extrabold tracking-[-0.01em]" style={{ color: 'var(--ink)' }}>
+            Extrato de cobranças ({filteredInvoices.length})
+          </h3>
+          <p className="mt-0.5 text-[12px]" style={{ color: 'var(--ink-muted)' }}>
+            Dispare o lembrete no WhatsApp e dê baixa no pagamento.
+          </p>
         </div>
 
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-xs">
-            <thead className="bg-slate-50 dark:bg-slate-800/60 border-b border-slate-200 dark:border-slate-800 text-slate-500 font-semibold uppercase tracking-wider text-[10px]">
-              <tr>
-                <th className="p-4">Contrato</th>
-                <th className="p-4">Cliente</th>
-                <th className="p-4">Vencimento</th>
-                <th className="p-4">Valor</th>
-                <th className="p-4">Status</th>
-                <th className="p-4 text-right">Régua de Cobrança</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-              {filteredInvoices.map((inv) => {
-                const isPaid = inv.status === 'paga'
-                const isOverdue = inv.status === 'atrasada'
-                return (
-                  <tr
-                    key={inv.id}
-                    className="hover:bg-slate-50/70 dark:hover:bg-slate-800/40 transition-colors"
-                  >
-                    <td className="p-4 font-mono font-bold text-blue-600 dark:text-blue-400">
-                      {inv.contractNumber}
-                    </td>
-                    <td className="p-4 font-semibold text-slate-900 dark:text-white">
-                      {inv.clientName}
-                    </td>
-                    <td className="p-4 text-slate-500 font-mono">
-                      {new Date(inv.dueDate).toLocaleDateString('pt-BR')}
-                    </td>
-                    <td className="p-4 font-bold text-slate-900 dark:text-white">
-                      R$ {inv.amount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                    </td>
-                    <td className="p-4">
-                      {isPaid ? (
-                        <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
-                          <CheckCircle2 className="w-3 h-3 text-emerald-500" />
-                          Quitada
-                        </span>
-                      ) : isOverdue ? (
-                        <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-rose-50 dark:bg-rose-950/60 text-rose-700 dark:text-rose-300 border border-rose-200 dark:border-rose-800">
-                          <AlertCircle className="w-3 h-3 text-rose-500" />
-                          Atrasada
-                        </span>
-                      ) : (
-                        <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800">
-                          <Clock className="w-3 h-3 text-amber-500" />
-                          Em Aberto
-                        </span>
-                      )}
-                    </td>
-                    <td className="p-4 text-right space-x-2">
-                      {!isPaid && (
-                        <>
-                          <button
-                            onClick={() => handleSendReminder(inv)}
-                            disabled={sendingReminderId === inv.id || !inv.leadId}
-                            className="inline-flex items-center gap-1 px-3 py-1 rounded-xl bg-emerald-50 dark:bg-emerald-950/50 hover:bg-emerald-100 text-emerald-700 dark:text-emerald-300 font-bold text-[11px] border border-emerald-200 dark:border-emerald-800 transition-all shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
-                            title={inv.leadId ? 'Dispara cobrança cordial com chave Pix no WhatsApp' : 'Vincule esta fatura a um cliente do CRM para cobrar pelo WhatsApp'}
-                          >
-                            <Send className="w-3 h-3" />
-                            {sendingReminderId === inv.id ? 'Enviando...' : inv.leadId ? 'Cobrar WhatsApp' : 'Sem cliente vinculado'}
-                          </button>
+        <ResponsiveTable
+          items={filteredInvoices}
+          getKey={(invoice) => invoice.id}
+          caption="Faturas e cobranças"
+          empty={
+            <EmptyState
+              icon={<DollarSign className="h-5 w-5" />}
+              title="Nenhuma fatura neste filtro"
+              description="Ajuste a busca ou o status acima, ou crie a primeira cobrança do período."
+            />
+          }
+          columns={[
+            {
+              header: 'Contrato',
+              primary: true,
+              cell: (invoice) => (
+                <span className="font-mono font-bold" style={{ color: 'var(--yr-500)' }}>
+                  {invoice.contractNumber}
+                </span>
+              ),
+            },
+            {
+              header: 'Cliente',
+              secondary: true,
+              cell: (invoice) => invoice.clientName,
+            },
+            {
+              header: 'Vencimento',
+              cell: (invoice) => (
+                <span className="tnum whitespace-nowrap" style={{ color: 'var(--ink-muted)' }}>
+                  {new Date(invoice.dueDate).toLocaleDateString('pt-BR')}
+                </span>
+              ),
+            },
+            {
+              header: 'Valor',
+              align: 'right',
+              cell: (invoice) => (
+                <span className="tnum font-bold" style={{ color: 'var(--ink)' }}>
+                  {invoice.amount.toLocaleString('pt-BR', {
+                    style: 'currency',
+                    currency: 'BRL',
+                    minimumFractionDigits: 2,
+                  })}
+                </span>
+              ),
+            },
+            {
+              header: 'Status',
+              cell: (invoice) => <InvoiceStatus status={invoice.status} />,
+            },
+          ]}
+          actions={(invoice) =>
+            invoice.status === 'paga' ? (
+              <span className="text-[11px] font-semibold" style={{ color: 'var(--ink-faint)' }}>
+                Quitada
+              </span>
+            ) : (
+              <>
+                <button
+                  onClick={() => handleSendReminder(invoice)}
+                  disabled={sendingReminderId === invoice.id || !invoice.leadId}
+                  className="inline-flex items-center gap-1.5 rounded-[8px] px-2.5 py-2 text-[11px] font-bold transition-colors disabled:opacity-50"
+                  style={{ background: 'var(--ok-surface)', color: 'var(--ok)', border: '1px solid var(--ok-border)' }}
+                  title={
+                    invoice.leadId
+                      ? 'Envia a cobrança pelo WhatsApp do cliente'
+                      : 'Vincule esta fatura a um cliente do CRM para cobrar pelo WhatsApp'
+                  }
+                >
+                  <Send className="h-3.5 w-3.5" />
+                  {sendingReminderId === invoice.id
+                    ? 'Enviando...'
+                    : invoice.leadId
+                      ? 'Cobrar'
+                      : 'Sem cliente'}
+                </button>
 
-                          <button
-                            onClick={() => handleMarkPaid(inv.id)}
-                            className="px-3 py-1 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-[11px] transition-all shadow-sm"
-                          >
-                            Dar Baixa
-                          </button>
-                        </>
-                      )}
-                    </td>
-                  </tr>
-                )
-              })}
-            </tbody>
-          </table>
-        </div>
-      </div>
+                <button
+                  onClick={() => handleMarkPaid(invoice.id)}
+                  className="inline-flex items-center gap-1.5 rounded-[8px] px-2.5 py-2 text-[11px] font-bold transition-colors"
+                  style={{ background: 'var(--yr-700)', color: 'var(--ink-on-brand)' }}
+                >
+                  Dar baixa
+                </button>
+              </>
+            )
+          }
+        />
+      </section>
 
       {/* 7. Modal de Nova Fatura / Cobrança */}
       {showNewModal && (

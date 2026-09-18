@@ -1,8 +1,9 @@
 import React from 'react'
-import { Sun, Moon, QrCode, Bot, Radio, LogOut, ShieldCheck, Menu } from 'lucide-react'
+import { Sun, Moon, QrCode, Radio, LogOut, ShieldCheck, Menu } from 'lucide-react'
 import { useTheme } from '../contexts/ThemeContext'
 import { useAuth } from '../contexts/AuthContext'
 import { useSocket } from '../contexts/SocketContext'
+import { useIsMobile } from '../hooks/useMediaQuery'
 
 interface NavbarProps {
   onOpenQr: () => void
@@ -13,130 +14,164 @@ export const Navbar: React.FC<NavbarProps> = ({ onOpenQr, onToggleMobileMenu }) 
   const { theme, toggleTheme } = useTheme()
   const { user, logout } = useAuth()
   const { whatsappStatus, switchWhatsAppProvider } = useSocket()
+  const isMobile = useIsMobile()
 
   const isBaileys = whatsappStatus.provider === 'baileys'
   const isConnected =
     whatsappStatus.status === 'connected' || whatsappStatus.status === 'connected_meta'
 
+  // O circulo do novo tema abre a partir do botao que foi clicado.
+  const onToggleTheme = (event: React.MouseEvent<HTMLButtonElement>) => {
+    const box = event.currentTarget.getBoundingClientRect()
+    toggleTheme({ x: box.left + box.width / 2, y: box.top + box.height / 2 })
+  }
+
   return (
-    <header className="h-16 border-b border-blue-100 dark:border-slate-800 bg-[#f8fbff]/95 dark:bg-slate-900/80 backdrop-blur-md px-4 sm:px-6 flex items-center justify-between sticky top-0 z-30">
-      {/* Brand logo & title */}
-      <div className="flex items-center gap-3">
-        {onToggleMobileMenu && (
+    <header
+      className="safe-top sticky top-0 z-30 flex h-16 shrink-0 items-center justify-between gap-3 px-3 sm:px-5"
+      style={{
+        background: 'color-mix(in srgb, var(--surface-raised) 88%, transparent)',
+        borderBottom: '1px solid var(--border-subtle)',
+        backdropFilter: 'blur(12px)',
+        WebkitBackdropFilter: 'blur(12px)',
+      }}
+    >
+      <div className="flex min-w-0 items-center gap-2.5">
+        {onToggleMobileMenu && isMobile && (
           <button
             onClick={onToggleMobileMenu}
-            className="md:hidden p-2 rounded-xl text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-all"
-            title="Abrir Menu"
+            aria-label="Abrir menu de navegação"
+            className="grid h-10 w-10 shrink-0 place-items-center rounded-[10px] transition-colors hover:bg-[var(--surface-sunken)]"
+            style={{ color: 'var(--ink-muted)' }}
           >
-            <Menu className="w-5 h-5" />
+            <Menu className="h-5 w-5" />
           </button>
         )}
-        <div className="w-11 h-11 rounded-lg bg-white border border-slate-200 flex items-center justify-center overflow-hidden shadow-sm">
+
+        <div
+          className="grid h-10 w-10 shrink-0 place-items-center overflow-hidden rounded-[10px]"
+          style={{ background: '#ffffff', border: '1px solid var(--border-subtle)' }}
+        >
           <img
             src="https://site.grupoyrhospitalar.com.br/yr-hospitalar-logo.jpg"
-            alt="Grupo YR Hospitalar"
-            className="w-full h-full object-contain"
+            alt=""
+            className="h-full w-full object-contain"
           />
         </div>
-        <div>
-          <h1 className="text-sm sm:text-base font-bold text-slate-900 dark:text-white leading-tight">
+
+        <div className="min-w-0">
+          <h1
+            className="truncate text-[14px] font-extrabold leading-tight tracking-[-0.02em] sm:text-[15px]"
+            style={{ color: 'var(--ink)' }}
+          >
             Grupo YR Hospitalar
           </h1>
-          <p className="text-[11px] sm:text-xs text-slate-500 dark:text-slate-400 hidden sm:block">
-            Locação, Vendas e Atendimento WhatsApp com IA
+          <p
+            className="hidden truncate text-[11px] leading-tight sm:block"
+            style={{ color: 'var(--ink-muted)' }}
+          >
+            Locação, vendas e atendimento
           </p>
         </div>
       </div>
 
-      {/* Right controls */}
-      <div className="flex items-center gap-3">
-        {/* WhatsApp Provider Switcher */}
-        <div className="flex items-center bg-slate-100 dark:bg-slate-800 p-1 rounded-xl border border-slate-200 dark:border-slate-700 text-xs font-medium">
-          <button
-            onClick={() => switchWhatsAppProvider('baileys')}
-            className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg transition-all ${
-              isBaileys
-              ? 'bg-white dark:bg-slate-900 text-teal-700 dark:text-teal-300 shadow-sm font-semibold'
-                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
-            }`}
-            title="Conexão Web QR Code via Baileys (Sem custos por mensagem)"
+      <div className="flex shrink-0 items-center gap-2">
+        {/* O seletor de provedor so cabe no desktop; no mobile fica em Configuracoes. */}
+        {!isMobile && (
+          <div
+            className="flex items-center rounded-[10px] p-0.5 text-[11px] font-semibold"
+            style={{ background: 'var(--surface-sunken)', border: '1px solid var(--border-subtle)' }}
+            role="group"
+            aria-label="Provedor de WhatsApp"
           >
-            <Radio className="w-3.5 h-3.5" />
-            Baileys
-          </button>
-          <button
-            onClick={() => switchWhatsAppProvider('meta')}
-            className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg transition-all ${
-              !isBaileys
-                ? 'bg-white dark:bg-slate-900 text-[#123b63] dark:text-sky-300 shadow-sm font-semibold'
-                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
-            }`}
-            title="Conexão oficial Meta Business API"
-          >
-            <ShieldCheck className="w-3.5 h-3.5" />
-            Meta API
-          </button>
-        </div>
+            <button
+              onClick={() => switchWhatsAppProvider('baileys')}
+              aria-pressed={isBaileys}
+              className="tap-exempt flex items-center gap-1.5 rounded-[8px] px-2.5 py-1.5 transition-colors"
+              style={
+                isBaileys
+                  ? { background: 'var(--surface-raised)', color: 'var(--ok)', boxShadow: 'var(--shadow-sm)' }
+                  : { color: 'var(--ink-muted)' }
+              }
+              title="Conexão por QR Code via Baileys, sem custo por mensagem"
+            >
+              <Radio className="h-3.5 w-3.5" />
+              Baileys
+            </button>
+            <button
+              onClick={() => switchWhatsAppProvider('meta')}
+              aria-pressed={!isBaileys}
+              className="tap-exempt flex items-center gap-1.5 rounded-[8px] px-2.5 py-1.5 transition-colors"
+              style={
+                !isBaileys
+                  ? { background: 'var(--surface-raised)', color: 'var(--yr-700)', boxShadow: 'var(--shadow-sm)' }
+                  : { color: 'var(--ink-muted)' }
+              }
+              title="Conexão oficial pela Meta Cloud API"
+            >
+              <ShieldCheck className="h-3.5 w-3.5" />
+              Meta API
+            </button>
+          </div>
+        )}
 
-        {/* WhatsApp Status Indicator */}
         <button
           onClick={!isConnected ? onOpenQr : undefined}
-          className={`flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all ${
+          disabled={isConnected}
+          className="flex items-center gap-2 rounded-[10px] border px-2.5 py-1.5 text-[11px] font-bold transition-colors disabled:cursor-default"
+          style={
             isConnected
-              ? 'bg-teal-50 dark:bg-teal-950/40 text-teal-700 dark:text-teal-300 border-teal-200 dark:border-teal-800 cursor-default'
-              : 'bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-800 cursor-pointer hover:bg-amber-100 shadow-sm'
-          }`}
-          title={isConnected ? 'WhatsApp Online' : 'Clique para conectar via Código 8 Dígitos ou QR Code'}
+              ? { color: 'var(--ok)', background: 'var(--ok-surface)', borderColor: 'var(--ok-border)' }
+              : { color: 'var(--wait)', background: 'var(--wait-surface)', borderColor: 'var(--wait-border)' }
+          }
+          title={isConnected ? 'WhatsApp conectado' : 'Conectar o WhatsApp por código ou QR Code'}
         >
           <span
-            className={`w-2 h-2 rounded-full ${
-              isConnected ? 'bg-teal-600' : 'bg-amber-500'
-            }`}
+            className="h-2 w-2 shrink-0 rounded-full"
+            style={{ background: isConnected ? 'var(--ok)' : 'var(--wait)' }}
           />
-          <span>
-            {isConnected
-              ? `Online (${isBaileys ? 'Baileys' : 'Meta'})`
-              : 'Conectar WhatsApp'}
+          <span className="hidden sm:inline">
+            {isConnected ? `Online (${isBaileys ? 'Baileys' : 'Meta'})` : 'Conectar WhatsApp'}
           </span>
-          {!isConnected && <QrCode className="w-3.5 h-3.5 ml-1 text-amber-600" />}
+          {!isConnected && <QrCode className="h-3.5 w-3.5" />}
         </button>
 
-        {/* IA Status */}
-        <div
-          className="hidden md:flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 text-xs font-medium"
-          title="Pipeline Multimodal Ativo: 3.8 -> 3.7 -> 3.6 -> 3.5 -> 3.5-Lite -> 3.1-Lite"
-        >
-          <Bot className="w-3.5 h-3.5 text-[#123b63] dark:text-sky-300" />
-          <span>Assistente IA</span>
-        </div>
-
-        {/* Dark / Light Toggle */}
         <button
-          onClick={toggleTheme}
-          className="p-2 rounded-xl text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-800 transition-all"
-          title={theme === 'dark' ? 'Mudar para Modo Claro' : 'Mudar para Modo Escuro'}
+          onClick={onToggleTheme}
+          aria-label={theme === 'dark' ? 'Mudar para o modo claro' : 'Mudar para o modo escuro'}
+          className="grid h-10 w-10 place-items-center rounded-[10px] border transition-colors hover:bg-[var(--surface-sunken)]"
+          style={{ color: 'var(--ink-muted)', borderColor: 'var(--border-subtle)' }}
         >
-          {theme === 'dark' ? <Sun className="w-4 h-4 text-amber-400" /> : <Moon className="w-4 h-4" />}
+          {theme === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
         </button>
 
-        {/* User profile and logout */}
         {user && (
-          <div className="flex items-center gap-2 pl-2 border-l border-slate-200 dark:border-slate-800">
-            <div className="w-8 h-8 rounded-full bg-slate-200 dark:bg-slate-700 text-slate-800 dark:text-slate-200 flex items-center justify-center font-bold text-xs uppercase">
+          <div
+            className="flex items-center gap-2 pl-2"
+            style={{ borderLeft: '1px solid var(--border-subtle)' }}
+          >
+            <div
+              className="grid h-8 w-8 shrink-0 place-items-center rounded-full text-[11px] font-extrabold uppercase"
+              style={{ background: 'var(--yr-100)', color: 'var(--yr-700)' }}
+            >
               {user.name.slice(0, 2)}
             </div>
-            <div className="hidden lg:block text-left">
-              <p className="text-xs font-semibold text-slate-800 dark:text-slate-200 leading-none">
+            <div className="hidden text-left lg:block">
+              <p className="text-[12px] font-bold leading-none" style={{ color: 'var(--ink)' }}>
                 {user.name}
               </p>
-              <p className="text-[10px] text-slate-500 capitalize">{user.role}</p>
+              <p className="mt-1 text-[10px] capitalize leading-none" style={{ color: 'var(--ink-faint)' }}>
+                {user.role}
+              </p>
             </div>
             <button
               onClick={logout}
-              className="p-1.5 rounded-lg text-slate-400 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/30 transition-all"
-              title="Encerrar Sessão"
+              aria-label="Encerrar sessão"
+              className="grid h-9 w-9 place-items-center rounded-[8px] transition-colors hover:bg-[var(--alert-surface)]"
+              style={{ color: 'var(--ink-faint)' }}
+              title="Encerrar sessão"
             >
-              <LogOut className="w-3.5 h-3.5" />
+              <LogOut className="h-4 w-4" />
             </button>
           </div>
         )}

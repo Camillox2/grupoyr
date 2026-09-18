@@ -1,5 +1,8 @@
 import React, { useState } from 'react'
-import { Plus, User, Phone, Mail, DollarSign, Tag, Layers, X } from 'lucide-react'
+import { UserPlus } from 'lucide-react'
+import { Modal } from './ui/Modal'
+import { TextField, SelectField, TextAreaField, FormError } from './ui/Field'
+import { SubmitButton } from './ui/Feedback'
 
 interface NewLeadModalProps {
   open: boolean
@@ -7,192 +10,201 @@ interface NewLeadModalProps {
   onSuccess: () => void
 }
 
+const EQUIPMENTS = [
+  'Cama hospitalar articulada',
+  'Cama manual 3 movimentos',
+  'Maca hidráulica',
+  'Carrinho de emergência',
+  'Biombo hospitalar',
+  'Mesa de refeição',
+  'Colchão pneumático',
+].map((name) => ({ value: name, label: name }))
+
+const ORIGINS = [
+  'Google Ads',
+  'Google Orgânico',
+  'Meta Ads',
+  'WhatsApp Direto',
+  'Indicação',
+].map((name) => ({ value: name, label: name }))
+
 export const NewLeadModal: React.FC<NewLeadModalProps> = ({ open, onClose, onSuccess }) => {
   const [name, setName] = useState('')
   const [phone, setPhone] = useState('')
   const [email, setEmail] = useState('')
-  const [equipmentInterest, setEquipmentInterest] = useState('Cama hospitalar articulada')
+  const [equipmentInterest, setEquipmentInterest] = useState(EQUIPMENTS[0].value)
   const [modality, setModality] = useState<'locacao' | 'compra'>('locacao')
   const [origin, setOrigin] = useState('Google Orgânico')
   const [value, setValue] = useState('480')
   const [notes, setNotes] = useState('')
   const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
-  if (!open) return null
+  const reset = () => {
+    setName('')
+    setPhone('')
+    setEmail('')
+    setNotes('')
+    setError(null)
+  }
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!name || !phone) return
+  const handleClose = () => {
+    if (loading) return
+    reset()
+    onClose()
+  }
+
+  const handleSubmit = async (event: React.FormEvent) => {
+    event.preventDefault()
+    if (!name.trim() || !phone.trim()) {
+      setError('Informe ao menos o nome e o telefone do cliente.')
+      return
+    }
+
     setLoading(true)
+    setError(null)
 
     try {
-      const res = await fetch('/api/leads', {
+      const response = await fetch('/api/leads', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${localStorage.getItem('yr_crm_token') || ''}`,
         },
         body: JSON.stringify({
-          name,
+          name: name.trim(),
           phone: phone.replace(/\D/g, ''),
-          email,
+          email: email.trim(),
           equipmentInterest,
           modality,
           origin,
-          value: Number(value),
-          notes,
+          value: Number(value) || 0,
+          notes: notes.trim(),
         }),
       })
 
-      if (res.ok) {
-        onSuccess()
-        onClose()
+      if (!response.ok) {
+        // Sem isso o formulario fechava calado e o lead nunca aparecia na lista.
+        throw new Error(`Falha ao cadastrar o lead (${response.status})`)
       }
+
+      reset()
+      onSuccess()
+      onClose()
     } catch (err) {
       console.error('Erro ao criar lead:', err)
+      setError('Não foi possível cadastrar o lead. Verifique a conexão e tente novamente.')
     } finally {
       setLoading(false)
     }
   }
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
-      <form
-        onSubmit={handleSubmit}
-        className="w-full max-w-md bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 p-6 space-y-4 shadow-2xl"
-      >
-        <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
-          <h3 className="text-sm font-bold text-slate-900 dark:text-white">
-            Cadastrar Novo Lead no Funil
-          </h3>
-          <button type="button" onClick={onClose} className="p-1 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors">
-            <X className="w-4 h-4" />
-          </button>
+    <Modal
+      open={open}
+      onClose={handleClose}
+      title="Cadastrar lead no funil"
+      subtitle="Entra na primeira etapa, pronto para qualificação"
+      icon={<UserPlus className="h-4 w-4" />}
+      footer={
+        <div className="flex gap-3">
+          <SubmitButton
+            variant="ghost"
+            type="button"
+            loading={false}
+            onClick={handleClose}
+            className="flex-1"
+          >
+            Cancelar
+          </SubmitButton>
+          <SubmitButton
+            type="submit"
+            form="form-novo-lead"
+            loading={loading}
+            className="flex-[2]"
+          >
+            Cadastrar lead
+          </SubmitButton>
         </div>
+      }
+    >
+      <form id="form-novo-lead" onSubmit={handleSubmit} className="space-y-4">
+        <FormError message={error} />
 
-        <div>
-          <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
-            Nome Completo do Cliente
-          </label>
-          <input
-            type="text"
+        <TextField
+          label="Nome do cliente"
+          required
+          value={name}
+          onChange={(event) => setName(event.target.value)}
+          placeholder="Ex.: João da Silva"
+          autoComplete="name"
+        />
+
+        <div className="grid gap-4 sm:grid-cols-2">
+          <TextField
+            label="Telefone / WhatsApp"
             required
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            placeholder="Ex: João da Silva"
-            className="w-full px-3 py-2 rounded-xl text-xs bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white"
+            inputMode="tel"
+            value={phone}
+            onChange={(event) => setPhone(event.target.value)}
+            placeholder="41999998888"
+            autoComplete="tel"
+          />
+          <TextField
+            label="E-mail"
+            type="email"
+            value={email}
+            onChange={(event) => setEmail(event.target.value)}
+            placeholder="cliente@email.com"
+            autoComplete="email"
+            hint="Opcional"
           />
         </div>
 
-        <div className="grid grid-cols-2 gap-3">
-          <div>
-            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
-              Telefone / WhatsApp
-            </label>
-            <input
-              type="text"
-              required
-              value={phone}
-              onChange={(e) => setPhone(e.target.value)}
-              placeholder="Ex: 41999998888"
-              className="w-full px-3 py-2 rounded-xl text-xs bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white"
-            />
-          </div>
-          <div>
-            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
-              E-mail (opcional)
-            </label>
-            <input
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="cliente@email.com"
-              className="w-full px-3 py-2 rounded-xl text-xs bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white"
-            />
-          </div>
+        <div className="grid gap-4 sm:grid-cols-2">
+          <SelectField
+            label="Equipamento de interesse"
+            value={equipmentInterest}
+            onChange={(event) => setEquipmentInterest(event.target.value)}
+            options={EQUIPMENTS}
+          />
+          <SelectField
+            label="Modalidade"
+            value={modality}
+            onChange={(event) => setModality(event.target.value as 'locacao' | 'compra')}
+            options={[
+              { value: 'locacao', label: 'Locação' },
+              { value: 'compra', label: 'Compra' },
+            ]}
+          />
         </div>
 
-        <div className="grid grid-cols-2 gap-3">
-          <div>
-            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
-              Equipamento de Interesse
-            </label>
-            <select
-              value={equipmentInterest}
-              onChange={(e) => setEquipmentInterest(e.target.value)}
-              className="w-full px-3 py-2 rounded-xl text-xs bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white"
-            >
-              <option value="Cama hospitalar articulada">Cama articulada</option>
-              <option value="Cama manual 3 movimentos">Cama manual 3 mov.</option>
-              <option value="Maca hidráulica">Maca hidráulica</option>
-              <option value="Carrinho de emergência">Carrinho emergência</option>
-              <option value="Biombo hospitalar">Biombo hospitalar</option>
-              <option value="Mesa de refeição">Mesa refeição</option>
-              <option value="Colchão Pneumático">Colchão Pneumático</option>
-            </select>
-          </div>
-          <div>
-            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
-              Modalidade
-            </label>
-            <select
-              value={modality}
-              onChange={(e) => setModality(e.target.value as any)}
-              className="w-full px-3 py-2 rounded-xl text-xs bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white"
-            >
-              <option value="locacao">Locação</option>
-              <option value="compra">Compra</option>
-            </select>
-          </div>
+        <div className="grid gap-4 sm:grid-cols-2">
+          <SelectField
+            label="Canal de origem"
+            value={origin}
+            onChange={(event) => setOrigin(event.target.value)}
+            options={ORIGINS}
+          />
+          <TextField
+            label="Valor previsto (R$)"
+            type="number"
+            inputMode="numeric"
+            min={0}
+            value={value}
+            onChange={(event) => setValue(event.target.value)}
+          />
         </div>
 
-        <div className="grid grid-cols-2 gap-3">
-          <div>
-            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
-              Canal de Origem (UTM)
-            </label>
-            <select
-              value={origin}
-              onChange={(e) => setOrigin(e.target.value)}
-              className="w-full px-3 py-2 rounded-xl text-xs bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white"
-            >
-              <option value="Google Ads">Google Ads</option>
-              <option value="Google Orgânico">Google Orgânico</option>
-              <option value="Meta Ads">Meta Ads</option>
-              <option value="WhatsApp Direto">WhatsApp Direto</option>
-              <option value="Indicação">Indicação</option>
-            </select>
-          </div>
-          <div>
-            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
-              Valor Previsto (R$)
-            </label>
-            <input
-              type="number"
-              value={value}
-              onChange={(e) => setValue(e.target.value)}
-              className="w-full px-3 py-2 rounded-xl text-xs bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white"
-            />
-          </div>
-        </div>
-
-        <div className="flex gap-3 pt-2">
-          <button
-            type="button"
-            onClick={onClose}
-            className="flex-1 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 text-xs font-semibold text-slate-600 dark:text-slate-300"
-          >
-            Cancelar
-          </button>
-          <button
-            type="submit"
-            disabled={loading}
-            className="flex-1 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold shadow-md shadow-blue-500/20"
-          >
-            {loading ? 'Cadastrando...' : 'Cadastrar Lead'}
-          </button>
-        </div>
+        <TextAreaField
+          label="Observações"
+          rows={3}
+          value={notes}
+          onChange={(event) => setNotes(event.target.value)}
+          placeholder="Contexto do atendimento, condições de acesso, prazo estimado"
+          hint="Opcional"
+        />
       </form>
-    </div>
+    </Modal>
   )
 }

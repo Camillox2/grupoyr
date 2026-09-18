@@ -3,7 +3,6 @@ import {
   FileSignature,
   Plus,
   CheckCircle2,
-  Clock,
   Printer,
   ShieldCheck,
   Trash2,
@@ -11,6 +10,22 @@ import {
   Copy,
 } from 'lucide-react'
 import { Contract, Lead, Equipment } from '../types'
+import { celebrateSignature } from './ui/celebrate'
+import { PageHeader, Notice, ActionButton } from './ui/PageHeader'
+import { ResponsiveTable, EmptyState } from './ui/ResponsiveTable'
+import { ContractStatus } from './ui/Status'
+import { brl } from './ui/Feedback'
+
+/** dd/mm sem o ano, que ocupa espaco e raramente muda dentro da lista. */
+const formatDate = (value: string) => {
+  if (!value) return '-'
+  // Data pura (YYYY-MM-DD) parseada direto vira meia-noite UTC e, em
+  // America/Sao_Paulo, retrocede um dia. O servidor faz o mesmo em
+  // contracts.js:19.
+  const parsed = new Date(value.length === 10 ? `${value}T00:00:00` : value)
+  if (Number.isNaN(parsed.getTime())) return value
+  return parsed.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: '2-digit' })
+}
 
 interface ContractsViewProps {
   contracts: Contract[]
@@ -27,7 +42,6 @@ export const ContractsView: React.FC<ContractsViewProps> = ({
   onRefreshContracts,
   onOpenNewContractModal,
 }) => {
-  const [selectedContract, setSelectedContract] = useState<Contract | null>(null)
   const [signingContract, setSigningContract] = useState<Contract | null>(null)
   const [signerName, setSignerName] = useState('')
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
@@ -154,6 +168,7 @@ export const ContractsView: React.FC<ContractsViewProps> = ({
         setSigningContract(null)
         clearCanvas()
         onRefreshContracts()
+        celebrateSignature()
       }
     } catch (e) {
       console.error('Erro ao assinar contrato:', e)
@@ -163,139 +178,146 @@ export const ContractsView: React.FC<ContractsViewProps> = ({
   }
 
   return (
-    <div className="space-y-6 pb-12">
-      {/* Top Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm">
-        <div>
-          <h2 className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
-            <FileSignature className="w-5 h-5 text-blue-600" />
-            Contratos & Assinatura Digital
-          </h2>
-          <p className="text-xs text-slate-500 mt-0.5">
-            Gere termos de locação com certificação ANVISA, colha assinaturas na tela ou envie link para o celular do cliente.
-          </p>
-        </div>
+    <div className="pb-12">
+      <PageHeader
+        icon={<FileSignature className="h-5 w-5" />}
+        title="Contratos e assinatura"
+        description="Gere o termo, colha a assinatura na tela ou envie o link para o celular do cliente."
+        actions={
+          <ActionButton onClick={onOpenNewContractModal}>
+            <Plus className="h-4 w-4" />
+            Gerar contrato
+          </ActionButton>
+        }
+      />
 
-        <button
-          onClick={onOpenNewContractModal}
-          className="flex items-center gap-2 px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-semibold text-xs shadow-md shadow-blue-500/20 transition-all"
-        >
-          <Plus className="w-4 h-4" />
-          Gerar Novo Contrato
-        </button>
-      </div>
-
-      <div className={`rounded-2xl border p-3.5 text-xs ${publicBaseUrl
-        ? 'border-emerald-200 bg-emerald-50 text-emerald-900 dark:border-emerald-800 dark:bg-emerald-950/30 dark:text-emerald-100'
-        : 'border-amber-200 bg-amber-50 text-amber-900 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-100'
-      }`}>
+      <Notice tone={publicBaseUrl ? 'ok' : 'wait'}>
         {publicBaseUrl
           ? `Link externo pronto para envio ao cliente: ${publicBaseUrl}`
-          : 'Tunnel público não detectado. O link copiado funcionará apenas neste computador até o launcher iniciar um tunnel.'}
-      </div>
+          : 'Tunnel público não detectado. O link copiado funciona apenas neste computador até o launcher iniciar um tunnel.'}
+      </Notice>
 
-      {linkError && (
-        <div className="rounded-2xl border border-rose-200 bg-rose-50 p-3.5 text-xs font-semibold text-rose-800 dark:border-rose-800 dark:bg-rose-950/40 dark:text-rose-200">
-          {linkError}
-        </div>
-      )}
+      {linkError && <Notice tone="alert">{linkError}</Notice>}
 
-      {/* Contracts Table */}
-      <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 overflow-hidden shadow-sm">
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-xs">
-            <thead className="bg-slate-50 dark:bg-slate-800/60 border-b border-slate-200 dark:border-slate-800 text-slate-500 font-semibold uppercase tracking-wider text-[10px]">
-              <tr>
-                <th className="p-4">Nº Contrato</th>
-                <th className="p-4">Cliente / Contratante</th>
-                <th className="p-4">Equipamento(s)</th>
-                <th className="p-4">Vigência</th>
-                <th className="p-4">Valor Mensal</th>
-                <th className="p-4">Status</th>
-                <th className="p-4 text-right">Ações</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-              {contracts.map((ctr) => {
-                const isSigned = ctr.status === 'assinado'
-                return (
-                  <tr
-                    key={ctr.id}
-                    className="hover:bg-slate-50/70 dark:hover:bg-slate-800/40 transition-colors"
-                  >
-                    <td className="p-4 font-mono font-bold text-blue-600 dark:text-blue-400">
-                      {ctr.number}
-                    </td>
-                    <td className="p-4 font-semibold text-slate-900 dark:text-white">
-                      <div>{ctr.clientName}</div>
-                      <div className="text-[10px] text-slate-400 font-normal">
-                        CPF: {ctr.clientCpf}
-                      </div>
-                    </td>
-                    <td className="p-4 text-slate-600 dark:text-slate-300 max-w-xs truncate">
-                      {ctr.equipmentNames}
-                    </td>
-                    <td className="p-4 text-slate-500">
-                      {ctr.startDate} até {ctr.endDate}
-                    </td>
-                    <td className="p-4 font-bold text-emerald-600 dark:text-emerald-400">
-                      R$ {ctr.monthlyValue.toFixed(2)}
-                    </td>
-                    <td className="p-4">
-                      {isSigned ? (
-                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
-                          <CheckCircle2 className="w-3 h-3 text-emerald-500" />
-                          Assinado Digitalmente
-                        </span>
-                      ) : (
-                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold bg-amber-50 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800">
-                          <Clock className="w-3 h-3 text-amber-500" />
-                          Aguardando Assinatura
-                        </span>
-                      )}
-                    </td>
-                    <td className="p-4 text-right space-x-2">
-                      <button
-                        onClick={() => handleCopySigningLink(ctr)}
-                        disabled={!ctr.signingToken}
-                        className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-blue-50 dark:bg-blue-950/40 hover:bg-blue-100 text-blue-700 dark:text-blue-300 font-semibold text-[11px] transition-all border border-blue-200 dark:border-blue-800 disabled:opacity-40 disabled:cursor-not-allowed"
-                        title="Copiar link individual para o cliente assinar no celular"
-                      >
-                        {copiedLinkId === ctr.id ? <CheckCircle2 className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
-                        {copiedLinkId === ctr.id ? 'Link copiado' : 'Copiar link'}
-                      </button>
+      <ResponsiveTable
+        items={contracts}
+        getKey={(contract) => contract.id}
+        caption="Contratos gerados"
+        empty={
+          <EmptyState
+            icon={<FileSignature className="h-5 w-5" />}
+            title="Nenhum contrato ainda"
+            description="Gere o primeiro termo a partir de um lead do funil. Ele nasce como rascunho e segue para assinatura."
+            action={
+              <ActionButton onClick={onOpenNewContractModal}>
+                <Plus className="h-4 w-4" />
+                Gerar contrato
+              </ActionButton>
+            }
+          />
+        }
+        columns={[
+          {
+            header: 'Contrato',
+            primary: true,
+            cell: (contract) => (
+              <span className="font-mono font-bold" style={{ color: 'var(--yr-500)' }}>
+                {contract.number}
+              </span>
+            ),
+          },
+          {
+            header: 'Cliente',
+            secondary: true,
+            cell: (contract) => (
+              <span>
+                {contract.clientName}
+                {contract.clientCpf && (
+                  <span className="tnum" style={{ color: 'var(--ink-faint)' }}>
+                    {' '}· CPF {contract.clientCpf}
+                  </span>
+                )}
+              </span>
+            ),
+          },
+          {
+            header: 'Equipamento',
+            cell: (contract) => (
+              <span className="block max-w-xs truncate" title={contract.equipmentNames}>
+                {contract.equipmentNames}
+              </span>
+            ),
+          },
+          {
+            header: 'Vigência',
+            cell: (contract) => (
+              <span className="tnum whitespace-nowrap" style={{ color: 'var(--ink-muted)' }}>
+                {formatDate(contract.startDate)} a {formatDate(contract.endDate)}
+              </span>
+            ),
+          },
+          {
+            header: 'Valor mensal',
+            align: 'right',
+            cell: (contract) => (
+              <span className="tnum font-bold" style={{ color: 'var(--ink)' }}>
+                {brl(contract.monthlyValue)}
+              </span>
+            ),
+          },
+          {
+            header: 'Status',
+            cell: (contract) => <ContractStatus status={contract.status} />,
+          },
+        ]}
+        actions={(contract) => (
+          <>
+            <button
+              onClick={() => handleCopySigningLink(contract)}
+              disabled={!contract.signingToken}
+              className="inline-flex items-center gap-1.5 rounded-[8px] px-2.5 py-2 text-[11px] font-bold transition-colors disabled:opacity-40"
+              style={{ background: 'var(--yr-050)', color: 'var(--yr-700)', border: '1px solid var(--yr-100)' }}
+              title="Copiar o link para o cliente assinar no celular"
+            >
+              {copiedLinkId === contract.id ? <CheckCircle2 className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
+              {copiedLinkId === contract.id ? 'Copiado' : 'Copiar link'}
+            </button>
 
-                      {!isSigned && (
-                        <button
-                          onClick={() => {
-                            setSigningContract(ctr)
-                            setSignerName(ctr.clientName)
-                          }}
-                          className="px-2.5 py-1 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-semibold text-[11px] shadow-sm transition-all"
-                        >
-                          Assinar na Tela
-                        </button>
-                      )}
-                      <a
-                        href={ctr.signingToken
-                          ? `/api/contracts/signing/${encodeURIComponent(ctr.signingToken)}/html`
-                          : `/api/contracts/${ctr.id}/html`}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 text-slate-700 dark:text-slate-200 font-semibold text-[11px] transition-all border border-slate-200 dark:border-slate-700"
-                        title="Ver ou Imprimir Contrato Completo"
-                      >
-                        <Printer className="w-3 h-3" />
-                        Imprimir / PDF
-                      </a>
-                    </td>
-                  </tr>
-                )
-              })}
-            </tbody>
-          </table>
-        </div>
-      </div>
+            {contract.status !== 'assinado' && (
+              <button
+                onClick={() => {
+                  setSigningContract(contract)
+                  setSignerName(contract.clientName)
+                }}
+                className="inline-flex items-center gap-1.5 rounded-[8px] px-2.5 py-2 text-[11px] font-bold transition-colors"
+                style={{ background: 'var(--yr-700)', color: 'var(--ink-on-brand)' }}
+              >
+                Assinar na tela
+              </button>
+            )}
+
+            <a
+              href={
+                contract.signingToken
+                  ? `/api/contracts/signing/${encodeURIComponent(contract.signingToken)}/html`
+                  : `/api/contracts/${contract.id}/html`
+              }
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex items-center gap-1.5 rounded-[8px] px-2.5 py-2 text-[11px] font-bold transition-colors"
+              style={{
+                background: 'var(--surface-sunken)',
+                color: 'var(--ink-muted)',
+                border: '1px solid var(--border-subtle)',
+              }}
+              title="Abrir o contrato completo para conferir ou imprimir"
+            >
+              <Printer className="h-3.5 w-3.5" />
+              Imprimir
+            </a>
+          </>
+        )}
+      />
 
       {/* Signature Modal */}
       {signingContract && (

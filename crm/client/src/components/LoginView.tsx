@@ -78,7 +78,10 @@ export const LoginView: React.FC = () => {
           </a>
 
           <button
-            onClick={toggleTheme}
+            onClick={(event) => {
+              const box = event.currentTarget.getBoundingClientRect()
+              toggleTheme({ x: box.left + box.width / 2, y: box.top + box.height / 2 })
+            }}
             className="p-2 rounded-lg bg-white dark:bg-slate-900 hover:bg-slate-100 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-300 transition-colors shadow-sm"
             title="Alternar tema"
           >
@@ -226,7 +229,7 @@ export const LoginView: React.FC = () => {
             <span>Central: (41) 99724-4279</span>
           </span>
           <span>•</span>
-          <span>Normas ANVISA RDC & LGPD</span>
+          <span>Uso interno · LGPD</span>
         </div>
       </footer>
     </div>

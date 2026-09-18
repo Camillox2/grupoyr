@@ -857,7 +857,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               <div className="flex items-center justify-between p-3 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/80 dark:border-slate-700/60">
                 <span className="text-xs font-medium text-slate-600 dark:text-slate-400 flex items-center gap-2">
                   <span className="w-2.5 h-2.5 rounded-full bg-amber-500" />
-                  Em Higienização (ANVISA)
+                  Em higienização
                 </span>
                 <span className="text-sm font-bold text-slate-900 dark:text-white">
                   {equipments.filter((e) => e.status === 'higienizacao').length}

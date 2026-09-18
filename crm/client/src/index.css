@@ -1,121 +1,470 @@
 @import "tailwindcss";
 @custom-variant dark (&:where(.dark, .dark *));
 
+/* ===========================================================================
+   Grupo YR - Sistema de design "Precisao Calorosa"
+   Superficies neutras e calmas; o azul YR aparece so onde comunica algo.
+   Movimento existe para informar mudanca de estado, nunca para decorar.
+   =========================================================================== */
+
+@font-face {
+  font-family: Manrope;
+  src: url('/fonts/manrope-latin.woff2') format('woff2');
+  font-weight: 200 800;
+  font-style: normal;
+  font-display: swap;
+}
+
 @layer base {
   :root {
-    --bg-primary: #eef4fa;
-    --bg-secondary: #f8fbff;
-    --bg-tertiary: #e2edf8;
-    --text-primary: #122033;
-    --text-secondary: #4b5d70;
-    --text-muted: #94a3b8;
-    --border-subtle: #dce5ea;
-    --border-strong: #cbd5e1;
-    --accent-blue: #123b63;
-    --accent-emerald: #0d6b67;
+    /* --- Superficies: quatro niveis de elevacao, do fundo ao flutuante --- */
+    --surface-canvas: #eaeff6;
+    --surface-raised: #ffffff;
+    --surface-sunken: #f1f5fa;
+    --surface-overlay: #ffffff;
+    --surface-brand: linear-gradient(160deg, #0b2e4c 0%, #12456f 55%, #17557f 100%);
+    --surface-tint: linear-gradient(180deg, #f4f8fd 0%, #eaeff6 100%);
+
+    /* --- Marca --- */
+    --yr-900: #0b2e4c;
+    --yr-700: #12456f;
+    --yr-500: #2b7fc4;
+    --yr-300: #8fc0e6;
+    --yr-100: #dcebf8;
+    --yr-050: #f0f7fd;
+
+    /* --- Texto: tres pesos, nao dez --- */
+    --ink: #0e1b2a;
+    --ink-muted: #5a6b7d;
+    --ink-faint: #8fa0b0;
+    --ink-on-brand: #ffffff;
+
+    /* --- Bordas --- */
+    --border-subtle: #e3eaf1;
+    --border-strong: #cbd8e4;
+
+    /* --- Semantico: o mesmo status tem a mesma cor em toda tela ---
+       ok    = fatura paga / equipamento disponivel
+       wait  = fatura pendente / equipamento em higienizacao
+       alert = fatura atrasada / equipamento em manutencao
+       busy  = equipamento alugado                                        */
+    --ok: #0e7c6b;
+    --ok-surface: #e6f4f1;
+    --ok-border: #a9ddd3;
+    --wait: #b26b00;
+    --wait-surface: #fdf3e3;
+    --wait-border: #f0d6a8;
+    --alert: #b3261e;
+    --alert-surface: #fdeceb;
+    --alert-border: #f3bdb9;
+    --busy: #2b7fc4;
+    --busy-surface: #e8f2fb;
+    --busy-border: #b3d5ef;
+
+    /* --- Elevacao: sombra tingida de azul, nunca cinza puro --- */
+    --shadow-sm: 0 1px 2px rgba(14, 27, 42, 0.05);
+    --shadow-md: 0 2px 4px rgba(14, 27, 42, 0.05), 0 6px 16px rgba(14, 27, 42, 0.06);
+    --shadow-lg: 0 8px 24px rgba(14, 27, 42, 0.10), 0 2px 6px rgba(14, 27, 42, 0.06);
+    --shadow-drag: 0 16px 32px rgba(11, 46, 76, 0.18), 0 4px 8px rgba(11, 46, 76, 0.10);
+
+    /* --- Raio --- */
+    --r-sm: 8px;
+    --r-md: 12px;
+    --r-lg: 16px;
+    --r-xl: 22px;
+
+    /* --- Movimento --- */
+    --dur-instant: 120ms;
+    --dur-fast: 200ms;
+    --dur-moderate: 320ms;
+    --dur-slow: 480ms;
+    --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+    --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+
+    /* Altura real da viewport no mobile: a barra do navegador nao corta mais */
+    --app-vh: 100dvh;
   }
 
   .dark {
-    --bg-primary: #090d16;
-    --bg-secondary: #0f172a;
-    --bg-tertiary: #1e293b;
-    --text-primary: #f8fafc;
-    --text-secondary: #cbd5e1;
-    --text-muted: #64748b;
-    --border-subtle: #1e293b;
-    --border-strong: #334155;
-    --accent-blue: #38bdf8;
-    --accent-emerald: #34d399;
+    --surface-canvas: #080d15;
+    --surface-raised: #101927;
+    --surface-sunken: #0b121d;
+    --surface-overlay: #151f30;
+
+    --yr-900: #d3e7f7;
+    --yr-700: #8fc0e6;
+    --yr-500: #4b9de0;
+    --yr-300: #2d6694;
+    --yr-100: #16324a;
+    --yr-050: #101f2e;
+
+    --ink: #f2f6fa;
+    --ink-muted: #9fb0c1;
+    --ink-faint: #6b7d8f;
+    --ink-on-brand: #06121e;
+
+    --border-subtle: #1c2938;
+    --border-strong: #2c3e52;
+
+    --ok: #3fbfa8;
+    --ok-surface: #0d2320;
+    --ok-border: #1d4b44;
+    --wait: #e0a43c;
+    --wait-surface: #2a1f0c;
+    --wait-border: #57431b;
+    --alert: #f08b84;
+    --alert-surface: #2c1413;
+    --alert-border: #5e2a27;
+    --busy: #4b9de0;
+    --busy-surface: #0e2337;
+    --busy-border: #23496b;
+
+    --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
+    --shadow-md: 0 2px 4px rgba(0, 0, 0, 0.35), 0 6px 16px rgba(0, 0, 0, 0.4);
+    --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.5), 0 2px 6px rgba(0, 0, 0, 0.35);
+    --shadow-drag: 0 16px 32px rgba(0, 0, 0, 0.6), 0 4px 8px rgba(0, 0, 0, 0.4);
   }
 
   * {
     border-color: var(--border-subtle);
   }
 
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+
   body {
-    background-color: var(--bg-primary);
-    color: var(--text-primary);
-    font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    margin: 0;
+    background-color: var(--surface-canvas);
+    color: var(--ink);
+    font-family: Manrope, ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+    font-synthesis: none;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
     overflow-x: hidden;
     min-width: 320px;
   }
 
-  html,
-  body,
+  /* O app ocupa a viewport e tem UMA area de scroll por tela.
+     Scroll aninhado em flex-column faz os filhos colapsarem por flex-shrink.
+     `overflow` fica no shell autenticado (.app-shell), NAO aqui: a tela de
+     login nao tem area de scroll propria e seria cortada no celular baixo. */
   #root {
-    min-height: 100%;
+    display: flex;
+    flex-direction: column;
   }
 
-  button, a, input, select, textarea {
-    transition: color 160ms ease, background-color 160ms ease, border-color 160ms ease, box-shadow 160ms ease, opacity 160ms ease;
+  .app-shell {
+    height: 100dvh;
+    overflow: hidden;
   }
 
-  button:hover, a:hover {
-    transform: none !important;
+  /* Dinheiro e metrica nao podem dancar de linha para linha. */
+  .tnum,
+  [data-numeric] {
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: 'tnum' 1;
+  }
+
+  button,
+  a,
+  input,
+  select,
+  textarea {
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  button:focus-visible,
+  a:focus-visible,
+  input:focus-visible,
+  select:focus-visible,
+  textarea:focus-visible,
+  [tabindex]:focus-visible {
+    outline: 2px solid var(--yr-500);
+    outline-offset: 2px;
+    border-radius: var(--r-sm);
+  }
+
+  /* iOS Safari amplia a pagina ao focar controle com menos de 16px. */
+  @media (pointer: coarse) {
+    input,
+    select,
+    textarea {
+      font-size: 16px;
+    }
+  }
+
+  /* Alvo de toque confortavel no mobile (WCAG 2.5.5). */
+  @media (pointer: coarse) {
+    button,
+    a[role='button'],
+    [role='tab'],
+    input[type='checkbox'],
+    input[type='radio'] {
+      min-height: 44px;
+    }
+    .tap-exempt {
+      min-height: 0;
+    }
   }
 }
 
-/* Interface corporativa: sem efeitos de jogo, brilho excessivo ou movimento contínuo. */
-.animate-pulse,
-.animate-ping,
-.animate-bounce,
-.animate-fade-in {
-  animation: none !important;
+/* ===========================================================================
+   Utilitarios de layout
+   =========================================================================== */
+
+/* Raiz de tela: altura cheia, uma area de scroll, acoes fixas fora dela. */
+.screen {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  flex: 1 1 auto;
+  overflow: hidden;
+}
+.screen-scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+}
+.screen-bar {
+  flex: 0 0 auto;
 }
 
-/* Interações discretas: sem deslocar os controles ou transformar a tela em uma animação. */
-.transition-all,
-.transition-colors,
-.transition-opacity,
-.transition-transform {
-  transition-duration: 160ms !important;
-  transition-timing-function: ease !important;
+/* Respeita o notch e a barra inferior do iOS. */
+.safe-bottom {
+  padding-bottom: max(1rem, env(safe-area-inset-bottom));
+}
+.safe-top {
+  padding-top: env(safe-area-inset-top);
 }
 
-.rounded-3xl { border-radius: 14px !important; }
-.rounded-2xl { border-radius: 12px !important; }
+/* ===========================================================================
+   Movimento: cada regra abaixo comunica uma mudanca de estado
+   =========================================================================== */
 
-button:focus-visible,
-a:focus-visible,
-input:focus-visible,
-select:focus-visible,
-textarea:focus-visible {
-  outline: 2px solid #2b82c9;
-  outline-offset: 2px;
+/* Troca de aba: o conteudo novo sobe 4px e aparece. Sem slide lateral. */
+@keyframes view-enter {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.view-enter {
+  animation: view-enter var(--dur-fast) var(--ease-out) both;
 }
 
-@media (prefers-reduced-motion: reduce) {
-  *, *::before, *::after {
-    scroll-behavior: auto !important;
-    animation-duration: 0.01ms !important;
-    animation-iteration-count: 1 !important;
+/* Drawer lateral no mobile. */
+@keyframes drawer-in {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: none;
+  }
+}
+.drawer-in {
+  animation: drawer-in var(--dur-moderate) var(--ease-out) both;
+}
+
+@keyframes backdrop-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+.backdrop-in {
+  animation: backdrop-in var(--dur-fast) var(--ease-out) both;
+}
+
+/* Dialogo no desktop. */
+@keyframes dialog-in {
+  from {
+    opacity: 0;
+    transform: scale(0.98) translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.dialog-in {
+  animation: dialog-in var(--dur-moderate) var(--ease-out) both;
+}
+
+/* Bottom sheet no mobile. */
+@keyframes sheet-in {
+  from {
+    transform: translateY(100%);
+  }
+  to {
+    transform: none;
+  }
+}
+.sheet-in {
+  animation: sheet-in var(--dur-moderate) var(--ease-out) both;
+}
+
+/* Registro alterado por outra pessoa (socket.io): pulso unico, sem susto. */
+@keyframes remote-pulse {
+  0% {
+    box-shadow: 0 0 0 0 rgba(43, 127, 196, 0.5);
+  }
+  100% {
+    box-shadow: 0 0 0 12px rgba(43, 127, 196, 0);
+  }
+}
+.remote-pulse {
+  animation: remote-pulse var(--dur-slow) var(--ease-out) 1;
+}
+
+/* Item novo entrando em lista: altura animada sem forcar layout por quadro. */
+@keyframes row-in {
+  from {
+    grid-template-rows: 0fr;
+    opacity: 0;
+  }
+  to {
+    grid-template-rows: 1fr;
+    opacity: 1;
+  }
+}
+.row-in {
+  display: grid;
+  grid-template-rows: 1fr;
+  animation: row-in var(--dur-moderate) var(--ease-out) both;
+}
+.row-in > * {
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* Carregando: esqueleto no formato do conteudo, nao spinner no vazio. */
+@keyframes skeleton-sweep {
+  from {
+    background-position: 200% 0;
+  }
+  to {
+    background-position: -200% 0;
+  }
+}
+.skeleton {
+  background-image: linear-gradient(
+    90deg,
+    var(--surface-sunken) 0%,
+    var(--border-subtle) 50%,
+    var(--surface-sunken) 100%
+  );
+  background-size: 200% 100%;
+  animation: skeleton-sweep 1.2s linear infinite;
+  border-radius: var(--r-sm);
+}
+
+/* Spinner: unico movimento continuo que sobrevive, porque significa "espere". */
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+.spin {
+  animation: spin 800ms linear infinite;
+}
+
+/* Card do Kanban sendo arrastado. */
+.dragging {
+  box-shadow: var(--shadow-drag);
+  transform: scale(1.02);
+  cursor: grabbing;
+}
+
+/* Coluna do Kanban recebendo o card. */
+.drop-active {
+  background-color: var(--yr-050);
+  outline: 2px dashed var(--yr-300);
+  outline-offset: -4px;
+}
+
+/* ===========================================================================
+   View Transitions: troca de tema em circulo, a partir do proprio botao
+   =========================================================================== */
+.theme-sweep::view-transition-old(root) {
+  animation: none;
+  mix-blend-mode: normal;
+  z-index: 1;
+}
+.theme-sweep::view-transition-new(root) {
+  animation: theme-reveal var(--dur-slow) var(--ease-out) both;
+  mix-blend-mode: normal;
+  z-index: 2;
+}
+@keyframes theme-reveal {
+  from {
+    clip-path: circle(0% at var(--sweep-x, 50%) var(--sweep-y, 50%));
+  }
+  to {
+    clip-path: circle(150% at var(--sweep-x, 50%) var(--sweep-y, 50%));
   }
 }
 
-/* Custom modern scrollbar */
+/* ===========================================================================
+   Barra de rolagem
+   =========================================================================== */
 ::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+  width: 8px;
+  height: 8px;
 }
 ::-webkit-scrollbar-track {
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: rgba(148, 163, 184, 0.3);
+  background: var(--border-strong);
   border-radius: 9999px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(148, 163, 184, 0.5);
+  background: var(--ink-faint);
+}
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-strong) transparent;
 }
 
-/* Glassmorphism helpers */
-.glass-panel {
-  background: rgba(255, 255, 255, 0.85);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-}
-.dark .glass-panel {
-  background: rgba(15, 23, 42, 0.85);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
+/* ===========================================================================
+   Movimento reduzido: nao e so acessibilidade, e enxaqueca vestibular.
+   O conteudo continua inteiro e legivel com movimento zero.
+   =========================================================================== */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+  .skeleton {
+    animation: none;
+    background-image: none;
+    background-color: var(--surface-sunken);
+  }
+  /* O spinner comunica "aguarde": congela-lo tira a informacao. */
+  .spin {
+    animation: spin 1.6s linear infinite !important;
+  }
+  .dragging {
+    transform: none;
+  }
+  ::view-transition-group(*),
+  ::view-transition-old(*),
+  ::view-transition-new(*) {
+    animation: none !important;
+  }
 }

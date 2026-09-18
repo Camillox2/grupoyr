@@ -151,7 +151,7 @@ function MainContent() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center space-y-4 text-slate-600 font-sans">
+      <div className="flex h-[100dvh] flex-col items-center justify-center gap-4" style={{ background: 'var(--surface-canvas)', color: 'var(--ink-muted)' }}>
         <div className="w-16 h-16 rounded-xl bg-white border border-slate-200 flex items-center justify-center overflow-hidden shadow-sm">
           <img
             src="https://site.grupoyrhospitalar.com.br/yr-hospitalar-logo.jpg"
@@ -160,7 +160,7 @@ function MainContent() {
           />
         </div>
         <div className="flex items-center gap-2 text-xs font-semibold text-slate-500">
-          <div className="w-3.5 h-3.5 border-2 border-slate-300 border-t-[#123b63] rounded-full animate-spin" />
+          <div className="spin h-3.5 w-3.5 rounded-full border-2" style={{ borderColor: 'var(--border-strong)', borderTopColor: 'var(--yr-500)' }} />
           <span>Carregando CRM Grupo YR Hospitalar</span>
         </div>
       </div>
@@ -173,7 +173,7 @@ function MainContent() {
 
   if (dataLoading && leads.length === 0 && equipments.length === 0 && invoices.length === 0) {
     return (
-      <div className="min-h-screen bg-[#eef4fa] dark:bg-slate-950 flex flex-col items-center justify-center gap-3 text-slate-600 dark:text-slate-300 font-sans">
+      <div className="flex h-[100dvh] flex-col items-center justify-center gap-3" style={{ background: 'var(--surface-canvas)', color: 'var(--ink-muted)' }}>
         <div className="w-14 h-14 rounded-xl bg-white border border-slate-200 flex items-center justify-center overflow-hidden shadow-sm">
           <img
             src="https://site.grupoyrhospitalar.com.br/yr-hospitalar-logo.jpg"
@@ -182,7 +182,7 @@ function MainContent() {
           />
         </div>
         <div className="flex items-center gap-2 text-xs font-semibold">
-          <div className="w-3.5 h-3.5 border-2 border-slate-300 border-t-[#123b63] rounded-full animate-spin" />
+          <div className="spin h-3.5 w-3.5 rounded-full border-2" style={{ borderColor: 'var(--border-strong)', borderTopColor: 'var(--yr-500)' }} />
           <span>Carregando dados da operação</span>
         </div>
       </div>
@@ -190,13 +190,15 @@ function MainContent() {
   }
 
   return (
-    <div className="min-h-screen bg-[#eef4fa] dark:bg-slate-950 text-slate-900 dark:text-slate-100 flex flex-col font-sans">
+    // Raiz do app: altura da viewport, sem scroll proprio.
+    // Cada tela abaixo tem UMA area de scroll, nunca aninhadas.
+    <div className="app-shell screen" style={{ background: 'var(--surface-canvas)', color: 'var(--ink)' }}>
       <Navbar
         onOpenQr={() => setQrModalOpen(true)}
         onToggleMobileMenu={() => setMobileSidebarOpen((prev) => !prev)}
       />
 
-      <div className="flex-1 flex overflow-hidden">
+      <div className="flex min-h-0 flex-1">
         <Sidebar
           activeTab={activeTab}
           onTabChange={setActiveTab}
@@ -206,8 +208,9 @@ function MainContent() {
           onCloseMobile={() => setMobileSidebarOpen(false)}
         />
 
-        <main className="flex-1 overflow-y-auto p-4 sm:p-6 transition-all">
-          <div className="max-w-7xl mx-auto">
+        {/* `key` no activeTab remonta o conteudo, disparando a entrada de 200ms. */}
+        <main key={activeTab} className="view-enter min-h-0 flex-1 overflow-y-auto p-4 sm:p-6">
+          <div className="mx-auto max-w-7xl">
             {dataError && (
               <div className="mb-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-2xl border border-amber-200 bg-amber-50 p-3.5 text-xs text-amber-900 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-100">
                 <span>{dataError}</span>

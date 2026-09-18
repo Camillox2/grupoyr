@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react'
 import {
+  ChevronLeft,
   Send,
   Bot,
   Sparkles,
@@ -14,11 +15,12 @@ import {
 } from 'lucide-react'
 import { Lead, Message } from '../types'
 import { useSocket } from '../contexts/SocketContext'
+import { useIsMobile } from '../hooks/useMediaQuery'
 
 interface WhatsAppChatViewProps {
   leads: Lead[]
   selectedLead: Lead | null
-  onSelectLead: (lead: Lead) => void
+  onSelectLead: (lead: Lead | null) => void
   onOpenNewContract: (lead: Lead) => void
 }
 
@@ -28,6 +30,7 @@ export const WhatsAppChatView: React.FC<WhatsAppChatViewProps> = ({
   onSelectLead,
   onOpenNewContract,
 }) => {
+  const isMobile = useIsMobile()
   const { whatsappStatus, socket } = useSocket()
   const [messages, setMessages] = useState<Message[]>([])
   const [inputText, setInputText] = useState('')
@@ -228,9 +231,27 @@ export const WhatsAppChatView: React.FC<WhatsAppChatViewProps> = ({
   }
 
   return (
-    <div className="flex flex-col lg:flex-row h-[calc(100vh-120px)] min-h-[560px] rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 overflow-hidden shadow-sm">
-      {/* Left Contacts Sidebar */}
-      <div className="w-full lg:w-80 max-h-60 lg:max-h-none border-b lg:border-b-0 lg:border-r border-slate-200 dark:border-slate-800 flex flex-col shrink-0 bg-slate-50/50 dark:bg-slate-900/50">
+    // `dvh` no lugar de `vh`: a barra do Chrome mobile nao corta o campo de envio.
+    // No mobile mostra a LISTA ou a CONVERSA, nunca as duas com scroll aninhado.
+    <div
+      className={`flex h-[calc(100dvh-150px)] min-h-[420px] overflow-hidden rounded-[14px] ${isMobile ? 'flex-col' : 'flex-row'}`}
+      style={{
+        background: 'var(--surface-raised)',
+        border: '1px solid var(--border-subtle)',
+        boxShadow: 'var(--shadow-sm)',
+      }}
+    >
+      {/* Lista de conversas */}
+      <div
+        className={`min-h-0 flex-col ${
+          isMobile
+            ? selectedLead
+              ? 'hidden'
+              : 'flex w-full flex-1'
+            : 'flex w-80 flex-none'
+        }`}
+        style={{ background: 'var(--surface-sunken)' }}
+      >
         <div className="p-3.5 border-b border-slate-200 dark:border-slate-800 space-y-3">
           <div className="flex items-center justify-between gap-2">
             <h3 className="text-xs font-bold text-slate-800 dark:text-slate-200">
@@ -252,7 +273,7 @@ export const WhatsAppChatView: React.FC<WhatsAppChatViewProps> = ({
           </div>
         </div>
 
-        <div className="flex-1 overflow-y-auto divide-y divide-slate-100 dark:divide-slate-800">
+        <div className="min-h-0 flex-1 divide-y overflow-y-auto overscroll-contain" style={{ borderColor: 'var(--border-subtle)' }}>
           {filteredLeads.length === 0 ? (
             <div className="p-6 text-center">
               <Search className="w-5 h-5 mx-auto text-slate-300 dark:text-slate-600" />
@@ -308,10 +329,24 @@ export const WhatsAppChatView: React.FC<WhatsAppChatViewProps> = ({
 
       {/* Main Chat Thread Area */}
       {selectedLead ? (
-        <div className="flex-1 min-w-0 flex flex-col bg-white dark:bg-slate-950">
-          {/* Top Chat Header */}
-          <div className="min-h-16 border-b border-slate-200 dark:border-slate-800 px-4 sm:px-5 py-3 flex flex-wrap items-center justify-between gap-2 bg-white dark:bg-slate-900">
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+          {/* Cabecalho da conversa */}
+          <div
+            className="flex min-h-16 shrink-0 flex-wrap items-center justify-between gap-2 px-4 py-3 sm:px-5"
+            style={{ borderBottom: '1px solid var(--border-subtle)' }}
+          >
             <div className="flex items-center gap-3">
+              {/* Volta para a lista no mobile. */}
+              {isMobile && (
+                <button
+                  onClick={() => onSelectLead(null)}
+                  aria-label="Voltar para a lista de conversas"
+                  className="-ml-1 grid h-10 w-10 shrink-0 place-items-center rounded-[8px]"
+                  style={{ color: 'var(--ink-muted)' }}
+                >
+                  <ChevronLeft className="h-5 w-5" />
+                </button>
+              )}
               <div className="w-10 h-10 rounded-full bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 font-bold flex items-center justify-center text-xs">
                 {selectedLead.name.slice(0, 2).toUpperCase()}
               </div>
@@ -355,7 +390,7 @@ export const WhatsAppChatView: React.FC<WhatsAppChatViewProps> = ({
           </div>
 
           {/* Messages Scroll Area */}
-          <div className="flex-1 overflow-y-auto p-5 space-y-3 bg-slate-50/50 dark:bg-slate-950">
+          <div className="min-h-0 flex-1 space-y-3 overflow-y-auto overscroll-contain p-4 sm:p-5" style={{ background: 'var(--surface-canvas)' }}>
             {messages.length === 0 ? (
               <div className="h-full flex flex-col items-center justify-center text-center px-6">
                 <div className="w-10 h-10 rounded-xl bg-blue-100 dark:bg-blue-950/50 text-blue-600 dark:text-blue-300 flex items-center justify-center">
@@ -506,7 +541,7 @@ export const WhatsAppChatView: React.FC<WhatsAppChatViewProps> = ({
             </p>
           )}
         </div>
-      ) : (
+      ) : isMobile ? null : (
         <div className="flex-1 flex flex-col items-center justify-center text-slate-400 dark:text-slate-600 p-8 text-center">
           <Bot className="w-12 h-12 mb-3 text-slate-300 dark:text-slate-700" />
           <h3 className="text-sm font-bold text-slate-700 dark:text-slate-300">
@@ -520,7 +555,7 @@ export const WhatsAppChatView: React.FC<WhatsAppChatViewProps> = ({
 
       {/* Right Drawer: AI Qualification Dossier */}
       {selectedLead && (
-        <div className="hidden xl:flex w-80 border-l border-slate-200 dark:border-slate-800 p-4 shrink-0 bg-slate-50/50 dark:bg-slate-900/40 flex-col justify-between overflow-y-auto">
+        <div className="hidden min-h-0 w-80 shrink-0 flex-col justify-between overflow-y-auto p-4 xl:flex" style={{ background: 'var(--surface-sunken)', borderLeft: '1px solid var(--border-subtle)' }}>
           <div className="space-y-4">
             <div className="flex items-center justify-between pb-2 border-b border-slate-200 dark:border-slate-800">
               <h4 className="text-xs font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
