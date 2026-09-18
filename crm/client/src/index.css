@@ -460,6 +460,17 @@
   border-color: var(--yr-300);
 }
 
+/* Campo de formulario: o fundo NUNCA anima (so borda e anel de foco). */
+.field-control {
+  transition:
+    border-color var(--dur-fast) ease,
+    box-shadow var(--dur-fast) ease;
+}
+.field-control:focus {
+  border-color: var(--yr-500) !important;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--yr-500) 22%, transparent);
+}
+
 /* Cartao padrao das telas */
 .card {
   background: var(--surface-raised);
@@ -573,17 +584,17 @@
   animation: backdrop-in var(--dur-fast) var(--ease-out) both;
 }
 
-/* Dialogo no desktop. */
-/* Sem `scale`: quando a escala termina o navegador re-rasteriza a camada e as
-   bordas de 1px dos campos de dentro do dialogo dao um estalo visivel. So
-   deslocamento e opacidade mantem o conteudo nitido do inicio ao fim. */
+/* Dialogo no desktop: entra SO deslizando, opaco desde o primeiro quadro.
+   - sem `scale`: ao terminar a escala o navegador re-rasteriza a camada e as
+     bordas de 1px dos campos dao um estalo;
+   - sem `opacity`: com o painel translucido, os campos (mais escuros que o
+     fundo do painel) pareciam sair do transparente e ganhar cor.
+   A suavidade da entrada fica por conta do fundo, que continua em fade. */
 @keyframes dialog-in {
   from {
-    opacity: 0;
-    transform: translateY(14px);
+    transform: translateY(20px);
   }
   to {
-    opacity: 1;
     transform: none;
   }
 }

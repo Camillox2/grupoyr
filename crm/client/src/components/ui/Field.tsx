@@ -1,7 +1,10 @@
 import React, { useId } from 'react'
 
+// A transicao cobre SO a borda (realce do foco). `transition-colors` incluia
+// background-color, e o fundo do campo aparecia "saindo do transparente" toda
+// vez que o dialogo abria.
 const CONTROL =
-  'w-full rounded-[10px] px-3 py-2.5 text-[13px] outline-none transition-colors placeholder:text-[var(--ink-faint)]'
+  'field-control w-full rounded-[10px] px-3 py-2.5 text-[13px] outline-none placeholder:text-[var(--ink-faint)]'
 
 const controlStyle: React.CSSProperties = {
   background: 'var(--surface-sunken)',
