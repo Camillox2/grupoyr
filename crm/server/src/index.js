@@ -24,6 +24,7 @@ import {
 import { sanitizeLeadDetails } from './leadDetails.js'
 import { listTemplates, sendTemplate, windowState, backfillLastInbound, MetaError } from './metaTemplates.js'
 import { normalizePhone, phoneKey } from './phone.js'
+import * as siteBlog from './blog.js'
 
 const app = express()
 const server = http.createServer(app)
@@ -42,6 +43,15 @@ const imageUpload = multer({
     },
   }),
   limits: { fileSize: 5 * 1024 * 1024, files: 8 },
+  fileFilter: (_req, file, callback) => {
+    callback(null, ['image/jpeg', 'image/png', 'image/webp'].includes(file.mimetype))
+  },
+})
+
+// Capa do blog do site: fica em memoria porque e recodificada antes de gravar.
+const blogCoverUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 10 * 1024 * 1024, files: 1 },
   fileFilter: (_req, file, callback) => {
     callback(null, ['image/jpeg', 'image/png', 'image/webp'].includes(file.mimetype))
   },
@@ -876,14 +886,36 @@ const normalizeBlogPost = (body, existing = {}) => {
   }
 }
 
-app.get('/api/blog/posts', requireAuth(), (_req, res) => {
+// Quando o CRM alcanca o banco do site (blog.js), a Central editorial escreve
+// direto no blog publico. Sem isso ela continua local e a tela avisa.
+const sendBlogError = (res, error, fallback) => {
+  if (error instanceof siteBlog.BlogError) return res.status(error.status).json({ error: error.message })
+  console.error('[Blog]', fallback, '-', error?.code || error?.message || error)
+  return res.status(503).json({ error: fallback })
+}
+
+app.get('/api/blog/status', requireAuth(), async (_req, res) => {
+  res.json({ linked: await siteBlog.isLinked(), siteUrl: 'https://site.grupoyrhospitalar.com.br/blog' })
+})
+
+app.get('/api/blog/posts', requireAuth(), async (_req, res) => {
+  try {
+    if (await siteBlog.isLinked()) return res.json(await siteBlog.listPosts())
+  } catch (error) {
+    return sendBlogError(res, error, 'Não foi possível carregar os artigos do site.')
+  }
   const posts = db.get('blog_posts').toSorted((a, b) => (
     new Date(b.updatedAt || b.createdAt || 0) - new Date(a.updatedAt || a.createdAt || 0)
   ))
   res.json(posts)
 })
 
-app.post('/api/blog/posts', requireAuth(['admin']), (req, res) => {
+app.post('/api/blog/posts', requireAuth(['admin']), async (req, res) => {
+  try {
+    if (await siteBlog.isLinked()) return res.status(201).json(await siteBlog.savePost(null, req.body))
+  } catch (error) {
+    return sendBlogError(res, error, 'Não foi possível salvar o artigo no site.')
+  }
   try {
     const post = normalizeBlogPost(req.body)
     if (db.find('blog_posts', (item) => item.slug === post.slug)) {
@@ -900,7 +932,12 @@ app.post('/api/blog/posts', requireAuth(['admin']), (req, res) => {
   }
 })
 
-app.put('/api/blog/posts/:id', requireAuth(['admin']), (req, res) => {
+app.put('/api/blog/posts/:id', requireAuth(['admin']), async (req, res) => {
+  try {
+    if (await siteBlog.isLinked()) return res.json(await siteBlog.savePost(req.params.id, req.body))
+  } catch (error) {
+    return sendBlogError(res, error, 'Não foi possível salvar o artigo no site.')
+  }
   try {
     const existing = db.find('blog_posts', (item) => item.id === req.params.id)
     if (!existing) return res.status(404).json({ error: 'Artigo não encontrado.' })
@@ -915,11 +952,43 @@ app.put('/api/blog/posts/:id', requireAuth(['admin']), (req, res) => {
   }
 })
 
-app.delete('/api/blog/posts/:id', requireAuth(['admin']), (req, res) => {
+app.delete('/api/blog/posts/:id', requireAuth(['admin']), async (req, res) => {
+  try {
+    if (await siteBlog.isLinked()) {
+      await siteBlog.archivePost(req.params.id)
+      return res.status(204).end()
+    }
+  } catch (error) {
+    return sendBlogError(res, error, 'Não foi possível arquivar o artigo no site.')
+  }
   const existing = db.find('blog_posts', (item) => item.id === req.params.id)
   if (!existing) return res.status(404).json({ error: 'Artigo não encontrado.' })
   db.delete('blog_posts', existing.id)
   res.status(204).end()
+})
+
+// Capa no blog do site: recodificada em WebP e guardada no banco do site.
+app.post('/api/blog/cover', requireAuth(['admin']), blogCoverUpload.single('image'), async (req, res) => {
+  try {
+    if (!(await siteBlog.isLinked())) return res.status(409).json({ error: 'O CRM não está ligado ao blog do site.' })
+    if (!req.file) return res.status(400).json({ error: 'Envie uma imagem JPG, PNG ou WebP de até 10 MB.' })
+    res.status(201).json(await siteBlog.uploadCover(req.file.buffer))
+  } catch (error) {
+    sendBlogError(res, error, 'Não foi possível enviar a capa.')
+  }
+})
+
+app.get('/api/blog/media/:id', requireAuth(), async (req, res) => {
+  try {
+    const data = (await siteBlog.isLinked()) ? await siteBlog.readMedia(req.params.id) : null
+    if (!data) return res.status(404).end()
+    res.setHeader('Content-Type', 'image/webp')
+    res.setHeader('X-Content-Type-Options', 'nosniff')
+    res.setHeader('Cache-Control', 'private, max-age=3600')
+    res.end(data)
+  } catch (error) {
+    sendBlogError(res, error, 'Não foi possível carregar a capa.')
+  }
 })
 
 app.post('/api/blog/media', requireAuth(['admin']), imageUpload.array('images', 8), (req, res) => {
