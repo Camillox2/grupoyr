@@ -7,9 +7,9 @@ import {
   Key,
   QrCode,
   Save,
-  CheckCircle2,
 } from 'lucide-react'
 import { PageHeader } from './ui/PageHeader'
+import { Toast, useToast } from './ui/Toast'
 import { useSocket } from '../contexts/SocketContext'
 
 interface SettingsViewProps {
@@ -26,7 +26,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onOpenQr }) => {
   const [metaAppSecretConfigured, setMetaAppSecretConfigured] = useState(false)
   const [geminiConfigured, setGeminiConfigured] = useState(false)
   const [metaTokenConfigured, setMetaTokenConfigured] = useState(false)
-  const [savedSuccess, setSavedSuccess] = useState(false)
+  const { toast, show: showToast, dismiss: dismissToast } = useToast()
 
   useEffect(() => {
     fetch('/api/settings', {
@@ -70,18 +70,24 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onOpenQr }) => {
       })
 
       if (res.ok) {
-        setSavedSuccess(true)
-        setTimeout(() => setSavedSuccess(false), 4000)
+        // Campos de segredo voltam a ficar vazios: o valor ja esta guardado.
+        if (metaAppSecret) { setMetaAppSecret(''); setMetaAppSecretConfigured(true) }
+        showToast({ tone: 'ok', message: 'Configurações salvas e aplicadas.' })
+      } else {
+        // Antes, um erro ao salvar passava calado e parecia que tinha dado certo.
+        const data = await res.json().catch(() => null)
+        showToast({ tone: 'alert', message: data?.error || 'Não foi possível salvar as configurações.' })
       }
     } catch (e) {
       console.error('Erro ao salvar configurações:', e)
+      showToast({ tone: 'alert', message: 'Falha de comunicação com o servidor.' })
     }
   }
 
   const isBaileys = whatsappStatus.provider === 'baileys'
 
   return (
-    <div className="space-y-6 pb-12 max-w-4xl">
+    <div className="space-y-6 pb-12">
       <PageHeader
         icon={<Settings className="h-5 w-5" />}
         eyebrow="Ajustes"
@@ -89,14 +95,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onOpenQr }) => {
         description="Provedor de WhatsApp, credenciais da Meta Cloud API e a chave da IA."
       />
 
-      {savedSuccess && (
-        <div className="p-3.5 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 text-xs font-semibold text-emerald-800 dark:text-emerald-200 flex items-center gap-2">
-          <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-          <span>Configurações salvas e aplicadas com sucesso!</span>
-        </div>
-      )}
-
-      <form onSubmit={handleSaveSettings} className="space-y-6">
+      <form onSubmit={handleSaveSettings} className="grid items-start gap-6 xl:grid-cols-2">
         {/* WhatsApp Provider Switcher Card */}
         <div className="p-6 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm space-y-4">
           <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800">
@@ -300,7 +299,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onOpenQr }) => {
         </div>
 
         {/* Submit button */}
-        <div className="flex justify-end">
+        <div className="flex justify-end xl:col-span-2">
           <button
             type="submit"
             className="px-6 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs shadow-md shadow-blue-500/20 flex items-center gap-2 transition-all"
@@ -310,6 +309,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onOpenQr }) => {
           </button>
         </div>
       </form>
+      <Toast toast={toast} onDismiss={dismissToast} />
     </div>
   )
 }

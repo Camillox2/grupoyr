@@ -233,12 +233,8 @@ function MainContent() {
             rolagem sumir e voltar, e o conteudo "pulava". Quem entra animado e
             o palco interno, que ganha `key` novo a cada aba. */}
         <main ref={mainRef} className="app-main min-h-0 flex-1 overflow-y-auto p-4 sm:p-6">
-          {/* As telas usam a largura toda. So configuracoes e blog, que sao
-              formularios e texto, ficam numa coluna de leitura confortavel. */}
-          <div
-            key={activeTab}
-            className={`view-stage mx-auto ${activeTab === 'settings' || activeTab === 'blog' ? 'max-w-6xl' : 'max-w-none'}`}
-          >
+          {/* Todas as telas usam a largura toda. */}
+          <div key={activeTab} className="view-stage mx-auto max-w-none">
             {dataError && (
               <div className="mb-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-2xl border border-amber-200 bg-amber-50 p-3.5 text-xs text-amber-900 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-100">
                 <span>{dataError}</span>
