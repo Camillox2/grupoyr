@@ -882,10 +882,20 @@
   cursor: pointer;
   width: 100%;
 }
+/* O checkbox real fica invisivel EXATAMENTE em cima do quadradinho desenhado.
+   Clicar no rotulo da foco nele, e o navegador rola a pagina ate o elemento
+   focado: se ele estiver solto em outro lugar, a tela "desce tudo". Em cima do
+   proprio quadradinho, o foco nunca tem para onde rolar. */
 .sheet-checklist input {
   position: absolute;
+  left: 0;
+  top: 50%;
+  width: 20px;
+  height: 20px;
+  margin: 0;
+  transform: translateY(-50%);
   opacity: 0;
-  pointer-events: none;
+  cursor: pointer;
 }
 .sheet-checklist em {
   font-style: normal;
