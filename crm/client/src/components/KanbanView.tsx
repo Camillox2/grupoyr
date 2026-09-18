@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react'
+import React, { useMemo, useRef, useState } from 'react'
 import { DragDropContext, Droppable, Draggable, DropResult } from '@hello-pangea/dnd'
 import {
   Plus,
@@ -15,6 +15,7 @@ import { useIsMobile } from '../hooks/useMediaQuery'
 import { PageHeader, ActionButton } from './ui/PageHeader'
 import { EmptyState } from './ui/ResponsiveTable'
 import { brl } from './ui/Feedback'
+import { WaveScrollbar } from './ui/WaveScrollbar'
 
 interface KanbanViewProps {
   leads: Lead[]
@@ -49,6 +50,7 @@ export const KanbanView: React.FC<KanbanViewProps> = ({
   const [filterOrigin, setFilterOrigin] = useState('todos')
   // No mobile o funil mostra uma etapa por vez: 7 colunas nao cabem em 390px.
   const [mobileStageIndex, setMobileStageIndex] = useState(0)
+  const boardRef = useRef<HTMLDivElement | null>(null)
 
   const filteredLeads = useMemo(() => {
     const term = searchTerm.trim().toLowerCase()
@@ -326,81 +328,84 @@ export const KanbanView: React.FC<KanbanViewProps> = ({
 
   // --------------------------------------------------------------- DESKTOP
   return (
-    <div className="pb-10">
+    <div className="pb-6">
       {header}
       {filters}
 
       <DragDropContext onDragEnd={onDragEnd}>
-        {/* Altura em dvh: a barra do navegador nao corta a ultima linha. */}
-        <div className="flex select-none items-start gap-4 overflow-x-auto pb-4">
-          {COLUMNS.map((column) => {
-            const columnLeads = byStage.get(column.id) ?? []
+        {/* O QUADRO e a unica area de rolagem, nos dois sentidos.
+            A biblioteca de arrastar so faz auto-rolagem na area de rolagem mais
+            proxima de cada coluna. Quando cada coluna tinha a sua propria
+            rolagem vertical, a biblioteca nem sabia que o quadro rolava de
+            lado: arrastar um card para uma etapa fora da tela nao movia nada.
+            Com o quadro como rolagem unica, chegar com o card perto da borda
+            esquerda ou direita rola o funil sozinho. Os cabecalhos das colunas
+            ficam presos no topo (sticky) enquanto o quadro rola para baixo. */}
+        <div ref={boardRef} className="kanban-board select-none">
+          <div className="flex items-start gap-4 pb-2 pr-1">
+            {COLUMNS.map((column) => {
+              const columnLeads = byStage.get(column.id) ?? []
 
-            return (
-              <section
-                key={column.id}
-                className="flex max-h-[calc(100dvh-280px)] w-[19rem] shrink-0 flex-col rounded-[14px] p-3"
-                style={{ background: 'var(--surface-sunken)', border: '1px solid var(--border-subtle)' }}
-              >
-                <div
-                  className="mb-2 flex shrink-0 items-center justify-between gap-2 pb-2.5"
-                  style={{ borderBottom: '1px solid var(--border-subtle)' }}
+              return (
+                <section
+                  key={column.id}
+                  className="w-[19rem] shrink-0 rounded-[16px] px-3 pb-3"
+                  style={{ background: 'var(--surface-sunken)', border: '1px solid var(--border-subtle)' }}
                 >
-                  <div className="flex min-w-0 items-center gap-2">
-                    <span
-                      className="h-2.5 w-2.5 shrink-0 rounded-full"
-                      style={{ background: column.accent }}
-                    />
-                    <h3 className="truncate text-[12px] font-extrabold" style={{ color: 'var(--ink)' }}>
-                      {column.title}
-                    </h3>
-                    <span
-                      className="tnum shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-extrabold"
-                      style={{ background: 'var(--surface-raised)', color: 'var(--ink-muted)' }}
-                    >
-                      {columnLeads.length}
+                  <div
+                    className="sticky top-0 z-[2] mb-2 flex items-center justify-between gap-2 rounded-t-[16px] pb-2.5 pt-3"
+                    style={{ background: 'var(--surface-sunken)', borderBottom: '1px solid var(--border-subtle)' }}
+                  >
+                    <div className="flex min-w-0 items-center gap-2">
+                      <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: column.accent }} />
+                      <h3 className="truncate text-[12px] font-extrabold" style={{ color: 'var(--ink)' }}>
+                        {column.title}
+                      </h3>
+                      <span
+                        className="tnum shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-extrabold"
+                        style={{ background: 'var(--surface-raised)', color: 'var(--ink-muted)' }}
+                      >
+                        {columnLeads.length}
+                      </span>
+                    </div>
+                    <span className="tnum shrink-0 text-[11px] font-bold" style={{ color: 'var(--ink-muted)' }}>
+                      {brl(stageTotal(column.id))}
                     </span>
                   </div>
-                  <span
-                    className="tnum shrink-0 text-[11px] font-bold"
-                    style={{ color: 'var(--ink-muted)' }}
-                  >
-                    {brl(stageTotal(column.id))}
-                  </span>
-                </div>
 
-                <Droppable droppableId={column.id}>
-                  {(provided, snapshot) => (
-                    <div
-                      ref={provided.innerRef}
-                      {...provided.droppableProps}
-                      className={`min-h-[140px] flex-1 space-y-2.5 overflow-y-auto rounded-[10px] pr-1 ${
-                        snapshot.isDraggingOver ? 'drop-active' : ''
-                      }`}
-                    >
-                      {columnLeads.map((lead, index) => (
-                        <Draggable key={lead.id} draggableId={lead.id} index={index}>
-                          {(dragProvided, dragSnapshot) => (
-                            <div
-                              ref={dragProvided.innerRef}
-                              {...dragProvided.draggableProps}
-                              {...dragProvided.dragHandleProps}
-                              className="cursor-grab active:cursor-grabbing"
-                            >
-                              {card(lead, column.id, dragSnapshot.isDragging)}
-                            </div>
-                          )}
-                        </Draggable>
-                      ))}
-                      {provided.placeholder}
-                    </div>
-                  )}
-                </Droppable>
-              </section>
-            )
-          })}
+                  <Droppable droppableId={column.id}>
+                    {(provided, snapshot) => (
+                      <div
+                        ref={provided.innerRef}
+                        {...provided.droppableProps}
+                        className={`kanban-drop space-y-2.5 rounded-[10px] ${snapshot.isDraggingOver ? 'drop-active' : ''}`}
+                      >
+                        {columnLeads.map((lead, index) => (
+                          <Draggable key={lead.id} draggableId={lead.id} index={index}>
+                            {(dragProvided, dragSnapshot) => (
+                              <div
+                                ref={dragProvided.innerRef}
+                                {...dragProvided.draggableProps}
+                                {...dragProvided.dragHandleProps}
+                                className="cursor-grab active:cursor-grabbing"
+                              >
+                                {card(lead, column.id, dragSnapshot.isDragging)}
+                              </div>
+                            )}
+                          </Draggable>
+                        ))}
+                        {provided.placeholder}
+                      </div>
+                    )}
+                  </Droppable>
+                </section>
+              )
+            })}
+          </div>
         </div>
       </DragDropContext>
+
+      <WaveScrollbar target={boardRef} />
     </div>
   )
 }

@@ -470,6 +470,69 @@
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--yr-500) 22%, transparent);
 }
 
+/* ---------------------------------------------------------------------------
+   Funil: o quadro e a unica area de rolagem (ver KanbanView.tsx)
+   --------------------------------------------------------------------------- */
+.kanban-board {
+  height: calc(100dvh - 318px);
+  min-height: 320px;
+  overflow: auto;
+  overscroll-behavior: contain;
+  border-radius: 16px;
+  /* a barra horizontal nativa sai de cena: quem aparece e a onda abaixo */
+  scrollbar-width: thin;
+}
+.kanban-board::-webkit-scrollbar:horizontal {
+  height: 0;
+}
+/* Area de soltar ocupa a altura do quadro: da para largar o card em qualquer
+   ponto da coluna, inclusive nas vazias. */
+.kanban-drop {
+  min-height: calc(100dvh - 400px);
+}
+
+/* Barra de rolagem em onda */
+.wave-scroll {
+  --wave: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='32' height='16' viewBox='0 0 32 16'%3E%3Cpath d='M0 8 Q 8 0 16 8 T 32 8' fill='none' stroke='%23000' stroke-width='3.4' stroke-linecap='round'/%3E%3C/svg%3E");
+  position: relative;
+  height: 18px;
+  margin-top: 10px;
+  cursor: pointer;
+  touch-action: none;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--dur-moderate) ease;
+}
+.wave-scroll.is-on {
+  opacity: 1;
+  pointer-events: auto;
+}
+.wave-scroll-track,
+.wave-scroll-thumb {
+  position: absolute;
+  top: 1px;
+  left: 0;
+  height: 16px;
+  -webkit-mask-image: var(--wave);
+  mask-image: var(--wave);
+  -webkit-mask-repeat: repeat-x;
+  mask-repeat: repeat-x;
+  -webkit-mask-size: 32px 16px;
+  mask-size: 32px 16px;
+}
+.wave-scroll-track {
+  width: 100%;
+  background: var(--border-strong);
+}
+.wave-scroll-thumb {
+  background: var(--yr-500);
+  cursor: grab;
+}
+.wave-scroll-thumb:active {
+  cursor: grabbing;
+  background: var(--yr-700);
+}
+
 /* Cartao padrao das telas */
 .card {
   background: var(--surface-raised);
