@@ -10,6 +10,10 @@ interface NavbarProps {
   onToggleMobileMenu?: () => void
 }
 
+/**
+ * Barra superior em azul-marinho: e o contraste forte da tela, o mesmo papel
+ * que a faixa azul faz no site. O resto do app fica na base pastel.
+ */
 export const Navbar: React.FC<NavbarProps> = ({ onOpenQr, onToggleMobileMenu }) => {
   const { theme, toggleTheme } = useTheme()
   const { user, logout } = useAuth()
@@ -26,50 +30,45 @@ export const Navbar: React.FC<NavbarProps> = ({ onOpenQr, onToggleMobileMenu }) 
     toggleTheme({ x: box.left + box.width / 2, y: box.top + box.height / 2 })
   }
 
+  const ghost: React.CSSProperties = {
+    color: '#dce9f8',
+    border: '1px solid rgba(220, 233, 248, 0.22)',
+    background: 'rgba(255, 253, 249, 0.06)',
+  }
+
   return (
     <header
       className="safe-top sticky top-0 z-30 flex h-16 shrink-0 items-center justify-between gap-3 px-3 sm:px-5"
-      style={{
-        background: 'color-mix(in srgb, var(--surface-raised) 88%, transparent)',
-        borderBottom: '1px solid var(--border-subtle)',
-        backdropFilter: 'blur(12px)',
-        WebkitBackdropFilter: 'blur(12px)',
-      }}
+      style={{ background: 'var(--navbar-bg)', color: '#fffdf9' }}
     >
-      <div className="flex min-w-0 items-center gap-2.5">
+      <div className="flex min-w-0 items-center gap-3">
         {onToggleMobileMenu && isMobile && (
           <button
             onClick={onToggleMobileMenu}
             aria-label="Abrir menu de navegação"
-            className="grid h-10 w-10 shrink-0 place-items-center rounded-[10px] transition-colors hover:bg-[var(--surface-sunken)]"
-            style={{ color: 'var(--ink-muted)' }}
+            className="grid h-10 w-10 shrink-0 place-items-center rounded-[12px]"
+            style={ghost}
           >
             <Menu className="h-5 w-5" />
           </button>
         )}
 
         <div
-          className="grid h-10 w-10 shrink-0 place-items-center overflow-hidden rounded-[10px]"
-          style={{ background: '#ffffff', border: '1px solid var(--border-subtle)' }}
+          className="grid h-10 w-10 shrink-0 place-items-center overflow-hidden rounded-[12px]"
+          style={{ background: '#fffdf9' }}
         >
           <img
             src="https://site.grupoyrhospitalar.com.br/yr-hospitalar-logo.jpg"
             alt=""
             className="h-full w-full object-contain"
+            style={{ mixBlendMode: 'multiply' }}
           />
         </div>
 
-        <div className="min-w-0">
-          <h1
-            className="truncate text-[14px] font-extrabold leading-tight tracking-[-0.02em] sm:text-[15px]"
-            style={{ color: 'var(--ink)' }}
-          >
-            Grupo YR Hospitalar
-          </h1>
-          <p
-            className="hidden truncate text-[11px] leading-tight sm:block"
-            style={{ color: 'var(--ink-muted)' }}
-          >
+        {/* no celular estreito o nome cortava em "Grup..."; a logo ja identifica */}
+        <div className="hidden min-w-0 min-[420px]:block">
+          <p className="serif truncate text-[18px] leading-none sm:text-[20px]">Grupo YR</p>
+          <p className="mt-1 hidden truncate text-[11px] font-semibold leading-none sm:block" style={{ color: '#9cc3f0' }}>
             Locação, vendas e atendimento
           </p>
         </div>
@@ -79,56 +78,49 @@ export const Navbar: React.FC<NavbarProps> = ({ onOpenQr, onToggleMobileMenu }) 
         {/* O seletor de provedor so cabe no desktop; no mobile fica em Configuracoes. */}
         {!isMobile && (
           <div
-            className="flex items-center rounded-[10px] p-0.5 text-[11px] font-semibold"
-            style={{ background: 'var(--surface-sunken)', border: '1px solid var(--border-subtle)' }}
+            className="flex items-center rounded-[12px] p-1 text-[11px] font-bold"
+            style={{ background: 'rgba(255, 253, 249, 0.08)', border: '1px solid rgba(220, 233, 248, 0.18)' }}
             role="group"
             aria-label="Provedor de WhatsApp"
           >
-            <button
-              onClick={() => switchWhatsAppProvider('baileys')}
-              aria-pressed={isBaileys}
-              className="tap-exempt flex items-center gap-1.5 rounded-[8px] px-2.5 py-1.5 transition-colors"
-              style={
-                isBaileys
-                  ? { background: 'var(--surface-raised)', color: 'var(--ok)', boxShadow: 'var(--shadow-sm)' }
-                  : { color: 'var(--ink-muted)' }
-              }
-              title="Conexão por QR Code via Baileys, sem custo por mensagem"
-            >
-              <Radio className="h-3.5 w-3.5" />
-              Baileys
-            </button>
-            <button
-              onClick={() => switchWhatsAppProvider('meta')}
-              aria-pressed={!isBaileys}
-              className="tap-exempt flex items-center gap-1.5 rounded-[8px] px-2.5 py-1.5 transition-colors"
-              style={
-                !isBaileys
-                  ? { background: 'var(--surface-raised)', color: 'var(--yr-700)', boxShadow: 'var(--shadow-sm)' }
-                  : { color: 'var(--ink-muted)' }
-              }
-              title="Conexão oficial pela Meta Cloud API"
-            >
-              <ShieldCheck className="h-3.5 w-3.5" />
-              Meta API
-            </button>
+            {(
+              [
+                ['baileys', 'Baileys', Radio, 'Conexão por QR Code via Baileys, sem custo por mensagem'],
+                ['meta', 'Meta API', ShieldCheck, 'Conexão oficial pela Meta Cloud API'],
+              ] as const
+            ).map(([id, label, Icon, title]) => {
+              const active = (id === 'baileys') === isBaileys
+              return (
+                <button
+                  key={id}
+                  onClick={() => switchWhatsAppProvider(id)}
+                  aria-pressed={active}
+                  title={title}
+                  className="tap-exempt flex items-center gap-1.5 rounded-[9px] px-2.5 py-1.5 transition-colors"
+                  style={active ? { background: '#fffdf9', color: '#102a4c' } : { color: '#b9d2f0' }}
+                >
+                  <Icon className="h-3.5 w-3.5" />
+                  {label}
+                </button>
+              )
+            })}
           </div>
         )}
 
         <button
           onClick={!isConnected ? onOpenQr : undefined}
           disabled={isConnected}
-          className="flex items-center gap-2 rounded-[10px] border px-2.5 py-1.5 text-[11px] font-bold transition-colors disabled:cursor-default"
+          className="flex items-center gap-2 rounded-[12px] px-3 py-2 text-[11.5px] font-extrabold transition-colors disabled:cursor-default"
           style={
             isConnected
-              ? { color: 'var(--ok)', background: 'var(--ok-surface)', borderColor: 'var(--ok-border)' }
-              : { color: 'var(--wait)', background: 'var(--wait-surface)', borderColor: 'var(--wait-border)' }
+              ? { background: 'rgba(63, 191, 168, 0.16)', color: '#7fe0cf', border: '1px solid rgba(63, 191, 168, 0.4)' }
+              : { background: '#fffdf9', color: '#102a4c', border: '1px solid #fffdf9' }
           }
           title={isConnected ? 'WhatsApp conectado' : 'Conectar o WhatsApp por código ou QR Code'}
         >
           <span
             className="h-2 w-2 shrink-0 rounded-full"
-            style={{ background: isConnected ? 'var(--ok)' : 'var(--wait)' }}
+            style={{ background: isConnected ? '#3fbfa8' : '#e0a43c' }}
           />
           <span className="hidden sm:inline">
             {isConnected ? `Online (${isBaileys ? 'Baileys' : 'Meta'})` : 'Conectar WhatsApp'}
@@ -139,37 +131,32 @@ export const Navbar: React.FC<NavbarProps> = ({ onOpenQr, onToggleMobileMenu }) 
         <button
           onClick={onToggleTheme}
           aria-label={theme === 'dark' ? 'Mudar para o modo claro' : 'Mudar para o modo escuro'}
-          className="grid h-10 w-10 place-items-center rounded-[10px] border transition-colors hover:bg-[var(--surface-sunken)]"
-          style={{ color: 'var(--ink-muted)', borderColor: 'var(--border-subtle)' }}
+          className="grid h-10 w-10 place-items-center rounded-[12px]"
+          style={ghost}
         >
           {theme === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
         </button>
 
         {user && (
-          <div
-            className="flex items-center gap-2 pl-2"
-            style={{ borderLeft: '1px solid var(--border-subtle)' }}
-          >
+          <div className="flex items-center gap-2 pl-1">
             <div
-              className="grid h-8 w-8 shrink-0 place-items-center rounded-full text-[11px] font-extrabold uppercase"
-              style={{ background: 'var(--yr-100)', color: 'var(--yr-700)' }}
+              className="grid h-9 w-9 shrink-0 place-items-center rounded-full text-[11px] font-extrabold uppercase"
+              style={{ background: '#1d5fae', color: '#fffdf9', border: '2px solid rgba(255,253,249,0.35)' }}
             >
               {user.name.slice(0, 2)}
             </div>
             <div className="hidden text-left lg:block">
-              <p className="text-[12px] font-bold leading-none" style={{ color: 'var(--ink)' }}>
-                {user.name}
-              </p>
-              <p className="mt-1 text-[10px] capitalize leading-none" style={{ color: 'var(--ink-faint)' }}>
+              <p className="text-[12.5px] font-bold leading-none">{user.name}</p>
+              <p className="mt-1 text-[10px] capitalize leading-none" style={{ color: '#9cc3f0' }}>
                 {user.role}
               </p>
             </div>
             <button
               onClick={logout}
               aria-label="Encerrar sessão"
-              className="grid h-9 w-9 place-items-center rounded-[8px] transition-colors hover:bg-[var(--alert-surface)]"
-              style={{ color: 'var(--ink-faint)' }}
               title="Encerrar sessão"
+              className="grid h-9 w-9 place-items-center rounded-[10px]"
+              style={{ color: '#9cc3f0' }}
             >
               <LogOut className="h-4 w-4" />
             </button>

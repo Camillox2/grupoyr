@@ -181,6 +181,7 @@ export const ContractsView: React.FC<ContractsViewProps> = ({
     <div className="pb-12">
       <PageHeader
         icon={<FileSignature className="h-5 w-5" />}
+        eyebrow="Contratos"
         title="Contratos e assinatura"
         description="Gere o termo, colha a assinatura na tela ou envie o link para o celular do cliente."
         actions={

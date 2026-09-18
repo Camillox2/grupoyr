@@ -1,38 +1,51 @@
 import React from 'react'
 
+/** Traco azul desenhado a mao, o mesmo dos titulos do site. */
+export const Mark: React.FC<{ children: React.ReactNode }> = ({ children }) => (
+  <span className="mark">
+    {children}
+    <svg viewBox="0 0 300 14" preserveAspectRatio="none" aria-hidden="true">
+      <path d="M3 9 C 60 2, 120 13, 180 6 S 270 4, 297 8" />
+    </svg>
+  </span>
+)
+
 interface PageHeaderProps {
-  icon: React.ReactNode
+  icon?: React.ReactNode
+  /** Rotulo pequeno acima do titulo (caixa alta, azul). */
+  eyebrow?: string
   title: string
-  description: string
+  description?: string
   actions?: React.ReactNode
 }
 
 /**
- * Cabecalho unico das telas.
+ * Cabecalho unico das telas, na linguagem editorial do site: rotulo em caixa
+ * alta, titulo em serifa com o traco azul desenhado, descricao curta.
  *
  * No mobile as acoes descem para uma linha propria e ocupam a largura toda,
  * em vez de espremer o titulo.
  */
-export const PageHeader: React.FC<PageHeaderProps> = ({ icon, title, description, actions }) => (
-  <header className="mb-5 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-    <div className="flex min-w-0 items-start gap-3">
-      <span
-        className="mt-0.5 grid h-10 w-10 shrink-0 place-items-center rounded-[10px]"
-        style={{ background: 'var(--yr-050)', color: 'var(--yr-700)' }}
-      >
-        {icon}
-      </span>
-      <div className="min-w-0">
-        <h2
-          className="text-[19px] font-extrabold leading-tight tracking-[-0.02em]"
-          style={{ color: 'var(--ink)' }}
+export const PageHeader: React.FC<PageHeaderProps> = ({ icon, eyebrow, title, description, actions }) => (
+  <header className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+    <div className="min-w-0">
+      {(eyebrow || icon) && (
+        <p
+          className="mb-2 flex items-center gap-2 text-[11px] font-extrabold uppercase tracking-[0.14em]"
+          style={{ color: 'var(--yr-500)' }}
         >
-          {title}
-        </h2>
-        <p className="mt-1 text-[13px] leading-relaxed" style={{ color: 'var(--ink-muted)' }}>
+          {icon && <span className="grid h-5 w-5 place-items-center [&>svg]:h-4 [&>svg]:w-4">{icon}</span>}
+          {eyebrow}
+        </p>
+      )}
+      <h2 className="serif text-[clamp(28px,3.4vw,44px)] leading-[1.05]" style={{ color: 'var(--ink)' }}>
+        <Mark>{title}</Mark>
+      </h2>
+      {description && (
+        <p className="mt-4 max-w-[62ch] text-[14px] leading-relaxed" style={{ color: 'var(--ink-muted)' }}>
           {description}
         </p>
-      </div>
+      )}
     </div>
     {actions && <div className="flex shrink-0 flex-wrap gap-2">{actions}</div>}
   </header>
@@ -52,7 +65,7 @@ export const Notice: React.FC<{
 
   return (
     <div
-      className="mb-4 rounded-[12px] border px-3.5 py-3 text-[12px] font-semibold leading-relaxed"
+      className="mb-4 rounded-[14px] border px-4 py-3 text-[12.5px] font-semibold leading-relaxed"
       style={palette}
       role={tone === 'alert' ? 'alert' : undefined}
     >
@@ -61,7 +74,7 @@ export const Notice: React.FC<{
   )
 }
 
-/** Botao de acao primaria do cabecalho. */
+/** Botao de acao do cabecalho: pilula, como os do site. */
 export const ActionButton: React.FC<{
   onClick?: () => void
   children: React.ReactNode
@@ -73,16 +86,7 @@ export const ActionButton: React.FC<{
     onClick={onClick}
     disabled={disabled}
     title={title}
-    className="inline-flex items-center justify-center gap-2 rounded-[10px] px-3.5 py-2.5 text-[12px] font-bold transition-colors disabled:opacity-50"
-    style={
-      variant === 'primary'
-        ? { background: 'var(--yr-700)', color: 'var(--ink-on-brand)', boxShadow: 'var(--shadow-sm)' }
-        : {
-            background: 'var(--surface-raised)',
-            color: 'var(--ink-muted)',
-            border: '1px solid var(--border-strong)',
-          }
-    }
+    className={`action-btn action-btn--${variant} inline-flex items-center justify-center gap-2 rounded-full px-5 py-3 text-[13px] font-extrabold disabled:opacity-50`}
   >
     {children}
   </button>

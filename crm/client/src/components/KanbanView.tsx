@@ -210,6 +210,7 @@ export const KanbanView: React.FC<KanbanViewProps> = ({
   const header = (
     <PageHeader
       icon={<KanbanSquare className="h-5 w-5" />}
+      eyebrow="Funil"
       title="Funil de vendas"
       description={`${filteredLeads.length} lead${filteredLeads.length === 1 ? '' : 's'} em acompanhamento, ${brl(
         filteredLeads.reduce((total, lead) => total + (lead.value || 0), 0),

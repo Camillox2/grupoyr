@@ -10,15 +10,16 @@ interface NewLeadModalProps {
   onSuccess: () => void
 }
 
-const EQUIPMENTS = [
-  'Cama hospitalar articulada',
-  'Cama manual 3 movimentos',
-  'Maca hidráulica',
-  'Carrinho de emergência',
-  'Biombo hospitalar',
-  'Mesa de refeição',
-  'Colchão pneumático',
-].map((name) => ({ value: name, label: name }))
+// Mesmo catalogo do site. O colchao pneumatico sai apenas em compra (item de
+// contato direto com a pele), entao o formulario nao deixa marcar locacao.
+const CATALOG: { name: string; rent: boolean }[] = [
+  { name: 'Cama elétrica luxo', rent: true },
+  { name: 'Cama manual 3 movimentos', rent: true },
+  { name: 'Colchão pneumático', rent: false },
+  { name: 'Cadeira de banho', rent: true },
+]
+const EQUIPMENTS = CATALOG.map((item) => ({ value: item.name, label: item.name }))
+const canRent = (name: string) => CATALOG.find((item) => item.name === name)?.rent ?? true
 
 const ORIGINS = [
   'Google Ads',
@@ -165,17 +166,26 @@ export const NewLeadModal: React.FC<NewLeadModalProps> = ({ open, onClose, onSuc
           <SelectField
             label="Equipamento de interesse"
             value={equipmentInterest}
-            onChange={(event) => setEquipmentInterest(event.target.value)}
+            onChange={(event) => {
+              const next = event.target.value
+              setEquipmentInterest(next)
+              if (!canRent(next)) setModality('compra')
+            }}
             options={EQUIPMENTS}
           />
           <SelectField
             label="Modalidade"
             value={modality}
             onChange={(event) => setModality(event.target.value as 'locacao' | 'compra')}
-            options={[
-              { value: 'locacao', label: 'Locação' },
-              { value: 'compra', label: 'Compra' },
-            ]}
+            options={
+              canRent(equipmentInterest)
+                ? [
+                    { value: 'locacao', label: 'Locação' },
+                    { value: 'compra', label: 'Compra' },
+                  ]
+                : [{ value: 'compra', label: 'Compra' }]
+            }
+            hint={canRent(equipmentInterest) ? undefined : 'Este item sai apenas em compra.'}
           />
         </div>
 

@@ -22,40 +22,90 @@ export type TabType =
   | 'blog'
   | 'settings'
 
+/** O que o menu mostra ao lado de cada item, vindo dos dados reais. */
+export interface SidebarMetrics {
+  funnel?: number
+  conversations?: number
+  equipmentsFree?: number
+  contractsPending?: number
+  overdueAmount?: number
+}
+
 interface SidebarProps {
   activeTab: TabType
   onTabChange: (tab: TabType) => void
-  unreadCount?: number
-  pendingContractsCount?: number
+  metrics?: SidebarMetrics
   mobileOpen?: boolean
   onCloseMobile?: () => void
 }
 
+type Tone = 'plain' | 'wait' | 'alert'
+
+const compactBrl = (value: number) =>
+  value >= 1000
+    ? `R$ ${(value / 1000).toLocaleString('pt-BR', { maximumFractionDigits: 1 })}k`
+    : `R$ ${Math.round(value).toLocaleString('pt-BR')}`
+
 export const Sidebar: React.FC<SidebarProps> = ({
   activeTab,
   onTabChange,
-  unreadCount = 0,
-  pendingContractsCount = 0,
+  metrics = {},
   mobileOpen = false,
   onCloseMobile,
 }) => {
   const isMobile = useIsMobile()
 
-  const menuItems = [
-    { id: 'dashboard' as TabType, label: 'Visão geral', icon: LayoutDashboard },
-    { id: 'kanban' as TabType, label: 'Funil', icon: KanbanSquare },
-    { id: 'whatsapp' as TabType, label: 'WhatsApp e IA', icon: MessageSquare, badge: unreadCount },
-    { id: 'equipments' as TabType, label: 'Equipamentos', icon: Bed },
+  // O menu ja conta onde esta o problema antes de voce clicar: a metrica mora
+  // dentro do proprio item, em vez de um numero solto.
+  const groups: {
+    label: string
+    items: { id: TabType; label: string; icon: typeof Bed; note?: string; tone?: Tone }[]
+  }[] = [
     {
-      id: 'contracts' as TabType,
-      label: 'Contratos',
-      icon: FileSignature,
-      badge: pendingContractsCount,
-      urgent: true,
+      label: 'Operação',
+      items: [
+        { id: 'dashboard', label: 'Visão geral', icon: LayoutDashboard },
+        {
+          id: 'kanban',
+          label: 'Funil',
+          icon: KanbanSquare,
+          note: metrics.funnel ? `${metrics.funnel} ativos` : undefined,
+        },
+        {
+          id: 'whatsapp',
+          label: 'WhatsApp e IA',
+          icon: MessageSquare,
+          note: metrics.conversations ? `${metrics.conversations}` : undefined,
+        },
+        {
+          id: 'equipments',
+          label: 'Equipamentos',
+          icon: Bed,
+          note: metrics.equipmentsFree !== undefined ? `${metrics.equipmentsFree} livres` : undefined,
+        },
+        {
+          id: 'contracts',
+          label: 'Contratos',
+          icon: FileSignature,
+          note: metrics.contractsPending ? `${metrics.contractsPending} a assinar` : undefined,
+          tone: 'wait',
+        },
+        {
+          id: 'finance',
+          label: 'Financeiro',
+          icon: DollarSign,
+          note: metrics.overdueAmount ? `${compactBrl(metrics.overdueAmount)} atrasado` : undefined,
+          tone: 'alert',
+        },
+      ],
     },
-    { id: 'finance' as TabType, label: 'Financeiro', icon: DollarSign },
-    { id: 'blog' as TabType, label: 'Blog', icon: BookOpen },
-    { id: 'settings' as TabType, label: 'Configurações', icon: Settings },
+    {
+      label: 'Conteúdo e ajustes',
+      items: [
+        { id: 'blog', label: 'Blog', icon: BookOpen },
+        { id: 'settings', label: 'Configurações', icon: Settings },
+      ],
+    },
   ]
 
   const handleSelectTab = (tab: TabType) => {
@@ -78,86 +128,78 @@ export const Sidebar: React.FC<SidebarProps> = ({
     }
   }, [mobileOpen, onCloseMobile])
 
+  const noteStyle = (tone: Tone | undefined, active: boolean): React.CSSProperties => {
+    if (active) return { background: 'rgba(255,253,249,0.16)', color: '#fffdf9' }
+    if (tone === 'alert') return { background: 'var(--alert-surface)', color: 'var(--alert)' }
+    if (tone === 'wait') return { background: 'var(--wait-surface)', color: 'var(--wait)' }
+    return { background: 'var(--surface-raised)', color: 'var(--ink-muted)' }
+  }
+
   const content = (
-    <div className="screen p-3">
-      {/* A marca vive na Navbar. Repeti-la aqui era a mesma logo duas vezes,
-          uma embaixo da outra. */}
-      <div
-        className="screen-bar flex items-center gap-3 px-3 pb-3 pt-1"
-        style={{ borderBottom: '1px solid var(--border-subtle)' }}
-      >
-        <p
-          className="text-[10px] font-extrabold uppercase tracking-[0.11em]"
-          style={{ color: 'var(--ink-faint)' }}
-        >
-          Operação
-        </p>
-        {isMobile && onCloseMobile && (
+    <div className="screen h-full p-3">
+      {isMobile && onCloseMobile && (
+        <div className="screen-bar flex items-center justify-between px-2 pb-2">
+          <p className="serif text-[20px]" style={{ color: 'var(--ink)' }}>
+            Menu
+          </p>
           <button
             onClick={onCloseMobile}
             aria-label="Fechar menu"
-            className="ml-auto grid h-9 w-9 shrink-0 place-items-center rounded-[8px]"
+            className="grid h-10 w-10 shrink-0 place-items-center rounded-[10px]"
             style={{ color: 'var(--ink-muted)' }}
           >
-            <X className="h-4 w-4" />
+            <X className="h-5 w-5" />
           </button>
-        )}
-      </div>
+        </div>
+      )}
 
-      <nav className="screen-scroll mt-3" aria-label="Navegação principal">
-        <ul className="space-y-0.5">
-          {menuItems.map((item) => {
-            const Icon = item.icon
-            const active = activeTab === item.id
-            const badge = item.badge ?? 0
-
-            return (
-              <li key={item.id}>
-                <button
-                  onClick={() => handleSelectTab(item.id)}
-                  aria-current={active ? 'page' : undefined}
-                  className="relative flex w-full items-center gap-3 rounded-[10px] px-3 py-2.5 text-left text-[13px] font-bold transition-colors"
-                  style={
-                    active
-                      ? { background: 'var(--yr-700)', color: 'var(--ink-on-brand)' }
-                      : { color: 'var(--ink-muted)' }
-                  }
-                  onMouseEnter={(event) => {
-                    if (!active) event.currentTarget.style.background = 'var(--surface-sunken)'
-                  }}
-                  onMouseLeave={(event) => {
-                    if (!active) event.currentTarget.style.background = 'transparent'
-                  }}
-                >
-                  <Icon className="h-[18px] w-[18px] shrink-0" aria-hidden="true" />
-                  <span className="min-w-0 flex-1 truncate">{item.label}</span>
-                  {badge > 0 && (
-                    <span
-                      className="tap-exempt grid h-5 min-w-5 shrink-0 place-items-center rounded-full px-1.5 text-[10px] font-extrabold tabular-nums"
-                      style={
-                        active
-                          ? { background: 'rgba(255,255,255,0.22)', color: 'var(--ink-on-brand)' }
-                          : item.urgent
-                            ? { background: 'var(--wait-surface)', color: 'var(--wait)' }
-                            : { background: 'var(--yr-100)', color: 'var(--yr-700)' }
-                      }
+      <nav className="screen-scroll" aria-label="Navegação principal">
+        {groups.map((group) => (
+          <div key={group.label} className="mb-4">
+            <p
+              className="px-3 pb-2 pt-2 text-[10px] font-extrabold uppercase tracking-[0.13em]"
+              style={{ color: 'var(--ink-faint)' }}
+            >
+              {group.label}
+            </p>
+            <ul className="space-y-1">
+              {group.items.map((item) => {
+                const Icon = item.icon
+                const active = activeTab === item.id
+                return (
+                  <li key={item.id}>
+                    <button
+                      onClick={() => handleSelectTab(item.id)}
+                      aria-current={active ? 'page' : undefined}
+                      className="nav-item flex w-full items-center gap-3 rounded-[12px] px-3 py-2.5 text-left text-[13.5px] font-bold"
+                      data-active={active}
                     >
-                      {badge > 99 ? '99+' : badge}
-                    </span>
-                  )}
-                </button>
-              </li>
-            )
-          })}
-        </ul>
+                      <Icon className="h-[18px] w-[18px] shrink-0" aria-hidden="true" />
+                      <span className="min-w-0 flex-1 truncate">{item.label}</span>
+                      {item.note && (
+                        <span
+                          className="tap-exempt tnum shrink-0 rounded-full px-2 py-0.5 text-[10.5px] font-extrabold"
+                          style={noteStyle(item.tone, active)}
+                        >
+                          {item.note}
+                        </span>
+                      )}
+                    </button>
+                  </li>
+                )
+              })}
+            </ul>
+          </div>
+        ))}
       </nav>
 
       <div
-        className="screen-bar mt-3 flex items-center gap-2 px-3 pt-3 text-[11px] font-semibold"
-        style={{ borderTop: '1px solid var(--border-subtle)', color: 'var(--ink-faint)' }}
+        className="screen-bar mt-2 flex items-center gap-2 rounded-[12px] px-3 py-2.5 text-[11px] font-bold"
+        style={{ background: 'var(--surface-raised)', color: 'var(--ink-muted)', border: '1px solid var(--border-subtle)' }}
       >
-        <span className="h-1.5 w-1.5 rounded-full" style={{ background: 'var(--ok)' }} />
+        <span className="h-2 w-2 rounded-full" style={{ background: 'var(--ok)' }} />
         Operação ativa
+        <span className="plus ml-auto text-[11px]" style={{ color: 'var(--yr-500)' }} aria-hidden="true" />
       </div>
     </div>
   )
@@ -168,13 +210,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
     return (
       <div className="fixed inset-0 z-50 flex" role="presentation">
         <div
-          className="backdrop-in absolute inset-0 bg-[#06121e]/55 backdrop-blur-sm"
+          className="backdrop-in absolute inset-0 bg-[#0a1c33]/55 backdrop-blur-sm"
           onClick={onCloseMobile}
           aria-hidden="true"
         />
         <aside
-          className="drawer-in relative z-10 h-full w-[272px] max-w-[82vw]"
-          style={{ background: 'var(--surface-raised)', boxShadow: 'var(--shadow-lg)' }}
+          className="drawer-in relative z-10 flex h-full w-[296px] max-w-[86vw] flex-col"
+          style={{ background: 'var(--surface-sunken)', boxShadow: 'var(--shadow-lg)' }}
         >
           {content}
         </aside>
@@ -184,11 +226,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
   return (
     <aside
-      className="w-60 shrink-0"
-      style={{
-        background: 'var(--surface-raised)',
-        borderRight: '1px solid var(--border-subtle)',
-      }}
+      className="flex w-[264px] shrink-0 flex-col"
+      style={{ background: 'var(--surface-sunken)', borderRight: '1px solid var(--border-subtle)' }}
     >
       {content}
     </aside>

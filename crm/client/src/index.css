@@ -2,10 +2,82 @@
 @custom-variant dark (&:where(.dark, .dark *));
 
 /* ===========================================================================
-   Grupo YR - Sistema de design "Precisao Calorosa"
-   Superficies neutras e calmas; o azul YR aparece so onde comunica algo.
-   Movimento existe para informar mudanca de estado, nunca para decorar.
+   Grupo YR - CRM na mesma linguagem do site
+   Base pastel (creme, papel, areia), azul da marca como contraste, serifa nos
+   titulos. Movimento existe para informar mudanca de estado.
    =========================================================================== */
+
+/* ---------------------------------------------------------------------------
+   Paleta do Tailwind remapeada na raiz.
+
+   As telas foram escritas com as cores padrao (slate, blue, purple, indigo).
+   Em vez de reescrever milhares de classes, as PROPRIAS variaveis do Tailwind
+   passam a apontar para a paleta da marca: slate claro vira creme/areia,
+   slate escuro vira o azul-marinho, blue vira o azul YR. Assim toda tela,
+   inclusive as que ainda nao foram refeitas a mao, fala a mesma lingua.
+   --------------------------------------------------------------------------- */
+@theme {
+  --color-white: #fffdf9;
+
+  --color-slate-50: #faf6ef;
+  --color-slate-100: #f3ecdf;
+  --color-slate-200: #e2d6c2;
+  --color-slate-300: #d4c5ab;
+  --color-slate-400: #8b96a5;
+  --color-slate-500: #66758a;
+  --color-slate-600: #4a5a70;
+  --color-slate-700: #2f4260;
+  --color-slate-800: #1b3355;
+  --color-slate-900: #102a4c;
+  --color-slate-950: #0a1c33;
+
+  --color-blue-50: #eef4fc;
+  --color-blue-100: #dce9f8;
+  --color-blue-200: #b9d2f0;
+  --color-blue-300: #8fb8e8;
+  --color-blue-400: #4f93e0;
+  --color-blue-500: #2b74c9;
+  --color-blue-600: #1d5fae;
+  --color-blue-700: #174d8f;
+  --color-blue-800: #123d72;
+  --color-blue-900: #102a4c;
+  --color-blue-950: #0a1c33;
+
+  /* roxo, indigo, violeta e ciano eram usados como enfeite (IA, blog etc.):
+     caem todos na familia do azul para a tela parar de parecer arco-iris. */
+  --color-purple-50: #eef4fc;
+  --color-purple-100: #dce9f8;
+  --color-purple-200: #b9d2f0;
+  --color-purple-300: #8fb8e8;
+  --color-purple-400: #4f93e0;
+  --color-purple-500: #2b74c9;
+  --color-purple-600: #1d5fae;
+  --color-purple-700: #174d8f;
+  --color-purple-800: #123d72;
+  --color-purple-900: #102a4c;
+  --color-purple-950: #0a1c33;
+
+  --color-indigo-50: #eef4fc;
+  --color-indigo-100: #dce9f8;
+  --color-indigo-200: #b9d2f0;
+  --color-indigo-300: #8fb8e8;
+  --color-indigo-400: #4f93e0;
+  --color-indigo-500: #2b74c9;
+  --color-indigo-600: #1d5fae;
+  --color-indigo-700: #174d8f;
+  --color-indigo-800: #123d72;
+  --color-indigo-900: #102a4c;
+  --color-indigo-950: #0a1c33;
+
+  --color-sky-300: #8fb8e8;
+  --color-sky-400: #4f93e0;
+  --color-cyan-400: #4f93e0;
+  --color-cyan-500: #2b74c9;
+  --color-cyan-600: #1d5fae;
+
+  --font-sans: Manrope, ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-serif: Georgia, 'Times New Roman', serif;
+}
 
 @font-face {
   font-family: Manrope;
@@ -18,30 +90,30 @@
 @layer base {
   :root {
     /* --- Superficies: quatro niveis de elevacao, do fundo ao flutuante --- */
-    --surface-canvas: #eaeff6;
-    --surface-raised: #ffffff;
-    --surface-sunken: #f1f5fa;
-    --surface-overlay: #ffffff;
-    --surface-brand: linear-gradient(160deg, #0b2e4c 0%, #12456f 55%, #17557f 100%);
-    --surface-tint: linear-gradient(180deg, #f4f8fd 0%, #eaeff6 100%);
+    --surface-canvas: #f6f1e8;
+    --surface-raised: #fffdf9;
+    --surface-sunken: #efe7da;
+    --surface-overlay: #fffdf9;
+    --surface-brand: radial-gradient(90% 120% at 100% 0%, #1d5fae 0%, rgba(29, 95, 174, 0) 60%), #102a4c;
+    --surface-tint: linear-gradient(180deg, #fbf8f2 0%, #f6f1e8 100%);
 
     /* --- Marca --- */
-    --yr-900: #0b2e4c;
-    --yr-700: #12456f;
-    --yr-500: #2b7fc4;
-    --yr-300: #8fc0e6;
-    --yr-100: #dcebf8;
-    --yr-050: #f0f7fd;
+    --yr-900: #0a1c33;
+    --yr-700: #102a4c;
+    --yr-500: #1d5fae;
+    --yr-300: #8fb8e8;
+    --yr-100: #dce9f8;
+    --yr-050: #eef4fc;
 
     /* --- Texto: tres pesos, nao dez --- */
-    --ink: #0e1b2a;
-    --ink-muted: #5a6b7d;
-    --ink-faint: #8fa0b0;
+    --ink: #102a4c;
+    --ink-muted: #56667c;
+    --ink-faint: #8b96a5;
     --ink-on-brand: #ffffff;
 
     /* --- Bordas --- */
-    --border-subtle: #e3eaf1;
-    --border-strong: #cbd8e4;
+    --border-subtle: #e2d6c2;
+    --border-strong: #d4c5ab;
 
     /* --- Semantico: o mesmo status tem a mesma cor em toda tela ---
        ok    = fatura paga / equipamento disponivel
@@ -57,9 +129,9 @@
     --alert: #b3261e;
     --alert-surface: #fdeceb;
     --alert-border: #f3bdb9;
-    --busy: #2b7fc4;
-    --busy-surface: #e8f2fb;
-    --busy-border: #b3d5ef;
+    --busy: #1d5fae;
+    --busy-surface: #eef4fc;
+    --busy-border: #b9d2f0;
 
     /* --- Elevacao: sombra tingida de azul, nunca cinza puro --- */
     --shadow-sm: 0 1px 2px rgba(14, 27, 42, 0.05);
@@ -86,10 +158,10 @@
   }
 
   .dark {
-    --surface-canvas: #080d15;
-    --surface-raised: #101927;
-    --surface-sunken: #0b121d;
-    --surface-overlay: #151f30;
+    --surface-canvas: #0a1c33;
+    --surface-raised: #10294a;
+    --surface-sunken: #0d2240;
+    --surface-overlay: #143158;
 
     --yr-900: #d3e7f7;
     --yr-700: #8fc0e6;
@@ -103,8 +175,8 @@
     --ink-faint: #6b7d8f;
     --ink-on-brand: #06121e;
 
-    --border-subtle: #1c2938;
-    --border-strong: #2c3e52;
+    --border-subtle: #1f3d66;
+    --border-strong: #2d5184;
 
     --ok: #3fbfa8;
     --ok-surface: #0d2320;
@@ -209,6 +281,139 @@
       min-height: 0;
     }
   }
+}
+
+/* ===========================================================================
+   Tipografia editorial (mesma do site)
+   =========================================================================== */
+.serif {
+  font-family: var(--font-serif);
+  font-weight: 400;
+  letter-spacing: -0.03em;
+}
+
+/* Traco azul desenhado a mao sob o titulo: a assinatura visual do site.
+   Ele se traca toda vez que a tela entra (o <main> remonta a cada aba). */
+.mark {
+  position: relative;
+  display: inline-block;
+}
+.mark > svg {
+  position: absolute;
+  left: -1%;
+  bottom: -0.2em;
+  width: 102%;
+  height: 0.24em;
+  overflow: visible;
+  pointer-events: none;
+}
+.mark > svg path {
+  fill: none;
+  stroke: var(--yr-500);
+  stroke-width: 5;
+  stroke-linecap: round;
+  stroke-dasharray: 320;
+  stroke-dashoffset: 320;
+  opacity: 0.6;
+  animation: mark-draw 900ms 220ms cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+@keyframes mark-draw {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+/* O "+" do logo, usado como ornamento discreto. */
+.plus {
+  display: inline-block;
+  width: 1em;
+  height: 1em;
+  background:
+    linear-gradient(currentColor, currentColor) center / 100% 30% no-repeat,
+    linear-gradient(currentColor, currentColor) center / 30% 100% no-repeat;
+}
+@keyframes plus-float {
+  0%, 100% { transform: translateY(0) rotate(0deg); }
+  50% { transform: translateY(-10px) rotate(12deg); }
+}
+
+/* ===========================================================================
+   Pecas de navegacao e acao
+   =========================================================================== */
+:root {
+  --navbar-bg: radial-gradient(70% 220% at 100% 0%, #1d5fae 0%, rgba(29, 95, 174, 0) 62%), #102a4c;
+  --brand-panel: radial-gradient(120% 80% at 100% 0%, #1d5fae 0%, rgba(29, 95, 174, 0) 70%),
+    radial-gradient(90% 60% at 0% 100%, #174d8f 0%, rgba(23, 77, 143, 0) 70%), #102a4c;
+}
+.dark {
+  --navbar-bg: radial-gradient(70% 220% at 100% 0%, #174d8f 0%, rgba(23, 77, 143, 0) 62%), #07142a;
+}
+
+/* Item do menu lateral */
+.nav-item {
+  color: var(--ink-muted);
+  transition:
+    background-color var(--dur-fast) ease,
+    color var(--dur-fast) ease,
+    transform var(--dur-moderate) var(--ease-out);
+}
+.nav-item:hover {
+  background: var(--surface-raised);
+  color: var(--ink);
+}
+.nav-item[data-active='true'] {
+  background: var(--yr-700);
+  color: #fffdf9;
+  box-shadow: 0 12px 24px -14px rgba(16, 42, 76, 0.7);
+}
+.dark .nav-item[data-active='true'] {
+  background: var(--yr-500);
+}
+
+/* Botao em pilula, igual aos do site */
+.action-btn {
+  transition:
+    background-color var(--dur-fast) ease,
+    border-color var(--dur-fast) ease,
+    box-shadow var(--dur-moderate) ease,
+    transform var(--dur-moderate) var(--ease-out);
+}
+.action-btn--primary {
+  background: var(--yr-500);
+  color: #fffdf9;
+  border: 1px solid var(--yr-500);
+  box-shadow: 0 14px 28px -14px rgba(29, 95, 174, 0.75);
+}
+.action-btn--primary:hover:not(:disabled) {
+  background: var(--yr-700);
+  border-color: var(--yr-700);
+  transform: translateY(-1px);
+}
+.action-btn--ghost {
+  background: var(--surface-raised);
+  color: var(--ink);
+  border: 1px solid var(--border-strong);
+}
+.action-btn--ghost:hover:not(:disabled) {
+  border-color: var(--yr-300);
+}
+
+/* Cartao padrao das telas */
+.card {
+  background: var(--surface-raised);
+  border: 1px solid var(--border-subtle);
+  border-radius: 20px;
+}
+.card-lift {
+  transition:
+    transform var(--dur-moderate) var(--ease-out),
+    box-shadow var(--dur-moderate) ease,
+    border-color var(--dur-fast) ease;
+}
+.card-lift:hover {
+  transform: translateY(-3px);
+  border-color: var(--yr-300);
+  box-shadow: 0 26px 46px -30px rgba(16, 42, 76, 0.5);
 }
 
 /* ===========================================================================
@@ -454,6 +659,10 @@
     animation: none;
     background-image: none;
     background-color: var(--surface-sunken);
+  }
+  .mark > svg path {
+    animation: none;
+    stroke-dashoffset: 0;
   }
   /* O spinner comunica "aguarde": congela-lo tira a informacao. */
   .spin {

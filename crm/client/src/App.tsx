@@ -202,8 +202,15 @@ function MainContent() {
         <Sidebar
           activeTab={activeTab}
           onTabChange={setActiveTab}
-          unreadCount={leads.length}
-          pendingContractsCount={pendingContractsCount}
+          metrics={{
+            funnel: leads.filter((lead) => lead.stage !== 'finalizado').length,
+            conversations: leads.length,
+            equipmentsFree: equipments.filter((item) => item.status === 'disponivel').length,
+            contractsPending: pendingContractsCount,
+            overdueAmount: invoices
+              .filter((invoice) => invoice.status === 'atrasada')
+              .reduce((total, invoice) => total + (invoice.amount || 0), 0),
+          }}
           mobileOpen={mobileSidebarOpen}
           onCloseMobile={() => setMobileSidebarOpen(false)}
         />

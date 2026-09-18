@@ -30,6 +30,10 @@ import {
   Cell,
 } from 'recharts'
 import { Invoice, Lead } from '../types'
+import { PageHeader, ActionButton } from './ui/PageHeader'
+import { Modal } from './ui/Modal'
+import { TextField, SelectField, FormError } from './ui/Field'
+import { SubmitButton } from './ui/Feedback'
 
 interface FinanceViewProps {
   invoices: Invoice[]
@@ -150,9 +154,9 @@ export const FinanceView: React.FC<FinanceViewProps> = ({ invoices, leads, onRef
   }, [invoices])
 
   const billingStatusData = [
-    { name: 'Pagas', value: paidTotal, color: '#10b981' },
-    { name: 'Em aberto', value: pendingTotal, color: '#0284c7' },
-    { name: 'Atrasadas', value: overdueTotal, color: '#f43f5e' },
+    { name: 'Pagas', value: paidTotal, color: '#0e7c6b' },
+    { name: 'Em aberto', value: pendingTotal, color: '#1d5fae' },
+    { name: 'Atrasadas', value: overdueTotal, color: '#b3261e' },
   ].filter((item) => item.value > 0)
 
   const handleMarkPaid = async (id: string) => {
@@ -265,41 +269,24 @@ export const FinanceView: React.FC<FinanceViewProps> = ({ invoices, leads, onRef
 
   return (
     <div className="space-y-6 pb-16">
-      {/* 1. Header com Ações */}
-      <div className="bg-white dark:bg-slate-900 p-6 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div>
-          <div className="flex items-center gap-2">
-            <span className="px-2.5 py-0.5 rounded-full bg-emerald-600 text-white font-bold text-[10px] uppercase tracking-wide">
-              Métricas & Fluxo de Caixa
-            </span>
-            <span className="text-xs text-slate-500 dark:text-slate-400">Grupo YR Hospitalar</span>
-          </div>
-          <h2 className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white mt-1">
-            Gestão Financeira & Previsibilidade de Receita
-          </h2>
-          <p className="text-xs text-slate-500 mt-1">
-            Acompanhe o MRR, faturamento realizado vs previsto, inadimplência e régua de cobrança automática por WhatsApp.
-          </p>
-        </div>
-
-        <div className="flex flex-wrap items-center gap-2">
-          <button
-            onClick={handleExportCsv}
-            className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-xs font-bold text-slate-700 dark:text-slate-200 transition-all"
-          >
-            <Download className="w-4 h-4 text-slate-500" />
-            <span>Exportar CSV</span>
-          </button>
-
-          <button
-            onClick={() => setShowNewModal(true)}
-            className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition-all shadow-md shadow-emerald-500/20"
-          >
-            <Plus className="w-4 h-4" />
-            <span>Nova Fatura / Cobrança</span>
-          </button>
-        </div>
-      </div>
+      <PageHeader
+        icon={<DollarSign className="h-5 w-5" />}
+        eyebrow="Financeiro"
+        title="Receita e cobrança"
+        description="O que entrou, o que está para entrar e o que atrasou. A cobrança pelo WhatsApp sai daqui."
+        actions={
+          <>
+            <ActionButton variant="ghost" onClick={handleExportCsv}>
+              <Download className="h-4 w-4" />
+              Exportar CSV
+            </ActionButton>
+            <ActionButton onClick={() => setShowNewModal(true)}>
+              <Plus className="h-4 w-4" />
+              Nova cobrança
+            </ActionButton>
+          </>
+        }
+      />
 
       {reminderSuccess && (
         <div className="p-4 rounded-2xl bg-emerald-50 dark:bg-emerald-950/50 border border-emerald-200 dark:border-emerald-800 text-xs font-semibold text-emerald-800 dark:text-emerald-200 flex items-center gap-2 animate-fade-in">
@@ -397,7 +384,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({ invoices, leads, onRef
           </div>
           <div className="mt-2">
             <h3 className="text-2xl font-black text-emerald-600 dark:text-emerald-400">
-              R$ {mrr.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+              R$ {mrr.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             </h3>
             <div className="flex items-center gap-1 text-[11px] text-emerald-700 dark:text-emerald-400 mt-1 font-semibold">
               <ArrowUpRight className="w-3.5 h-3.5" />
@@ -418,7 +405,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({ invoices, leads, onRef
           </div>
           <div className="mt-2">
             <h3 className="text-2xl font-black text-slate-900 dark:text-white">
-              R$ {ticketMedio.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+              R$ {ticketMedio.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             </h3>
             <p className="text-[11px] text-slate-400 mt-1">Valor médio mensal por contrato</p>
           </div>
@@ -436,7 +423,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({ invoices, leads, onRef
           </div>
           <div className="mt-2">
             <h3 className="text-2xl font-black text-purple-600 dark:text-purple-400">
-              R$ {estimatedLTV.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+              R$ {estimatedLTV.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             </h3>
             <p className="text-[11px] text-slate-400 mt-1">Tempo médio de permanência: 8.5 meses</p>
           </div>
@@ -472,7 +459,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({ invoices, leads, onRef
       </div>
 
       {/* 4. Projeção de Faturamento & Previsibilidade de Caixa */}
-      <div className="bg-gradient-to-r from-blue-900/10 via-indigo-900/10 to-purple-900/10 dark:from-blue-950/40 dark:via-indigo-950/30 dark:to-purple-950/40 p-5 rounded-3xl border border-blue-200/80 dark:border-blue-800/60 space-y-3">
+      <div className="bg-slate-100 dark:bg-slate-900 p-5 rounded-3xl border border-blue-200/80 dark:border-blue-800/60 space-y-3">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <TrendingUp className="w-4 h-4 text-blue-600 dark:text-blue-400" />
@@ -487,7 +474,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({ invoices, leads, onRef
           <div className="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm">
             <span className="text-[11px] font-bold text-slate-400 uppercase">Próximos 30 Dias (D+30)</span>
             <div className="text-xl font-black text-slate-900 dark:text-white mt-1">
-              R$ {forecast30.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+              R$ {forecast30.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             </div>
             <span className="text-[10px] text-emerald-600 font-semibold">Base em aberto atual</span>
           </div>
@@ -495,7 +482,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({ invoices, leads, onRef
           <div className="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm">
             <span className="text-[11px] font-bold text-slate-400 uppercase">Próximos 60 Dias (D+60)</span>
             <div className="text-xl font-black text-slate-900 dark:text-white mt-1">
-              R$ {forecast60.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+              R$ {forecast60.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             </div>
             <span className="text-[10px] text-blue-600 font-semibold">Duas mensalidades na mesma base</span>
           </div>
@@ -503,7 +490,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({ invoices, leads, onRef
           <div className="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm">
             <span className="text-[11px] font-bold text-slate-400 uppercase">Próximos 90 Dias (D+90)</span>
             <div className="text-xl font-black text-slate-900 dark:text-white mt-1">
-              R$ {forecast90.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+              R$ {forecast90.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             </div>
             <span className="text-[10px] text-purple-600 font-semibold">Três mensalidades na mesma base</span>
           </div>
@@ -529,11 +516,11 @@ export const FinanceView: React.FC<FinanceViewProps> = ({ invoices, leads, onRef
           <div className="h-64">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={cashFlowData}>
-                <XAxis dataKey="mes" stroke="#94a3b8" fontSize={11} />
-                <YAxis stroke="#94a3b8" fontSize={11} tickFormatter={(v) => `R$${v}`} />
+                <XAxis dataKey="mes" stroke="#8b96a5" fontSize={11} />
+                <YAxis stroke="#8b96a5" fontSize={11} tickFormatter={(v) => `R$${v}`} />
                 <Tooltip
                   formatter={(value: any) => [
-                    `R$ ${Number(value).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`,
+                    `R$ ${Number(value).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
                   ]}
                   contentStyle={{
                     backgroundColor: '#1e293b',
@@ -543,8 +530,8 @@ export const FinanceView: React.FC<FinanceViewProps> = ({ invoices, leads, onRef
                     border: 'none',
                   }}
                 />
-                <Bar dataKey="realizado" name="Faturamento Pago" fill="#10b981" radius={[6, 6, 0, 0]} />
-                <Bar dataKey="previsto" name="A Receber / Previsão" fill="#0284c7" radius={[6, 6, 0, 0]} />
+                <Bar dataKey="realizado" name="Faturamento Pago" fill="#0e7c6b" radius={[6, 6, 0, 0]} />
+                <Bar dataKey="previsto" name="A Receber / Previsão" fill="#1d5fae" radius={[6, 6, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </div>
@@ -579,7 +566,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({ invoices, leads, onRef
                   ))}
                 </Pie>
                 <Tooltip
-                  formatter={(value: any) => [`R$ ${Number(value).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`]}
+                  formatter={(value: any) => [`R$ ${Number(value).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`]}
                   contentStyle={{
                     backgroundColor: '#1e293b',
                     borderRadius: '12px',
@@ -602,7 +589,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({ invoices, leads, onRef
                   <span className="text-slate-600 dark:text-slate-300 font-medium">{item.name}</span>
                 </div>
                 <span className="font-bold text-slate-900 dark:text-white">
-                  R$ {item.value.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                  R$ {item.value.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                 </span>
               </div>
             ))}
@@ -712,163 +699,96 @@ export const FinanceView: React.FC<FinanceViewProps> = ({ invoices, leads, onRef
         />
       </section>
 
-      {/* 7. Modal de Nova Fatura / Cobrança */}
-      {showNewModal && (
-        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="w-full max-w-md bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-2xl p-6 space-y-4">
-            <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
-              <h3 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
-                <Plus className="w-4 h-4 text-emerald-600" />
-                Criar Nova Fatura / Mensalidade
-              </h3>
-              <button
-                onClick={() => setShowNewModal(false)}
-                className="w-7 h-7 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 flex items-center justify-center transition-colors"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-
-            <form onSubmit={handleCreateInvoice} className="space-y-3 text-xs">
-              {formError && (
-                <div className="p-3 rounded-xl bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800 text-rose-800 dark:text-rose-200 font-semibold">
-                  {formError}
-                </div>
-              )}
-
-              <div>
-                <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">
-                  Vincular cliente do CRM (recomendado para cobrança WhatsApp)
-                </label>
-                <select
-                  value={newInvoiceData.leadId}
-                  onChange={(e) => {
-                    const leadId = e.target.value
-                    const selectedLead = leads.find((lead) => lead.id === leadId)
-                    setNewInvoiceData({
-                      ...newInvoiceData,
-                      leadId,
-                      clientName: selectedLead?.name || newInvoiceData.clientName,
-                    })
-                  }}
-                  className="w-full p-2 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white"
-                >
-                  <option value="">Sem vínculo — cobrança manual</option>
-                  {leads.map((lead) => (
-                    <option key={lead.id} value={lead.id}>
-                      {lead.name} — {lead.phone}
-                    </option>
-                  ))}
-                </select>
-                <p className="text-[10px] text-slate-400 mt-1">
-                  Sem vínculo, a fatura continua válida, mas o botão de cobrança WhatsApp ficará bloqueado.
-                </p>
-              </div>
-
-              <div>
-                <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">
-                  Número do Contrato / Referência
-                </label>
-                <input
-                  type="text"
-                  required
-                  placeholder="Ex: CTR-2026-092"
-                  value={newInvoiceData.contractNumber}
-                  onChange={(e) =>
-                    setNewInvoiceData({ ...newInvoiceData, contractNumber: e.target.value })
-                  }
-                  className="w-full p-2 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white font-mono"
-                />
-              </div>
-
-              <div>
-                <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">
-                  Nome do Cliente / Hospital
-                </label>
-                <input
-                  type="text"
-                  required
-                  placeholder="Ex: Hospital Pilar / Clínica Vida"
-                  value={newInvoiceData.clientName}
-                  onChange={(e) =>
-                    setNewInvoiceData({ ...newInvoiceData, clientName: e.target.value, leadId: '' })
-                  }
-                  className="w-full p-2 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white"
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">
-                    Valor (R$)
-                  </label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    required
-                    placeholder="450.00"
-                    value={newInvoiceData.amount}
-                    onChange={(e) =>
-                      setNewInvoiceData({ ...newInvoiceData, amount: e.target.value })
-                    }
-                    className="w-full p-2 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white font-mono"
-                  />
-                </div>
-
-                <div>
-                  <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">
-                    Vencimento
-                  </label>
-                  <input
-                    type="date"
-                    required
-                    value={newInvoiceData.dueDate}
-                    onChange={(e) =>
-                      setNewInvoiceData({ ...newInvoiceData, dueDate: e.target.value })
-                    }
-                    className="w-full p-2 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white font-mono"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">
-                  Status Inicial
-                </label>
-                <select
-                  value={newInvoiceData.status}
-                  onChange={(e) =>
-                    setNewInvoiceData({
-                      ...newInvoiceData,
-                      status: e.target.value as 'pendente' | 'paga',
-                    })
-                  }
-                  className="w-full p-2 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white"
-                >
-                  <option value="pendente">Em Aberto (Pendente)</option>
-                  <option value="paga">Já Quitado (Pago)</option>
-                </select>
-              </div>
-
-              <div className="flex items-center gap-2 pt-3">
-                <button
-                  type="button"
-                  onClick={() => setShowNewModal(false)}
-                  className="flex-1 py-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 font-bold"
-                >
-                  Cancelar
-                </button>
-                <button
-                  type="submit"
-                  className="flex-1 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold transition-all shadow-md shadow-emerald-500/20"
-                >
-                  Salvar Fatura
-                </button>
-              </div>
-            </form>
+      {/* 7. Nova cobranca: dialogo no desktop, bottom sheet no celular */}
+      <Modal
+        open={showNewModal}
+        onClose={() => setShowNewModal(false)}
+        title="Nova cobrança"
+        subtitle="Fatura avulsa ou mensalidade de um contrato"
+        icon={<Plus className="h-4 w-4" />}
+        footer={
+          <div className="flex gap-3">
+            <SubmitButton variant="ghost" type="button" loading={false} onClick={() => setShowNewModal(false)} className="flex-1">
+              Cancelar
+            </SubmitButton>
+            <SubmitButton type="submit" form="form-nova-cobranca" loading={false} className="flex-[2]">
+              Salvar cobrança
+            </SubmitButton>
           </div>
-        </div>
-      )}
+        }
+      >
+        <form id="form-nova-cobranca" onSubmit={handleCreateInvoice} className="space-y-4">
+          <FormError message={formError} />
+
+          <SelectField
+            label="Cliente do CRM"
+            value={newInvoiceData.leadId}
+            onChange={(event) => {
+              const leadId = event.target.value
+              const selectedLead = leads.find((lead) => lead.id === leadId)
+              setNewInvoiceData({
+                ...newInvoiceData,
+                leadId,
+                clientName: selectedLead?.name || newInvoiceData.clientName,
+              })
+            }}
+            options={[
+              { value: '', label: 'Sem vínculo (cobrança manual)' },
+              ...leads.map((lead) => ({ value: lead.id, label: `${lead.name} (${lead.phone})` })),
+            ]}
+            hint="Sem vínculo a fatura vale do mesmo jeito, mas a cobrança pelo WhatsApp fica bloqueada."
+          />
+
+          <TextField
+            label="Contrato ou referência"
+            required
+            placeholder="Ex.: YR-2026-1041"
+            value={newInvoiceData.contractNumber}
+            onChange={(event) => setNewInvoiceData({ ...newInvoiceData, contractNumber: event.target.value })}
+          />
+
+          <TextField
+            label="Nome do cliente"
+            required
+            placeholder="Ex.: Clínica Vida"
+            value={newInvoiceData.clientName}
+            onChange={(event) => setNewInvoiceData({ ...newInvoiceData, clientName: event.target.value, leadId: '' })}
+          />
+
+          <div className="grid gap-4 sm:grid-cols-2">
+            <TextField
+              label="Valor (R$)"
+              type="number"
+              inputMode="decimal"
+              step="0.01"
+              min={0}
+              required
+              placeholder="450,00"
+              value={newInvoiceData.amount}
+              onChange={(event) => setNewInvoiceData({ ...newInvoiceData, amount: event.target.value })}
+            />
+            <TextField
+              label="Vencimento"
+              type="date"
+              required
+              value={newInvoiceData.dueDate}
+              onChange={(event) => setNewInvoiceData({ ...newInvoiceData, dueDate: event.target.value })}
+            />
+          </div>
+
+          <SelectField
+            label="Status inicial"
+            value={newInvoiceData.status}
+            onChange={(event) =>
+              setNewInvoiceData({ ...newInvoiceData, status: event.target.value as 'pendente' | 'paga' })
+            }
+            options={[
+              { value: 'pendente', label: 'Em aberto' },
+              { value: 'paga', label: 'Já paga' },
+            ]}
+          />
+        </form>
+      </Modal>
     </div>
   )
 }

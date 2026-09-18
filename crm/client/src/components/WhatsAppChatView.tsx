@@ -234,7 +234,7 @@ export const WhatsAppChatView: React.FC<WhatsAppChatViewProps> = ({
     // `dvh` no lugar de `vh`: a barra do Chrome mobile nao corta o campo de envio.
     // No mobile mostra a LISTA ou a CONVERSA, nunca as duas com scroll aninhado.
     <div
-      className={`flex h-[calc(100dvh-150px)] min-h-[420px] overflow-hidden rounded-[14px] ${isMobile ? 'flex-col' : 'flex-row'}`}
+      className={`flex h-[calc(100dvh-112px)] sm:h-[calc(100dvh-150px)] min-h-[420px] overflow-hidden rounded-[14px] ${isMobile ? 'flex-col' : 'flex-row'}`}
       style={{
         background: 'var(--surface-raised)',
         border: '1px solid var(--border-subtle)',
@@ -358,7 +358,7 @@ export const WhatsAppChatView: React.FC<WhatsAppChatViewProps> = ({
                   </span>
                 </h3>
                 <p className="text-[11px] text-slate-500">
-                  Interesse: <span className="font-semibold">{selectedLead.equipmentInterest}</span> ({selectedLead.modality})
+                  Interesse: <span className="font-semibold">{selectedLead.equipmentInterest}</span> ({selectedLead.modality === 'locacao' ? 'locação' : 'compra'})
                 </p>
               </div>
             </div>
@@ -413,13 +413,13 @@ export const WhatsAppChatView: React.FC<WhatsAppChatViewProps> = ({
                       isClient
                         ? 'bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 rounded-tl-none border border-slate-200/80 dark:border-slate-700'
                         : isAi
-                        ? 'bg-gradient-to-br from-purple-600 to-indigo-600 text-white rounded-tr-none'
-                        : 'bg-blue-600 text-white rounded-tr-none'
+                        ? 'bg-blue-100 text-slate-900 border border-blue-200 rounded-tr-none dark:bg-blue-900 dark:text-white dark:border-blue-800'
+                        : 'bg-slate-900 text-white rounded-tr-none dark:bg-blue-600'
                     }`}
                   >
                     {/* Header for AI response */}
                     {isAi && (
-                      <div className="flex items-center gap-1.5 pb-1 mb-1 border-b border-white/20 text-[10px] font-bold text-purple-200">
+                      <div className="flex items-center gap-1.5 pb-1 mb-1 border-b border-blue-200 text-[10px] font-extrabold text-blue-700 dark:border-white/20 dark:text-blue-200">
                         <Bot className="w-3 h-3" />
                         <span>Assistente YR ({msg.modelUsed || 'gemini-3.8-flash'})</span>
                       </div>

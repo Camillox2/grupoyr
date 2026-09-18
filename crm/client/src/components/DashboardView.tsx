@@ -33,6 +33,8 @@ import {
   Cell,
 } from 'recharts'
 import { Lead, Equipment, Invoice } from '../types'
+import { Mark } from './ui/PageHeader'
+import { CountUp, brl } from './ui/Feedback'
 import { useAuth } from '../contexts/AuthContext'
 import { useSocket } from '../contexts/SocketContext'
 
@@ -48,7 +50,8 @@ interface DashboardViewProps {
   onOpenQr: () => void
 }
 
-const COLORS = ['#0284c7', '#10b981', '#f59e0b', '#8b5cf6', '#ec4899', '#64748b']
+// Paleta da marca: azul YR, verde de "ok", ambar de "espera" e neutros.
+const COLORS = ['#1d5fae', '#0e7c6b', '#b26b00', '#8fb8e8', '#102a4c', '#8b96a5']
 
 export const DashboardView: React.FC<DashboardViewProps> = ({
   leads,
@@ -177,12 +180,12 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                 alt="Grupo YR Hospitalar"
                 className="w-20 h-20 object-contain rounded-lg border border-slate-100 bg-white"
               />
-              <h2 className="mt-8 text-3xl font-semibold tracking-tight text-[#123b63]">CRM pronto para a operação</h2>
+              <h2 className="mt-8 text-3xl font-semibold tracking-tight text-[#102a4c]">CRM pronto para a operação</h2>
               <p className="mt-3 max-w-xl text-sm leading-6 text-slate-600">
                 Comece pelo cadastro de um equipamento ou de uma oportunidade. Contratos, faturamento e atendimento passam a ser organizados a partir dos registros reais da sua equipe.
               </p>
               <div className="mt-8 flex flex-wrap gap-3">
-                <button onClick={onOpenNewLead} className="inline-flex items-center gap-2 rounded-lg bg-[#123b63] px-4 py-2.5 text-xs font-semibold text-white hover:bg-[#0d2f50] transition-colors">
+                <button onClick={onOpenNewLead} className="inline-flex items-center gap-2 rounded-lg bg-[#102a4c] px-4 py-2.5 text-xs font-semibold text-white hover:bg-[#0d2f50] transition-colors">
                   <Users className="w-4 h-4" /> Cadastrar oportunidade
                 </button>
                 <button onClick={onOpenNewEquipment} className="inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 transition-colors">
@@ -194,12 +197,12 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               <div>
                 <p className="text-xs font-semibold uppercase tracking-[0.16em] text-teal-700">Primeiros passos</p>
                 <ol className="mt-5 space-y-4 text-sm text-slate-700">
-                  <li className="flex gap-3"><span className="font-semibold text-[#123b63]">01</span><span>Cadastre os equipamentos disponíveis.</span></li>
-                  <li className="flex gap-3"><span className="font-semibold text-[#123b63]">02</span><span>Registre a oportunidade e os dados do cliente.</span></li>
-                  <li className="flex gap-3"><span className="font-semibold text-[#123b63]">03</span><span>Gere o contrato e acompanhe o financeiro.</span></li>
+                  <li className="flex gap-3"><span className="font-semibold text-[#102a4c]">01</span><span>Cadastre os equipamentos disponíveis.</span></li>
+                  <li className="flex gap-3"><span className="font-semibold text-[#102a4c]">02</span><span>Registre a oportunidade e os dados do cliente.</span></li>
+                  <li className="flex gap-3"><span className="font-semibold text-[#102a4c]">03</span><span>Gere o contrato e acompanhe o financeiro.</span></li>
                 </ol>
               </div>
-              <button onClick={!isConnected ? onOpenQr : undefined} className="mt-8 inline-flex w-fit items-center gap-2 text-xs font-semibold text-[#123b63] hover:text-teal-700">
+              <button onClick={!isConnected ? onOpenQr : undefined} className="mt-8 inline-flex w-fit items-center gap-2 text-xs font-semibold text-[#102a4c] hover:text-teal-700">
                 <QrCode className="w-4 h-4" /> {isConnected ? 'WhatsApp conectado' : 'Conectar WhatsApp'}
               </button>
             </div>
@@ -209,140 +212,114 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
     )
   }
 
+  const hour = new Date().getHours()
+  const greeting = hour < 12 ? 'Bom dia' : hour < 18 ? 'Boa tarde' : 'Boa noite'
+  const firstName = (user?.name || 'Rodrigo').split(' ')[0]
+  const openLeads = leads.filter((lead) => lead.stage !== 'finalizado').length
+  const freeEquipments = equipments.filter((item) => item.status === 'disponivel').length
+  const overdueCount = invoices.filter((invoice) => invoice.status === 'atrasada').length
+
   return (
-    <div className="space-y-6 pb-16">
-      {/* 1. Header de Boas-Vindas e Status Geral */}
-      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 bg-blue-50/60 dark:bg-slate-900 p-6 rounded-2xl border border-blue-100 dark:border-slate-800 shadow-sm">
-        <div className="space-y-1">
-          <div className="flex items-center gap-2">
-            <span className="px-2.5 py-0.5 rounded-full bg-blue-700 text-white font-bold text-[10px] tracking-wide uppercase shadow-sm">
-              Painel Comercial Integrado
-            </span>
-            <span className="text-xs text-slate-500 dark:text-slate-400 flex items-center gap-1">
-              <Calendar className="w-3.5 h-3.5" />
-              {new Date().toLocaleDateString('pt-BR', {
-                weekday: 'long',
-                day: 'numeric',
-                month: 'long',
-              })}
-            </span>
-          </div>
-          <h2 className="text-xl sm:text-2xl font-bold text-slate-900 dark:text-white tracking-tight">
-            Olá, {user?.name || 'Rodrigo'}
+    <div className="space-y-7 pb-16">
+      {/* 1. Abertura: saudacao editorial + o resumo do dia, com dados reais */}
+      <section className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
+        <div className="min-w-0">
+          <p
+            className="mb-3 flex items-center gap-2 text-[11px] font-extrabold uppercase tracking-[0.14em]"
+            style={{ color: 'var(--yr-500)' }}
+          >
+            <Calendar className="h-3.5 w-3.5" />
+            {new Date().toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long' })}
+          </p>
+          <h2 className="serif text-[clamp(32px,4.2vw,56px)] leading-[1.02]" style={{ color: 'var(--ink)' }}>
+            {greeting}, <Mark>{firstName}.</Mark>
           </h2>
-          <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-300">
-            Acompanhe em tempo real o fluxo de locações, faturamento, qualificação por IA e logística do Grupo YR Hospitalar.
+          <p className="mt-5 max-w-[60ch] text-[15px] leading-relaxed" style={{ color: 'var(--ink-muted)' }}>
+            Hoje são <strong style={{ color: 'var(--ink)' }}>{openLeads} oportunidades</strong> no funil,{' '}
+            <strong style={{ color: 'var(--ink)' }}>{freeEquipments} equipamentos livres</strong>
+            {overdueCount > 0 ? (
+              <>
+                {' '}
+                e <strong style={{ color: 'var(--alert)' }}>{overdueCount} faturas atrasadas</strong> pedindo atenção.
+              </>
+            ) : (
+              <> e nenhuma fatura atrasada.</>
+            )}
           </p>
         </div>
 
-        {/* Quick status badges */}
         <div className="flex flex-wrap items-center gap-2">
           <button
             onClick={!isConnected ? onOpenQr : undefined}
-            className={`flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-semibold border transition-all ${
-              isConnected
-                ? 'bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border-emerald-300 dark:border-emerald-700'
-                : 'bg-amber-50 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 border-amber-300 dark:border-amber-700 hover:bg-amber-100 dark:hover:bg-amber-900/40 cursor-pointer shadow-sm'
-            }`}
+            className="action-btn action-btn--ghost inline-flex items-center gap-2 rounded-full px-4 py-2.5 text-[12px] font-extrabold"
           >
             <span
-              className={`w-2 h-2 rounded-full ${
-                isConnected ? 'bg-emerald-500 animate-pulse' : 'bg-amber-500'
-              }`}
+              className="h-2 w-2 rounded-full"
+              style={{ background: isConnected ? 'var(--ok)' : 'var(--wait)' }}
             />
-            <span>
-              {isConnected
-                ? `WhatsApp: ${whatsappStatus.provider === 'baileys' ? 'Baileys' : 'Meta'}`
-                : 'Conectar WhatsApp (QR)'}
-            </span>
-            {!isConnected && <QrCode className="w-3.5 h-3.5 text-amber-600" />}
+            {isConnected
+              ? `WhatsApp: ${whatsappStatus.provider === 'baileys' ? 'Baileys' : 'Meta'}`
+              : 'Conectar WhatsApp'}
+            {!isConnected && <QrCode className="h-3.5 w-3.5" />}
           </button>
-
           <button
             onClick={handleTestAi}
-            className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-blue-50 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800 text-xs font-semibold hover:bg-blue-100 dark:hover:bg-blue-900/40 transition-all cursor-pointer shadow-sm"
-            title="Clique para rodar diagnóstico da cascata de IA"
+            className="action-btn action-btn--ghost inline-flex items-center gap-2 rounded-full px-4 py-2.5 text-[12px] font-extrabold"
+            title="Rodar o diagnóstico da cascata de IA"
           >
-            <Bot className="w-3.5 h-3.5 text-blue-700 dark:text-blue-400" />
-            <span>IA: 3.8 Flash Fallback</span>
-            <Zap className="w-3 h-3 text-amber-500" />
+            <Bot className="h-3.5 w-3.5" style={{ color: 'var(--yr-500)' }} />
+            Testar a IA
           </button>
-
           <a
             href="https://site.grupoyrhospitalar.com.br/"
             target="_blank"
             rel="noreferrer"
-            className="flex items-center gap-1.5 px-3 py-2 rounded-2xl bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 text-xs font-semibold hover:bg-slate-50 dark:hover:bg-slate-700 transition-all shadow-sm"
+            className="action-btn action-btn--ghost inline-flex items-center gap-2 rounded-full px-4 py-2.5 text-[12px] font-extrabold"
           >
-            <Globe className="w-3.5 h-3.5 text-blue-500" />
-            <span>Ver Site Oficial</span>
-            <ExternalLink className="w-3 h-3 text-slate-400" />
+            <Globe className="h-3.5 w-3.5" style={{ color: 'var(--yr-500)' }} />
+            Ver o site
+            <ExternalLink className="h-3 w-3 opacity-50" />
           </a>
         </div>
-      </div>
+      </section>
 
-      {/* 2. Barra de Ações Rápidas de 1 Clique */}
-      <div className="bg-white dark:bg-slate-900 p-4 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-sm space-y-3">
-        <div className="flex items-center justify-between px-1">
-          <span className="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider flex items-center gap-1.5">
-            <Zap className="w-3.5 h-3.5 text-amber-500" />
-            Ações Rápidas de 1 Clique
-          </span>
-          <span className="text-[11px] text-slate-400">Agilidade no atendimento</span>
-        </div>
-
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3">
+      {/* 2. Atalhos: todos na mesma lingua, em vez de um bloco de cada cor */}
+      <section className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+        {(
+          [
+            ['Novo lead', 'Orçamento ou contato', Plus, onOpenNewLead],
+            ['Conectar WhatsApp', 'QR Code ou código', QrCode, onOpenQr],
+            ['Novo contrato', 'Termo para assinatura', FileSignature, onOpenNewContract],
+            ['Cadastrar equipamento', 'Entra no inventário', Bed, onOpenNewEquipment],
+            ['Publicar no blog', 'Artigo do Blog YR', BookOpen, () => onNavigateTab('blog')],
+          ] as const
+        ).map(([label, hint, Icon, action], index) => (
           <button
-            onClick={onOpenNewLead}
-            className="flex flex-col items-center justify-center gap-2 p-3.5 rounded-2xl bg-blue-50/70 dark:bg-blue-950/40 hover:bg-blue-100 dark:hover:bg-blue-900/60 border border-blue-200/80 dark:border-blue-800/60 text-blue-700 dark:text-blue-300 transition-all hover:scale-[1.02] shadow-sm text-center group"
+            key={label}
+            onClick={action}
+            className={`card card-lift flex items-center gap-3 p-3.5 text-left ${index === 4 ? 'col-span-2 sm:col-span-1' : ''}`}
           >
-            <div className="w-9 h-9 rounded-xl bg-blue-600 text-white flex items-center justify-center shadow-md shadow-blue-500/30 group-hover:scale-110 transition-transform">
-              <Plus className="w-5 h-5" />
-            </div>
-            <span className="text-xs font-bold leading-tight">Novo Lead / Orçamento</span>
+            <span
+              className="grid h-11 w-11 shrink-0 place-items-center rounded-[14px]"
+              style={
+                index === 0
+                  ? { background: 'var(--yr-500)', color: '#fffdf9' }
+                  : { background: 'var(--yr-050)', color: 'var(--yr-500)' }
+              }
+            >
+              <Icon className="h-5 w-5" />
+            </span>
+            <span className="min-w-0">
+              <span className="block text-[13px] font-extrabold leading-tight" style={{ color: 'var(--ink)' }}>
+                {label}
+              </span>
+              <span className="mt-0.5 hidden truncate text-[11px] sm:block" style={{ color: 'var(--ink-faint)' }}>
+                {hint}
+              </span>
+            </span>
           </button>
-
-          <button
-            onClick={onOpenQr}
-            className="flex flex-col items-center justify-center gap-2 p-3.5 rounded-2xl bg-emerald-50/70 dark:bg-emerald-950/40 hover:bg-emerald-100 dark:hover:bg-emerald-900/60 border border-emerald-200/80 dark:border-emerald-800/60 text-emerald-700 dark:text-emerald-300 transition-all hover:scale-[1.02] shadow-sm text-center group"
-          >
-            <div className="w-9 h-9 rounded-xl bg-emerald-600 text-white flex items-center justify-center shadow-md shadow-emerald-500/30 group-hover:scale-110 transition-transform">
-              <QrCode className="w-5 h-5" />
-            </div>
-            <span className="text-xs font-bold leading-tight">Conectar WhatsApp</span>
-          </button>
-
-          <button
-            onClick={onOpenNewContract}
-            className="flex flex-col items-center justify-center gap-2 p-3.5 rounded-2xl bg-purple-50/70 dark:bg-purple-950/40 hover:bg-purple-100 dark:hover:bg-purple-900/60 border border-purple-200/80 dark:border-purple-800/60 text-purple-700 dark:text-purple-300 transition-all hover:scale-[1.02] shadow-sm text-center group"
-          >
-            <div className="w-9 h-9 rounded-xl bg-purple-600 text-white flex items-center justify-center shadow-md shadow-purple-500/30 group-hover:scale-110 transition-transform">
-              <FileSignature className="w-5 h-5" />
-            </div>
-            <span className="text-xs font-bold leading-tight">Novo Contrato Digital</span>
-          </button>
-
-          <button
-            onClick={onOpenNewEquipment}
-            className="flex flex-col items-center justify-center gap-2 p-3.5 rounded-2xl bg-cyan-50/70 dark:bg-cyan-950/40 hover:bg-cyan-100 dark:hover:bg-cyan-900/60 border border-cyan-200/80 dark:border-cyan-800/60 text-cyan-700 dark:text-cyan-300 transition-all hover:scale-[1.02] shadow-sm text-center group"
-          >
-            <div className="w-9 h-9 rounded-xl bg-cyan-600 text-white flex items-center justify-center shadow-md shadow-cyan-500/30 group-hover:scale-110 transition-transform">
-              <Bed className="w-5 h-5" />
-            </div>
-            <span className="text-xs font-bold leading-tight">Cadastrar Equipamento</span>
-          </button>
-
-          <button
-            onClick={() => onNavigateTab('blog')}
-            className="flex flex-col items-center justify-center gap-2 p-3.5 rounded-2xl bg-amber-50/70 dark:bg-amber-950/40 hover:bg-amber-100 dark:hover:bg-amber-900/60 border border-amber-200/80 dark:border-amber-800/60 text-amber-700 dark:text-amber-300 transition-all hover:scale-[1.02] shadow-sm text-center group col-span-2 sm:col-span-1"
-          >
-            <div className="w-9 h-9 rounded-xl bg-amber-600 text-white flex items-center justify-center shadow-md shadow-amber-500/30 group-hover:scale-110 transition-transform">
-              <BookOpen className="w-5 h-5" />
-            </div>
-            <span className="text-xs font-bold leading-tight">Publicar Artigo Blog</span>
-          </button>
-        </div>
-      </div>
+        ))}
+      </section>
 
       {/* 3. Barra de Busca Instantânea e Filtro de Leads */}
       <div className="relative">
@@ -427,7 +404,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           </div>
           <div className="mt-3">
             <h3 className="text-2xl font-black text-slate-900 dark:text-white">
-              R$ {totalRevenue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+              <CountUp value={totalRevenue} format={brl} />
             </h3>
             <span className="text-[11px] text-slate-500">Soma das faturas marcadas como pagas</span>
           </div>
@@ -445,7 +422,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           </div>
           <div className="mt-3">
             <h3 className="text-2xl font-black text-slate-900 dark:text-white">
-              R$ {pendingRevenue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+              <CountUp value={pendingRevenue} format={brl} />
             </h3>
             <div className="flex items-center gap-1.5 mt-2">
               <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300">
@@ -467,7 +444,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             </div>
           </div>
           <div className="mt-3">
-            <h3 className="text-2xl font-black text-slate-900 dark:text-white">{leads.length}</h3>
+            <h3 className="text-2xl font-black text-slate-900 dark:text-white"><CountUp value={leads.length} /></h3>
             <div className="flex items-center gap-1.5 mt-2">
               <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300">
                 {leads.filter((l) => l.aiEnabled).length} com IA ativa
@@ -488,7 +465,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             </div>
           </div>
           <div className="mt-3">
-            <h3 className="text-2xl font-black text-slate-900 dark:text-white">{occupancyRate}%</h3>
+            <h3 className="text-2xl font-black text-slate-900 dark:text-white"><CountUp value={occupancyRate} format={(v) => `${Math.round(v)}%`} /></h3>
             <div className="w-full h-2 rounded-full bg-slate-100 dark:bg-slate-800 mt-2.5 overflow-hidden">
               <div
                 className="h-full bg-gradient-to-r from-blue-500 to-purple-600 rounded-full transition-all duration-500"
@@ -503,11 +480,11 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
       </div>
 
       {/* 4.5. Métricas Personalizadas de Alto Impacto (MRR, Ticket Médio, LTV, Inadimplência) */}
-      <div className="bg-gradient-to-r from-emerald-950/20 via-blue-950/20 to-purple-950/20 p-5 rounded-3xl border border-emerald-500/30 dark:border-emerald-500/20 shadow-sm space-y-4">
+      <div className="card p-5 space-y-4" style={{ background: 'var(--surface-sunken)' }}>
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div>
             <div className="flex items-center gap-2">
-              <span className="px-2 py-0.5 rounded-full bg-emerald-600 text-white font-bold text-[10px] uppercase tracking-wide">
+              <span className="px-2 py-0.5 rounded-full bg-blue-600 text-white font-bold text-[10px] uppercase tracking-wide">
                 Métricas Personalizadas
               </span>
               <span className="text-xs text-slate-500 dark:text-slate-400">KPIs de Crescimento & Recorrência</span>
@@ -518,7 +495,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           </div>
           <button
             onClick={() => onNavigateTab('finance')}
-            className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition-all shadow-sm w-fit"
+            className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold transition-all shadow-sm w-fit"
           >
             <span>Abrir Finanças & Projeção 90d</span>
             <ArrowRight className="w-3.5 h-3.5" />
@@ -529,7 +506,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           <div className="p-3.5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm">
             <span className="text-[11px] font-bold text-slate-400 uppercase">MRR Recorrência</span>
             <div className="text-lg sm:text-xl font-black text-emerald-600 dark:text-emerald-400 mt-0.5">
-              R$ {mrr.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+              R$ {mrr.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             </div>
             <span className="text-[10px] text-slate-400">Base ativa de locações</span>
           </div>
@@ -537,7 +514,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           <div className="p-3.5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm">
             <span className="text-[11px] font-bold text-slate-400 uppercase">Ticket Médio</span>
             <div className="text-lg sm:text-xl font-black text-blue-600 dark:text-blue-400 mt-0.5">
-              R$ {ticketMedio.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+              R$ {ticketMedio.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             </div>
             <span className="text-[10px] text-slate-400">Por contrato ativo</span>
           </div>
@@ -545,7 +522,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           <div className="p-3.5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm">
             <span className="text-[11px] font-bold text-slate-400 uppercase">LTV Médio Est.</span>
             <div className="text-lg sm:text-xl font-black text-purple-600 dark:text-purple-400 mt-0.5">
-              R$ {estimatedLtv.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+              R$ {estimatedLtv.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             </div>
             <span className="text-[10px] text-slate-400">Permanência média 8.5m</span>
           </div>
@@ -565,7 +542,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
       </div>
 
       {/* 5. Visualizador do Pipeline de IA Multimodal Fallback 6 Níveis */}
-      <div className="p-6 rounded-3xl bg-gradient-to-r from-purple-900/15 via-indigo-900/10 to-blue-900/15 border border-purple-200 dark:border-purple-800/60 space-y-4">
+      <div className="p-6 rounded-3xl bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 space-y-4">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
           <div className="flex items-center gap-3">
             <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-purple-600 to-indigo-600 text-white flex items-center justify-center shrink-0 shadow-md shadow-purple-500/30">
@@ -755,7 +732,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                     fontSize: '12px',
                   }}
                 />
-                <Bar dataKey="quantidade" fill="#0284c7" radius={[6, 6, 0, 0]} />
+                <Bar dataKey="quantidade" fill="#1d5fae" radius={[6, 6, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </div>
@@ -874,7 +851,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
       </div>
 
       {/* 8. Central operacional: informa o que está pronto sem expor acessos */}
-      <div className="p-5 sm:p-6 rounded-2xl bg-[#123b63] text-white shadow-sm space-y-5">
+      <div className="p-5 sm:p-6 rounded-2xl bg-[#102a4c] text-white shadow-sm space-y-5">
         <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
           <div>
             <div className="flex items-center gap-2 text-blue-100">

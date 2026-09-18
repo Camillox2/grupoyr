@@ -9,6 +9,7 @@ import {
   Save,
   CheckCircle2,
 } from 'lucide-react'
+import { PageHeader } from './ui/PageHeader'
 import { useSocket } from '../contexts/SocketContext'
 
 interface SettingsViewProps {
@@ -74,15 +75,12 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onOpenQr }) => {
 
   return (
     <div className="space-y-6 pb-12 max-w-4xl">
-      <div className="bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm">
-        <h2 className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
-          <Settings className="w-5 h-5 text-blue-600" />
-          Configurações do Sistema & Integrações
-        </h2>
-        <p className="text-xs text-slate-500 mt-0.5">
-          Alterne entre provedores de WhatsApp, gerencie credenciais da Meta Cloud API e configure a chave da IA Gemini.
-        </p>
-      </div>
+      <PageHeader
+        icon={<Settings className="h-5 w-5" />}
+        eyebrow="Ajustes"
+        title="Configurações"
+        description="Provedor de WhatsApp, credenciais da Meta Cloud API e a chave da IA."
+      />
 
       {savedSuccess && (
         <div className="p-3.5 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 text-xs font-semibold text-emerald-800 dark:text-emerald-200 flex items-center gap-2">
@@ -189,7 +187,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onOpenQr }) => {
                     type="password"
                     value={metaToken}
                     onChange={(e) => { setMetaToken(e.target.value); setMetaTokenConfigured(false) }}
-                    placeholder={metaTokenConfigured ? 'Token já configurado — digite para substituir' : 'EAAB...'}
+                    placeholder={metaTokenConfigured ? 'Token já configurado, digite para substituir' : 'EAAB...'}
                     className="w-full px-3 py-2 rounded-xl text-xs bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white"
                   />
                 </div>
@@ -220,7 +218,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onOpenQr }) => {
                 type="password"
                 value={geminiApiKey}
                 onChange={(e) => { setGeminiApiKey(e.target.value); setGeminiConfigured(false) }}
-                placeholder={geminiConfigured ? 'Chave já configurada — digite para substituir' : 'AIzaSy...'}
+                placeholder={geminiConfigured ? 'Chave já configurada, digite para substituir' : 'AIzaSy...'}
                 className="w-full pl-9 pr-3 py-2.5 rounded-xl text-xs bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white font-mono"
               />
             </div>

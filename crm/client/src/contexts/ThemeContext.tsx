@@ -23,7 +23,9 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     try {
       const saved = localStorage.getItem('yr_crm_theme')
       if (saved === 'light' || saved === 'dark') return saved
-      return window.matchMedia?.('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
+      // A identidade da marca e a base pastel: o escuro e escolha de quem usa,
+      // nao o ponto de partida.
+      return 'light'
     } catch {
       return 'light'
     }
