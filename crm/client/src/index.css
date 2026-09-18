@@ -233,6 +233,15 @@
     overflow: hidden;
   }
 
+  /* Com o app aberto a PAGINA nunca rola: quem rola sao as areas internas.
+     Isso fecha a porta para qualquer elemento que vaze do layout esticar o
+     documento (ja aconteceu com um checkbox absoluto). O login fica de fora
+     porque ele, sim, rola pela pagina. */
+  html:has(.app-shell),
+  body:has(.app-shell) {
+    overflow: hidden;
+  }
+
   /* Dinheiro e metrica nao podem dancar de linha para linha. */
   .tnum,
   [data-numeric] {

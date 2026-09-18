@@ -75,19 +75,14 @@ export const Modal: React.FC<ModalProps> = ({
     return () => document.removeEventListener('keydown', onKeyDown, true)
   }, [open, onClose])
 
-  // Trava o scroll do fundo enquanto o dialogo esta aberto.
-  useEffect(() => {
-    if (!open) return
-    const previous = document.body.style.overflow
-    document.body.style.overflow = 'hidden'
-    return () => {
-      document.body.style.overflow = previous
-    }
-  }, [open])
+  // NAO se trava o scroll do <body>: o app rola por dentro (.app-main), nunca
+  // pelo body. E mexer no overflow do body faz a barra de rolagem da pagina
+  // sumir e voltar, deslocando a tela inteira para o lado ao abrir o dialogo.
 
   // Foco inicial no painel, para leitor de tela anunciar o dialogo.
   useEffect(() => {
-    if (open) panelRef.current?.focus()
+    // preventScroll: dar foco nao pode rolar nenhum ancestral.
+    if (open) panelRef.current?.focus({ preventScroll: true })
   }, [open])
 
   if (!open) return null

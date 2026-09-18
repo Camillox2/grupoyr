@@ -249,15 +249,24 @@ export const FinanceView: React.FC<FinanceViewProps> = ({ invoices, leads, onRef
     }
   }
 
+  // Celula que comeca com = + - @ e executada como formula por Excel e
+  // Sheets ("CSV injection"). Nome de cliente e entrada externa, entao ganha
+  // um apostrofo na frente; aspas internas sao dobradas.
+  const csvCell = (value: unknown) => {
+    const text = String(value ?? '')
+    const safe = /^[=+\-@\t\r]/.test(text) ? `'${text}` : text
+    return `"${safe.replace(/"/g, '""')}"`
+  }
+
   const handleExportCsv = () => {
     const headers = 'ID;Contrato;Cliente;Vencimento;Valor;Status;PagoEm\n'
     const rows = filteredInvoices
-      .map(
-        (i) =>
-          `${i.id};${i.contractNumber};"${i.clientName}";${i.dueDate};${i.amount};${i.status};${i.paidAt || ''}`
+      .map((i) =>
+        [i.id, i.contractNumber, i.clientName, i.dueDate, i.amount, i.status, i.paidAt || ''].map(csvCell).join(';'),
       )
       .join('\n')
-    const blob = new Blob([headers + rows], { type: 'text/csv;charset=utf-8;' })
+    // BOM: sem ele o Excel abre os acentos quebrados.
+    const blob = new Blob(['\ufeff' + headers + rows], { type: 'text/csv;charset=utf-8;' })
     const url = URL.createObjectURL(blob)
     const link = document.createElement('a')
     link.href = url
@@ -265,6 +274,85 @@ export const FinanceView: React.FC<FinanceViewProps> = ({ invoices, leads, onRef
     document.body.appendChild(link)
     link.click()
     document.body.removeChild(link)
+    URL.revokeObjectURL(url)
+  }
+
+  // PDF sem biblioteca: monta um relatorio em HTML num iframe escondido e
+  // chama a impressao do navegador, onde o usuario escolhe "Salvar como PDF".
+  const handleExportPdf = () => {
+    const esc = (value: unknown) =>
+      String(value ?? '').replace(/[&<>"']/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char] as string)
+    const money = (value: number) => value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
+    const statusLabel: Record<string, string> = { paga: 'Paga', pendente: 'Pendente', atrasada: 'Atrasada' }
+    const sum = (status: string) =>
+      filteredInvoices.filter((invoice) => invoice.status === status).reduce((total, invoice) => total + (invoice.amount || 0), 0)
+
+    const rows = filteredInvoices
+      .map(
+        (invoice) => `<tr>
+          <td class="mono">${esc(invoice.contractNumber)}</td>
+          <td>${esc(invoice.clientName)}</td>
+          <td class="mono">${esc(new Date(`${invoice.dueDate}T00:00:00`).toLocaleDateString('pt-BR'))}</td>
+          <td class="num">${esc(money(invoice.amount || 0))}</td>
+          <td><span class="tag ${esc(invoice.status)}">${esc(statusLabel[invoice.status] ?? invoice.status)}</span></td>
+        </tr>`,
+      )
+      .join('')
+
+    const html = `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><title>Relatório financeiro - Grupo YR</title><style>
+      @page { size: A4; margin: 16mm 14mm; }
+      * { box-sizing: border-box; }
+      body { font-family: 'Segoe UI', Arial, sans-serif; color: #102a4c; margin: 0; font-size: 11px; }
+      header { display: flex; justify-content: space-between; align-items: flex-end; border-bottom: 2px solid #102a4c; padding-bottom: 10px; margin-bottom: 14px; }
+      h1 { font-family: Georgia, serif; font-weight: 400; font-size: 24px; margin: 0; letter-spacing: -0.02em; }
+      .sub { color: #56667c; font-size: 10.5px; margin-top: 3px; }
+      .kpis { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 14px; }
+      .kpi { border: 1px solid #e2d6c2; border-radius: 8px; padding: 9px 11px; }
+      .kpi span { display: block; font-size: 9px; text-transform: uppercase; letter-spacing: .08em; color: #56667c; font-weight: 700; }
+      .kpi b { font-size: 15px; }
+      table { width: 100%; border-collapse: collapse; }
+      th { text-align: left; font-size: 9px; text-transform: uppercase; letter-spacing: .07em; color: #56667c; border-bottom: 1px solid #102a4c; padding: 6px 7px; }
+      td { padding: 6px 7px; border-bottom: 1px solid #e9e1d2; }
+      tr { break-inside: avoid; }
+      .num { text-align: right; font-variant-numeric: tabular-nums; font-weight: 700; }
+      th.num { text-align: right; }
+      .mono { font-variant-numeric: tabular-nums; }
+      .tag { padding: 2px 7px; border-radius: 99px; font-size: 9.5px; font-weight: 700; border: 1px solid; }
+      .tag.paga { color: #0e7c6b; border-color: #a9ddd3; background: #e6f4f1; }
+      .tag.pendente { color: #b26b00; border-color: #f0d6a8; background: #fdf3e3; }
+      .tag.atrasada { color: #b3261e; border-color: #f3bdb9; background: #fdeceb; }
+      footer { margin-top: 12px; color: #8b96a5; font-size: 9.5px; }
+      @media print { .tag, .kpi { -webkit-print-color-adjust: exact; print-color-adjust: exact; } }
+    </style></head><body>
+      <header>
+        <div><h1>Receita e cobrança</h1><div class="sub">Grupo YR Hospitalar · ${esc(filteredInvoices.length)} faturas no filtro atual</div></div>
+        <div class="sub">Gerado em ${esc(new Date().toLocaleString('pt-BR'))}</div>
+      </header>
+      <section class="kpis">
+        <div class="kpi"><span>Recebido</span><b>${esc(money(sum('paga')))}</b></div>
+        <div class="kpi"><span>A receber</span><b>${esc(money(sum('pendente')))}</b></div>
+        <div class="kpi"><span>Atrasado</span><b>${esc(money(sum('atrasada')))}</b></div>
+      </section>
+      <table><thead><tr><th>Contrato</th><th>Cliente</th><th>Vencimento</th><th class="num">Valor</th><th>Status</th></tr></thead><tbody>${rows}</tbody></table>
+      <footer>Documento gerado pelo CRM do Grupo YR Hospitalar. Uso interno.</footer>
+    </body></html>`
+
+    const frame = document.createElement('iframe')
+    frame.setAttribute('aria-hidden', 'true')
+    frame.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;border:0;visibility:hidden'
+    document.body.appendChild(frame)
+    const doc = frame.contentWindow?.document
+    if (!doc || !frame.contentWindow) return
+    doc.open()
+    doc.write(html)
+    doc.close()
+    const target = frame.contentWindow
+    // da um instante para o layout do iframe assentar antes de imprimir
+    window.setTimeout(() => {
+      target.focus()
+      target.print()
+      window.setTimeout(() => frame.remove(), 1500)
+    }, 250)
   }
 
   return (
@@ -276,9 +364,13 @@ export const FinanceView: React.FC<FinanceViewProps> = ({ invoices, leads, onRef
         description="O que entrou, o que está para entrar e o que atrasou. A cobrança pelo WhatsApp sai daqui."
         actions={
           <>
+            <ActionButton variant="ghost" onClick={handleExportPdf} title="Abre a impressão do navegador: escolha Salvar como PDF">
+              <Download className="h-4 w-4" />
+              PDF
+            </ActionButton>
             <ActionButton variant="ghost" onClick={handleExportCsv}>
               <Download className="h-4 w-4" />
-              Exportar CSV
+              CSV
             </ActionButton>
             <ActionButton onClick={() => setShowNewModal(true)}>
               <Plus className="h-4 w-4" />

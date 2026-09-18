@@ -138,19 +138,14 @@ export const Sidebar: React.FC<SidebarProps> = ({
     onCloseMobile?.()
   }
 
-  // Escape fecha o drawer e o fundo nao rola enquanto ele esta aberto.
+  // Escape fecha o drawer.
   useEffect(() => {
     if (!mobileOpen) return
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') onCloseMobile?.()
     }
-    const previous = document.body.style.overflow
-    document.body.style.overflow = 'hidden'
     document.addEventListener('keydown', onKeyDown)
-    return () => {
-      document.body.style.overflow = previous
-      document.removeEventListener('keydown', onKeyDown)
-    }
+    return () => document.removeEventListener('keydown', onKeyDown)
   }, [mobileOpen, onCloseMobile])
 
   const noteStyle = (tone: Tone | undefined, active: boolean): React.CSSProperties => {
