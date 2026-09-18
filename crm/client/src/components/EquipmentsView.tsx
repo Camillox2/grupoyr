@@ -97,10 +97,10 @@ export const EquipmentsView: React.FC<EquipmentsViewProps> = ({
             <button
               key={tab.id}
               onClick={() => setFilterStatus(tab.id)}
-              className={`px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-all flex items-center gap-1.5 ${
+              className={`px-3.5 py-2 rounded-full border text-xs font-bold whitespace-nowrap transition-colors flex items-center gap-1.5 ${
                 filterStatus === tab.id
-                  ? 'bg-blue-600 text-white shadow-sm'
-                  : 'bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-50'
+                  ? 'bg-slate-900 border-slate-900 text-white dark:bg-blue-600 dark:border-blue-600'
+                  : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 hover:border-blue-300'
               }`}
             >
               <span>{tab.label}</span>
@@ -129,7 +129,7 @@ export const EquipmentsView: React.FC<EquipmentsViewProps> = ({
       </div>
 
       {/* Equipment Cards Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 gap-5">
         {filtered.map((eq) => {
           const isAlugado = eq.status === 'alugado'
 
