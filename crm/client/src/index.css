@@ -361,13 +361,75 @@
   background: var(--surface-raised);
   color: var(--ink);
 }
-.nav-item[data-active='true'] {
-  background: var(--yr-700);
-  color: #fffdf9;
-  box-shadow: 0 12px 24px -14px rgba(16, 42, 76, 0.7);
+/* O fundo do item ativo e a pilula deslizante (.nav-glider), nao o botao. */
+.nav-item {
+  position: relative;
+  z-index: 1;
 }
-.dark .nav-item[data-active='true'] {
+.nav-item[data-active='true'],
+.nav-item[data-active='true']:hover {
+  background: transparent;
+  color: #fffdf9;
+}
+.nav-item svg {
+  transition: transform var(--dur-moderate) var(--ease-out);
+}
+.nav-item[data-active='true'] svg {
+  transform: scale(1.12);
+}
+
+.nav-glider {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  z-index: 0;
+  border-radius: 12px;
+  background: var(--yr-700);
+  box-shadow: 0 12px 24px -14px rgba(16, 42, 76, 0.7);
+  opacity: 0;
+  pointer-events: none;
+}
+.nav-glider.is-ready {
+  opacity: 1;
+  transition:
+    transform 480ms var(--ease-out),
+    height 300ms var(--ease-out),
+    opacity 200ms ease;
+}
+.dark .nav-glider {
   background: var(--yr-500);
+}
+
+/* Seletor Baileys / Meta: polegar que desliza entre duas metades iguais. */
+.provider-thumb {
+  position: absolute;
+  top: 4px;
+  bottom: 4px;
+  left: 4px;
+  width: calc(50% - 4px);
+  border-radius: 9px;
+  background: #fffdf9;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+  transition: transform 420ms var(--ease-out);
+}
+
+/* Bloco que abre e fecha com a altura animada (0fr -> 1fr). */
+.collapse-y {
+  display: grid;
+  grid-template-rows: 0fr;
+  opacity: 0;
+  transition:
+    grid-template-rows 420ms var(--ease-out),
+    opacity 300ms ease;
+}
+.collapse-y[data-open='true'] {
+  grid-template-rows: 1fr;
+  opacity: 1;
+}
+.collapse-y > div {
+  min-height: 0;
+  overflow: hidden;
 }
 
 /* Botao em pilula, igual aos do site */
@@ -451,19 +513,39 @@
    Movimento: cada regra abaixo comunica uma mudanca de estado
    =========================================================================== */
 
-/* Troca de aba: o conteudo novo sobe 4px e aparece. Sem slide lateral. */
+/* Troca de tela.
+   A area de rolagem (.app-main) fica parada e reserva o espaco da barra de
+   rolagem: sem isso a barra aparecia e sumia a cada aba e a tela "puxava".
+   Quem entra e o palco interno, e os blocos da tela sobem em cascata. */
+.app-main {
+  scrollbar-gutter: stable;
+}
+
 @keyframes view-enter {
   from {
     opacity: 0;
-    transform: translateY(4px);
+    transform: translateY(16px);
   }
   to {
     opacity: 1;
     transform: none;
   }
 }
-.view-enter {
-  animation: view-enter var(--dur-fast) var(--ease-out) both;
+.view-stage > * > * {
+  animation: view-enter 520ms var(--ease-out) both;
+}
+.view-stage > * > *:nth-child(1) { animation-delay: 0ms; }
+.view-stage > * > *:nth-child(2) { animation-delay: 70ms; }
+.view-stage > * > *:nth-child(3) { animation-delay: 140ms; }
+.view-stage > * > *:nth-child(4) { animation-delay: 210ms; }
+.view-stage > * > *:nth-child(5) { animation-delay: 280ms; }
+.view-stage > * > *:nth-child(n + 6) { animation-delay: 340ms; }
+
+/* Dialogos e camadas fixas que moram dentro da tela nao entram na cascata:
+   transform em quem e position:fixed desloca o dialogo inteiro. */
+.view-stage > * > .fixed,
+.view-stage > * > [role='presentation'] {
+  animation: none;
 }
 
 /* Drawer lateral no mobile. */
@@ -663,6 +745,14 @@
   .mark > svg path {
     animation: none;
     stroke-dashoffset: 0;
+  }
+  .view-stage > * > * {
+    animation: none;
+  }
+  .nav-glider.is-ready,
+  .provider-thumb,
+  .collapse-y {
+    transition: none;
   }
   /* O spinner comunica "aguarde": congela-lo tira a informacao. */
   .spin {

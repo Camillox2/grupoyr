@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useLayoutEffect, useRef } from 'react'
 import { ThemeProvider } from './contexts/ThemeContext'
 import { AuthProvider, useAuth } from './contexts/AuthContext'
 import { SocketProvider } from './contexts/SocketContext'
@@ -147,6 +147,12 @@ function MainContent() {
     setNewContractModalOpen(true)
   }
 
+  // Toda troca de aba comeca do topo, antes de o navegador pintar o quadro.
+  const mainRef = useRef<HTMLElement | null>(null)
+  useLayoutEffect(() => {
+    if (mainRef.current) mainRef.current.scrollTop = 0
+  }, [activeTab])
+
   const pendingContractsCount = contracts.filter((c) => c.status === 'pendente_assinatura').length
 
   if (loading) {
@@ -215,9 +221,11 @@ function MainContent() {
           onCloseMobile={() => setMobileSidebarOpen(false)}
         />
 
-        {/* `key` no activeTab remonta o conteudo, disparando a entrada de 200ms. */}
-        <main key={activeTab} className="view-enter min-h-0 flex-1 overflow-y-auto p-4 sm:p-6">
-          <div className="mx-auto max-w-7xl">
+        {/* A area de rolagem NAO remonta nem anima: remontar fazia a barra de
+            rolagem sumir e voltar, e o conteudo "pulava". Quem entra animado e
+            o palco interno, que ganha `key` novo a cada aba. */}
+        <main ref={mainRef} className="app-main min-h-0 flex-1 overflow-y-auto p-4 sm:p-6">
+          <div key={activeTab} className="view-stage mx-auto max-w-7xl">
             {dataError && (
               <div className="mb-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-2xl border border-amber-200 bg-amber-50 p-3.5 text-xs text-amber-900 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-100">
                 <span>{dataError}</span>

@@ -77,12 +77,19 @@ export const Navbar: React.FC<NavbarProps> = ({ onOpenQr, onToggleMobileMenu }) 
       <div className="flex shrink-0 items-center gap-2">
         {/* O seletor de provedor so cabe no desktop; no mobile fica em Configuracoes. */}
         {!isMobile && (
+          /* Controle segmentado com "polegar" deslizante. As duas metades tem
+             a MESMA largura (grid), entao nada contrai ao alternar. */
           <div
-            className="flex items-center rounded-[12px] p-1 text-[11px] font-bold"
+            className="provider-switch relative grid w-[196px] grid-cols-2 rounded-[12px] p-1 text-[11px] font-bold"
             style={{ background: 'rgba(255, 253, 249, 0.08)', border: '1px solid rgba(220, 233, 248, 0.18)' }}
             role="group"
             aria-label="Provedor de WhatsApp"
           >
+            <span
+              className="provider-thumb"
+              style={{ transform: isBaileys ? 'translateX(0)' : 'translateX(100%)' }}
+              aria-hidden="true"
+            />
             {(
               [
                 ['baileys', 'Baileys', Radio, 'Conexão por QR Code via Baileys, sem custo por mensagem'],
@@ -96,8 +103,8 @@ export const Navbar: React.FC<NavbarProps> = ({ onOpenQr, onToggleMobileMenu }) 
                   onClick={() => switchWhatsAppProvider(id)}
                   aria-pressed={active}
                   title={title}
-                  className="tap-exempt flex items-center gap-1.5 rounded-[9px] px-2.5 py-1.5 transition-colors"
-                  style={active ? { background: '#fffdf9', color: '#102a4c' } : { color: '#b9d2f0' }}
+                  className="tap-exempt relative z-10 flex items-center justify-center gap-1.5 rounded-[9px] px-2 py-1.5"
+                  style={{ color: active ? '#102a4c' : '#b9d2f0', transition: 'color 320ms ease' }}
                 >
                   <Icon className="h-3.5 w-3.5" />
                   {label}
@@ -110,7 +117,7 @@ export const Navbar: React.FC<NavbarProps> = ({ onOpenQr, onToggleMobileMenu }) 
         <button
           onClick={!isConnected ? onOpenQr : undefined}
           disabled={isConnected}
-          className="flex items-center gap-2 rounded-[12px] px-3 py-2 text-[11.5px] font-extrabold transition-colors disabled:cursor-default"
+          className="flex items-center justify-center gap-2 rounded-[12px] px-3 py-2 text-[11.5px] font-extrabold transition-colors disabled:cursor-default sm:min-w-[178px]"
           style={
             isConnected
               ? { background: 'rgba(63, 191, 168, 0.16)', color: '#7fe0cf', border: '1px solid rgba(63, 191, 168, 0.4)' }

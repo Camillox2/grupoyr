@@ -164,7 +164,10 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onOpenQr }) => {
             </div>
           </div>
 
-          {!isBaileys && (
+          {/* Os campos da Meta abrem e fecham com a altura animada. Antes eles
+              simplesmente sumiam e o card encolhia no tranco. */}
+          <div className="collapse-y" data-open={!isBaileys} inert={isBaileys}>
+            <div>
             <div className="pt-3 border-t border-slate-100 dark:border-slate-800 space-y-3">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
@@ -193,7 +196,8 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onOpenQr }) => {
                 </div>
               </div>
             </div>
-          )}
+            </div>
+          </div>
         </div>
 
         {/* Gemini AI Settings Card */}

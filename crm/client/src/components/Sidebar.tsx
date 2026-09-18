@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react'
+import React, { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import {
   LayoutDashboard,
   KanbanSquare,
@@ -108,6 +108,31 @@ export const Sidebar: React.FC<SidebarProps> = ({
     },
   ]
 
+  // Indicador deslizante: uma pilula azul que VIAJA ate o item clicado, em vez
+  // de o fundo simplesmente trocar de lugar. A posicao vem do proprio botao.
+  const navRef = useRef<HTMLElement | null>(null)
+  const [glider, setGlider] = useState<{ y: number; h: number; ready: boolean }>({ y: 0, h: 0, ready: false })
+
+  useLayoutEffect(() => {
+    const measure = () => {
+      const nav = navRef.current
+      const active = nav?.querySelector<HTMLElement>('[data-active="true"]')
+      if (!nav || !active) return
+      const navBox = nav.getBoundingClientRect()
+      const box = active.getBoundingClientRect()
+      setGlider((current) => ({ y: box.top - navBox.top + nav.scrollTop, h: box.height, ready: current.ready }))
+    }
+    measure()
+    // So liga a transicao depois da primeira medida, senao a pilula "cai" do
+    // topo ate o item ao abrir a tela.
+    const frame = requestAnimationFrame(() => setGlider((current) => ({ ...current, ready: true })))
+    window.addEventListener('resize', measure)
+    return () => {
+      cancelAnimationFrame(frame)
+      window.removeEventListener('resize', measure)
+    }
+  }, [activeTab, isMobile, mobileOpen])
+
   const handleSelectTab = (tab: TabType) => {
     onTabChange(tab)
     onCloseMobile?.()
@@ -153,7 +178,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
         </div>
       )}
 
-      <nav className="screen-scroll" aria-label="Navegação principal">
+      <nav className="screen-scroll relative" aria-label="Navegação principal" ref={navRef}>
+        <span
+          className={`nav-glider ${glider.ready ? 'is-ready' : ''}`}
+          style={{ transform: `translateY(${glider.y}px)`, height: glider.h }}
+          aria-hidden="true"
+        />
         {groups.map((group) => (
           <div key={group.label} className="mb-4">
             <p
