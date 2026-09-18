@@ -5,3 +5,14 @@ dist
 .env.*
 .DS_Store
 server/sanitizer.generated.mjs
+
+# CRM local runtime, build artifacts, credentials and session data
+crm/.runtime/
+crm/__pycache__/
+crm/client/node_modules/
+crm/client/dist/
+crm/server/node_modules/
+crm/server/data/
+crm/server/.env
+crm/cloudflared-crm.yml
+!crm/server/.env.example

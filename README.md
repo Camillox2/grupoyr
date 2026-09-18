@@ -2,6 +2,10 @@
 
 Site institucional e catálogo inicial para venda e locação de equipamentos hospitalares, criado em React + Vite.
 
+## CRM
+
+O CRM local de atendimento, contratos, assinatura, financeiro e WhatsApp está em [`crm/`](crm/). Ele usa Neon/PostgreSQL e integrações externas configuradas por variáveis locais; credenciais, sessões do WhatsApp e dados de execução não são versionados.
+
 ## Rodar localmente
 
 ```bash
