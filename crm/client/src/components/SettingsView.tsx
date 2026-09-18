@@ -21,6 +21,9 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onOpenQr }) => {
   const [geminiApiKey, setGeminiApiKey] = useState('')
   const [metaToken, setMetaToken] = useState('')
   const [metaPhoneId, setMetaPhoneId] = useState('')
+  const [metaWabaId, setMetaWabaId] = useState('')
+  const [metaAppSecret, setMetaAppSecret] = useState('')
+  const [metaAppSecretConfigured, setMetaAppSecretConfigured] = useState(false)
   const [geminiConfigured, setGeminiConfigured] = useState(false)
   const [metaTokenConfigured, setMetaTokenConfigured] = useState(false)
   const [savedSuccess, setSavedSuccess] = useState(false)
@@ -39,6 +42,8 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onOpenQr }) => {
           setMetaTokenConfigured(data.metaConfig?.accessToken === '__configured__')
           setMetaToken(data.metaConfig?.accessToken === '__configured__' ? '' : data.metaConfig?.accessToken || '')
           setMetaPhoneId(data.metaConfig?.phoneNumberId || '')
+          setMetaWabaId(data.metaConfig?.wabaId || '')
+          setMetaAppSecretConfigured(data.metaConfig?.appSecret === '__configured__')
         }
       })
       .catch(() => {})
@@ -58,6 +63,8 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onOpenQr }) => {
           metaConfig: {
             accessToken: metaToken,
             phoneNumberId: metaPhoneId,
+            wabaId: metaWabaId,
+            appSecret: metaAppSecret,
           },
         }),
       })
@@ -193,6 +200,38 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onOpenQr }) => {
                     placeholder={metaTokenConfigured ? 'Token já configurado, digite para substituir' : 'EAAB...'}
                     className="w-full px-3 py-2 rounded-xl text-xs bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white"
                   />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                    WABA ID (conta do WhatsApp Business)
+                  </label>
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    value={metaWabaId}
+                    onChange={(e) => setMetaWabaId(e.target.value.replace(/\D/g, ''))}
+                    placeholder="Ex: 102938475610293"
+                    className="w-full px-3 py-2 rounded-xl text-xs bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white"
+                  />
+                  <p className="mt-1 text-[11px] text-slate-400">É por ele que o CRM lista os templates aprovados.</p>
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                    App Secret (assinatura do webhook)
+                  </label>
+                  <input
+                    type="password"
+                    value={metaAppSecret}
+                    onChange={(e) => { setMetaAppSecret(e.target.value); setMetaAppSecretConfigured(false) }}
+                    placeholder={metaAppSecretConfigured ? 'Já configurado, digite para substituir' : 'Painel do app na Meta, Configurações, Básico'}
+                    autoComplete="off"
+                    className="w-full px-3 py-2 rounded-xl text-xs bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white"
+                  />
+                  <p className="mt-1 text-[11px] text-slate-400">
+                    {metaAppSecretConfigured
+                      ? 'Ativo: o CRM só aceita mensagens recebidas que venham assinadas pela Meta.'
+                      : 'Sem ele o webhook aceita qualquer chamada. Com ele, só o que a Meta assinou.'}
+                  </p>
                 </div>
               </div>
             </div>

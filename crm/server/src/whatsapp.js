@@ -5,6 +5,7 @@ import QRCode from 'qrcode'
 import axios from 'axios'
 import pino from 'pino'
 import { db } from './db.js'
+import { phoneKey } from './phone.js'
 import { runGeminiWithFallback, analyzeImage, transcribeAndUnderstandAudio, generateCustomerSummary } from './gemini.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
@@ -264,11 +265,21 @@ class WhatsAppService {
 
       if (!fromPhone) return
 
+      // A Meta reentrega o mesmo webhook quando a resposta demora (e aqui ela
+      // demora, porque a IA responde antes do 200). Sem este filtro a mesma
+      // mensagem entrava duas vezes e a IA respondia em dobro.
+      if (provider === 'meta' && rawMsg.id
+        && db.find('messages', (message) => message.sourceMessageId === rawMsg.id)) return
+
       // Find or create lead
       const phoneCandidates = provider === 'baileys'
         ? [fromPhone, remoteIdentifier].filter(Boolean)
         : [fromPhone]
-      let lead = db.find('leads', (l) => {
+      // Primeiro pela chave normalizada (o mesmo celular chega com e sem o
+      // nono digito); so depois pela comparacao solta que ja existia.
+      const candidateKeys = phoneCandidates.map(phoneKey).filter(Boolean)
+      let lead = db.find('leads', (l) => candidateKeys.includes(phoneKey(l.phone)))
+      if (!lead) lead = db.find('leads', (l) => {
         const savedPhone = String(l.phone || '').replace(/\D/g, '')
         return phoneCandidates.some((candidate) => {
           const normalizedCandidate = String(candidate).replace(/\D/g, '')
@@ -297,11 +308,19 @@ class WhatsAppService {
           value: 480.0,
           notes: 'Lead criado automaticamente ao receber mensagem no WhatsApp.',
           whatsappJid: provider === 'baileys' ? replyJid : undefined,
+          conversationStatus: 'open',
+          lastInboundAt: new Date().toISOString(),
           createdAt: new Date().toISOString(),
         })
       } else {
         const contactUpdate = {
           lastInteraction: new Date().toISOString(),
+          // Abre (ou renova) a janela de 24h da Meta e reabre a conversa se
+          // ela estava encerrada: cliente que volta a falar nao fica escondido.
+          lastInboundAt: new Date().toISOString(),
+          ...(lead.conversationStatus === 'closed'
+            ? { conversationStatus: 'open', reopenedAt: new Date().toISOString() }
+            : {}),
           ...(provider === 'baileys' ? { whatsappJid: replyJid } : {}),
           ...(provider === 'baileys' && phoneJid ? { phone: fromPhone } : {}),
         }
@@ -334,9 +353,36 @@ class WhatsAppService {
     }
   }
 
+  /**
+   * Status de entrega que a Meta manda pelo webhook (sent, delivered, read,
+   * failed). Template costuma falhar DEPOIS do 200 do envio, entao e so por
+   * aqui que a equipe fica sabendo que a mensagem nao chegou.
+   */
+  handleMetaStatus(status) {
+    const metaId = String(status?.id || '')
+    const state = String(status?.status || '')
+    if (!metaId || !['sent', 'delivered', 'read', 'failed'].includes(state)) return
+
+    const message = db.find('messages', (item) => item.metaMessageId === metaId)
+    if (!message) return
+    // Nao volta atras: um "delivered" atrasado nao desfaz um "read".
+    const rank = { sending: 0, sent: 1, delivered: 2, read: 3, failed: 4 }
+    if ((rank[state] ?? 0) <= (rank[message.deliveryStatus] ?? 0)) return
+
+    const failure = status.errors?.[0]
+    const updated = db.update('messages', message.id, {
+      deliveryStatus: state,
+      ...(state === 'failed'
+        ? { deliveryError: String(failure?.error_data?.details || failure?.title || 'A Meta não entregou a mensagem.').slice(0, 300) }
+        : {}),
+    })
+    if (this.io && updated) this.io.emit('message:updated', updated)
+  }
+
   async respondWithAi(lead, userMsg, mediaBuffer = null) {
     try {
-      const history = db.filter('messages', (m) => m.leadId === lead.id).slice(-10)
+      // Avisos do sistema ("conversa encerrada") nao sao fala de ninguem.
+      const history = db.filter('messages', (m) => m.leadId === lead.id && m.from !== 'system').slice(-10)
 
       let aiResult
       if (userMsg.type === 'image' && mediaBuffer) {

@@ -4,7 +4,7 @@ import http from 'node:http'
 import path from 'node:path'
 import fs from 'node:fs'
 import { fileURLToPath } from 'node:url'
-import { randomUUID } from 'node:crypto'
+import { randomUUID, createHmac, timingSafeEqual } from 'node:crypto'
 import { Server } from 'socket.io'
 import cors from 'cors'
 import multer from 'multer'
@@ -20,6 +20,8 @@ import {
   findContractBySigningToken,
 } from './contracts.js'
 import { sanitizeLeadDetails } from './leadDetails.js'
+import { listTemplates, sendTemplate, windowState, backfillLastInbound, MetaError } from './metaTemplates.js'
+import { normalizePhone, phoneKey } from './phone.js'
 
 const app = express()
 const server = http.createServer(app)
@@ -81,7 +83,14 @@ const io = new Server(server, {
 })
 
 app.use(cors(corsOptions))
-app.use(express.json({ limit: '25mb' }))
+app.use(express.json({
+  limit: '25mb',
+  // A assinatura do webhook da Meta e calculada sobre os bytes crus do corpo.
+  // Guarda-se o buffer so nessa rota, para nao dobrar a memoria das demais.
+  verify: (req, _res, buffer) => {
+    if (req.originalUrl?.startsWith('/api/whatsapp/webhook')) req.rawBody = buffer
+  },
+}))
 app.use(express.urlencoded({ extended: true, limit: '25mb' }))
 app.use('/uploads/blog', express.static(BLOG_UPLOAD_DIR, { maxAge: '7d', index: false }))
 
@@ -152,9 +161,20 @@ app.post('/api/whatsapp/reset-session', requireAuth(['admin']), async (_req, res
 
 app.post('/api/whatsapp/send', requireAuth(), async (req, res) => {
   try {
-    const { leadId, text } = req.body
+    const { leadId } = req.body
+    const text = String(req.body.text ?? '').trim()
     const lead = db.find('leads', (l) => l.id === leadId)
     if (!lead) return res.status(404).json({ error: 'Lead não encontrado' })
+    if (!text) return res.status(400).json({ error: 'Escreva a mensagem antes de enviar.' })
+
+    // Na API oficial, texto livre so passa dentro da janela de 24h. Recusar
+    // aqui evita gravar como "enviada" uma mensagem que a Meta vai rejeitar.
+    if (whatsappService.activeProvider === 'meta' && !windowState(lead).open) {
+      return res.status(409).json({
+        code: 'window_closed',
+        error: 'A janela de 24h fechou. Envie um template aprovado para retomar a conversa.',
+      })
+    }
 
     const success = await whatsappService.sendMessage(lead.phone, text)
 
@@ -168,7 +188,11 @@ app.post('/api/whatsapp/send', requireAuth(), async (req, res) => {
       timestamp: new Date().toISOString(),
     })
 
-    db.update('leads', lead.id, { lastInteraction: new Date().toISOString() })
+    // Responder uma conversa encerrada a reabre.
+    db.update('leads', lead.id, {
+      lastInteraction: new Date().toISOString(),
+      ...(lead.conversationStatus === 'closed' ? { conversationStatus: 'open', reopenedAt: new Date().toISOString() } : {}),
+    })
 
     io.emit('message:new', savedMsg)
     io.emit('lead:updated', db.find('leads', (l) => l.id === lead.id))
@@ -217,6 +241,142 @@ app.post('/api/whatsapp/send-media', requireAuth(), whatsappMediaUpload.single('
   }
 })
 
+/* --------------------------------------------------------------------------
+   Templates da Meta, novo contato e encerramento de conversa
+   -------------------------------------------------------------------------- */
+const sendMetaError = (res, err, fallback) => {
+  if (err instanceof MetaError) return res.status(err.status).json({ error: err.message, code: err.code })
+  console.error('[WhatsApp]', fallback, '-', err?.message || err)
+  return res.status(500).json({ error: fallback })
+}
+
+const newMessageId = () => `msg_${Date.now()}_${randomUUID().slice(0, 6)}`
+
+// Linha de sistema no historico ("conversa encerrada por Fulano").
+const insertSystemNote = (leadId, content) => {
+  const note = db.insert('messages', {
+    id: newMessageId(),
+    leadId,
+    from: 'system',
+    type: 'text',
+    content,
+    timestamp: new Date().toISOString(),
+  })
+  io.emit('message:new', note)
+  return note
+}
+
+app.get('/api/whatsapp/templates', requireAuth(), async (req, res) => {
+  try {
+    if (whatsappService.activeProvider !== 'meta') {
+      return res.status(409).json({ code: 'provider_not_meta', error: 'Templates são um recurso da API oficial da Meta. No Baileys não há template.' })
+    }
+    res.json({ templates: await listTemplates({ refresh: req.query.refresh === '1' }) })
+  } catch (err) {
+    sendMetaError(res, err, 'Não foi possível listar os templates.')
+  }
+})
+
+app.post('/api/whatsapp/send-template', requireAuth(), async (req, res) => {
+  try {
+    if (whatsappService.activeProvider !== 'meta') {
+      return res.status(409).json({ code: 'provider_not_meta', error: 'O envio de template só existe na API oficial da Meta.' })
+    }
+    const lead = db.find('leads', (l) => l.id === req.body.leadId)
+    if (!lead) return res.status(404).json({ error: 'Lead não encontrado' })
+
+    const result = await sendTemplate({
+      phone: lead.phone,
+      templateId: String(req.body.templateId || ''),
+      bodyValues: req.body.bodyValues,
+      headerValues: req.body.headerValues,
+      headerMediaUrl: req.body.headerMediaUrl,
+    })
+
+    const savedMsg = db.insert('messages', {
+      id: newMessageId(),
+      leadId: lead.id,
+      from: 'agent',
+      type: 'template',
+      templateName: result.template.name,
+      content: result.rendered,
+      metaMessageId: result.metaMessageId,
+      deliveryStatus: 'sent',
+      sentBy: req.user.id,
+      timestamp: new Date().toISOString(),
+    })
+    const updatedLead = db.update('leads', lead.id, {
+      lastInteraction: new Date().toISOString(),
+      ...(lead.conversationStatus === 'closed' ? { conversationStatus: 'open', reopenedAt: new Date().toISOString() } : {}),
+    })
+
+    io.emit('message:new', savedMsg)
+    io.emit('lead:updated', updatedLead)
+    res.json({ ok: true, message: savedMsg, lead: updatedLead })
+  } catch (err) {
+    sendMetaError(res, err, 'Não foi possível enviar o template.')
+  }
+})
+
+// Novo contato pelo atendimento. Nos dois provedores ele so CRIA o contato; o
+// disparo do template e uma segunda chamada, que so existe na Meta.
+app.post('/api/whatsapp/contacts', requireAuth(), (req, res) => {
+  const name = String(req.body.name ?? '').replace(/\s+/g, ' ').trim().slice(0, 120)
+  const phone = normalizePhone(req.body.phone)
+  if (name.length < 2) return res.status(400).json({ error: 'Informe o nome do contato.' })
+  if (!phone) return res.status(400).json({ error: 'Telefone inválido. Use DDD + número, por exemplo (41) 99999-0000.' })
+
+  // Mesmo numero nao vira dois contatos: devolve o que ja existe.
+  const key = phoneKey(phone)
+  const existing = db.find('leads', (lead) => phoneKey(lead.phone) === key)
+  if (existing) return res.json({ lead: existing, existing: true })
+
+  const now = new Date().toISOString()
+  const lead = db.insert('leads', {
+    id: `lead_${Date.now()}_${randomUUID().slice(0, 6)}`,
+    name,
+    phone,
+    email: '',
+    stage: 'novo_lead',
+    origin: 'Contato adicionado',
+    utmSource: 'crm',
+    utmMedium: 'manual',
+    utmCampaign: 'contato_ativo',
+    equipmentInterest: 'A definir',
+    modality: 'locacao',
+    estimatedPeriod: '30 dias',
+    aiSummary: 'Contato adicionado pela equipe. Ainda sem conversa.',
+    aiEnabled: true,
+    lastInteraction: now,
+    assignedTo: req.user.id,
+    value: 0,
+    notes: '',
+    conversationStatus: 'open',
+    createdAt: now,
+  })
+  io.emit('lead:new', lead)
+  io.emit('lead:updated', lead)
+  res.status(201).json({ lead, existing: false })
+})
+
+app.put('/api/leads/:id/conversation', requireAuth(), (req, res) => {
+  const status = req.body.status
+  if (!['open', 'closed'].includes(status)) return res.status(400).json({ error: 'Status inválido.' })
+  const lead = db.find('leads', (l) => l.id === req.params.id)
+  if (!lead) return res.status(404).json({ error: 'Lead não encontrado' })
+  if ((lead.conversationStatus || 'open') === status) return res.json(lead)
+
+  const now = new Date().toISOString()
+  const updated = db.update('leads', lead.id, status === 'closed'
+    ? { conversationStatus: 'closed', closedAt: now, closedBy: req.user.id }
+    : { conversationStatus: 'open', reopenedAt: now })
+
+  const who = req.user.name || req.user.email || 'equipe'
+  insertSystemNote(lead.id, status === 'closed' ? `Conversa encerrada por ${who}.` : `Conversa reaberta por ${who}.`)
+  io.emit('lead:updated', updated)
+  res.json(updated)
+})
+
 // Meta Cloud API Webhook Verification
 app.get('/api/whatsapp/webhook', (req, res) => {
   const mode = req.query['hub.mode']
@@ -232,13 +392,39 @@ app.get('/api/whatsapp/webhook', (req, res) => {
 })
 
 // Meta Cloud API Webhook Receiver
+// Esta rota e publica por natureza (a Meta chama sem login). Sem conferir a
+// assinatura, qualquer um que descubra a URL injeta mensagens falsas: cria
+// lead, gasta cota do Gemini e faz o numero da empresa responder a terceiros.
+// A Meta assina o corpo com o App Secret em X-Hub-Signature-256.
+let warnedUnsignedWebhook = false
+const isSignedByMeta = (req) => {
+  const appSecret = db.getSettings().metaConfig?.appSecret || process.env.META_APP_SECRET || ''
+  if (!appSecret) {
+    if (!warnedUnsignedWebhook) {
+      console.warn('[Meta Webhook] App Secret não configurado: o webhook está aceitando chamadas SEM conferir a assinatura. Configure em Ajustes.')
+      warnedUnsignedWebhook = true
+    }
+    return true
+  }
+  const received = String(req.headers['x-hub-signature-256'] || '')
+  if (!received.startsWith('sha256=') || !req.rawBody) return false
+  const expected = `sha256=${createHmac('sha256', appSecret).update(req.rawBody).digest('hex')}`
+  const a = Buffer.from(received)
+  const b = Buffer.from(expected)
+  return a.length === b.length && timingSafeEqual(a, b)
+}
+
 app.post('/api/whatsapp/webhook', async (req, res) => {
   try {
+    if (!isSignedByMeta(req)) return res.sendStatus(401)
     const body = req.body
     if (body.object === 'whatsapp_business_account') {
       for (const entry of body.entry || []) {
         for (const change of entry.changes || []) {
-          const value = change.value
+          const value = change.value || {}
+          for (const status of value.statuses || []) {
+            whatsappService.handleMetaStatus(status)
+          }
           if (value.messages) {
             for (const message of value.messages) {
               await whatsappService.handleIncomingMessage(message, 'meta')
@@ -784,6 +970,7 @@ const maskSettingsSecrets = (settings) => ({
     ...settings.metaConfig,
     accessToken: settings.metaConfig?.accessToken ? '__configured__' : '',
     verifyToken: settings.metaConfig?.verifyToken ? '__configured__' : '',
+    appSecret: settings.metaConfig?.appSecret ? '__configured__' : '',
   },
 })
 
@@ -806,6 +993,10 @@ app.put('/api/settings', requireAuth(['admin']), (req, res) => {
       ...requestedMeta,
       accessToken: keepOrReplace(requestedMeta.accessToken, current.metaConfig?.accessToken),
       verifyToken: keepOrReplace(requestedMeta.verifyToken, current.metaConfig?.verifyToken),
+      appSecret: keepOrReplace(requestedMeta.appSecret, current.metaConfig?.appSecret),
+      // IDs da Meta entram em URL da Graph API: so digitos.
+      phoneNumberId: String(requestedMeta.phoneNumberId ?? current.metaConfig?.phoneNumberId ?? '').replace(/\D/g, ''),
+      wabaId: String(requestedMeta.wabaId ?? current.metaConfig?.wabaId ?? '').replace(/\D/g, ''),
     },
   })
   res.json(maskSettingsSecrets(updated))
@@ -835,6 +1026,7 @@ if (fs.existsSync(clientDist)) {
 
 const PORT = process.env.PORT || 3001
 await db.ready
+backfillLastInbound()
 
 // Initialize WhatsApp engine with WebSockets after the database is ready.
 whatsappService.init(io)

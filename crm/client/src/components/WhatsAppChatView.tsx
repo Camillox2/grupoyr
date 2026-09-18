@@ -12,11 +12,22 @@ import {
   Mic,
   Square,
   X,
+  UserRoundPlus,
+  Archive,
+  ArchiveRestore,
+  Hourglass,
+  LockKeyhole,
+  CircleAlert,
+  Check,
+  MessageSquareDashed,
 } from 'lucide-react'
 import { Lead, Message } from '../types'
 import { useSocket } from '../contexts/SocketContext'
 import { useIsMobile, useMediaQuery } from '../hooks/useMediaQuery'
+import { authHeaders, isClosed, windowInfo } from '../lib/conversation'
 import { LeadSheet } from './LeadSheet'
+import { NewContactModal } from './NewContactModal'
+import { SendTemplateModal } from './SendTemplateModal'
 
 interface WhatsAppChatViewProps {
   leads: Lead[]
@@ -54,8 +65,32 @@ export const WhatsAppChatView: React.FC<WhatsAppChatViewProps> = ({
   const audioRecorderRef = useRef<MediaRecorder | null>(null)
   const audioChunksRef = useRef<Blob[]>([])
 
+  const [listTab, setListTab] = useState<'open' | 'closed'>('open')
+  const [newContactOpen, setNewContactOpen] = useState(false)
+  const [templateOpen, setTemplateOpen] = useState(false)
+  const [closing, setClosing] = useState(false)
+  // Relogio da janela de 24h: um tique por minuto basta para o contador.
+  const [now, setNow] = useState(() => Date.now())
+  // Lead para o qual o SERVIDOR ja respondeu que a janela fechou.
+  const [serverClosedFor, setServerClosedFor] = useState<string | null>(null)
+
   const isConnected =
     whatsappStatus.status === 'connected' || whatsappStatus.status === 'connected_meta'
+  const isMeta = whatsappStatus.provider === 'meta'
+
+  // `selectedLead` e uma copia guardada no App e nao recebe os eventos do
+  // socket. O estado vivo (encerrada, ultima mensagem do cliente) sai da lista.
+  const selectedLeadId = selectedLead?.id
+  const liveLead = (selectedLeadId && leads.find((lead) => lead.id === selectedLeadId)) || selectedLead
+  const conversationClosed = liveLead ? isClosed(liveLead) : false
+  const windowState = windowInfo(liveLead, now)
+  // Texto livre so e barrado na API oficial: o Baileys nao tem janela.
+  const windowBlocked = isMeta && (!windowState.open || serverClosedFor === selectedLeadId)
+
+  useEffect(() => {
+    const timer = window.setInterval(() => setNow(Date.now()), 60_000)
+    return () => window.clearInterval(timer)
+  }, [])
 
   useEffect(() => {
     if (selectedLead) {
@@ -63,32 +98,42 @@ export const WhatsAppChatView: React.FC<WhatsAppChatViewProps> = ({
       setSelectedFile(null)
       setAiEnabled(selectedLead.aiEnabled)
       setAiSummary(null)
-      const token = localStorage.getItem('yr_crm_token') || ''
-      fetch(`/api/leads/${selectedLead.id}/messages`, {
-        headers: { Authorization: `Bearer ${token}` },
-      })
+      setSendError(null)
+      setNow(Date.now())
+      fetch(`/api/leads/${selectedLead.id}/messages`, { headers: authHeaders(false) })
         .then((res) => (res.ok ? res.json() : []))
         .then((data) => setMessages(data))
         .catch(() => {})
     }
-  }, [selectedLead])
+    // So o id: trocar o OBJETO do mesmo lead nao pode zerar a conversa aberta.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedLeadId])
 
   useEffect(() => {
-    if (!socket || !selectedLead) return
-    const selectedLeadId = selectedLead.id
+    if (!socket || !selectedLeadId) return
 
     const appendLiveMessage = (message: Message) => {
       if (message.leadId !== selectedLeadId) return
       setMessages((current) => (
         current.some((item) => item.id === message.id) ? current : [...current, message]
       ))
+      // Mensagem do cliente renova a janela: o contador ja sai certo.
+      setNow(Date.now())
+      if (message.from === 'client') setServerClosedFor(null)
+    }
+    // Status de entrega que a Meta manda depois (entregue, lida, falhou).
+    const updateLiveMessage = (message: Message) => {
+      if (message.leadId !== selectedLeadId) return
+      setMessages((current) => current.map((item) => (item.id === message.id ? { ...item, ...message } : item)))
     }
 
     socket.on('message:new', appendLiveMessage)
+    socket.on('message:updated', updateLiveMessage)
     return () => {
       socket.off('message:new', appendLiveMessage)
+      socket.off('message:updated', updateLiveMessage)
     }
-  }, [socket, selectedLead])
+  }, [socket, selectedLeadId])
 
   useEffect(() => {
     // Rola SO a lista de mensagens. scrollIntoView rola todos os ancestrais
@@ -182,6 +227,9 @@ export const WhatsAppChatView: React.FC<WhatsAppChatViewProps> = ({
         const data = await res.json().catch(() => null)
         setInputText(textToSend)
         setSendError(data?.error || 'Não foi possível enviar. Confira a conexão do WhatsApp e tente novamente.')
+        // O relogio do navegador pode estar adiantado/atrasado: quem decide a
+        // janela e o servidor. Se ele disse que fechou, a tela acompanha.
+        if (data?.code === 'window_closed') setServerClosedFor(selectedLead.id)
       }
     } catch (err) {
       console.error('Erro ao enviar mensagem:', err)
@@ -192,14 +240,44 @@ export const WhatsAppChatView: React.FC<WhatsAppChatViewProps> = ({
     }
   }
 
+  const openCount = leads.filter((lead) => !isClosed(lead)).length
+  const closedCount = leads.length - openCount
+
   const filteredLeads = leads.filter((lead) => {
     const term = contactSearch.trim().toLowerCase()
-    if (!term) return true
+    // Buscando, procura nas duas abas: ninguem lembra se ja encerrou.
+    if (!term) return isClosed(lead) === (listTab === 'closed')
     return [lead.name, lead.phone, lead.equipmentInterest, lead.origin]
       .join(' ')
       .toLowerCase()
       .includes(term)
   })
+
+  const handleConversationStatus = async (status: 'open' | 'closed') => {
+    if (!liveLead || closing) return
+    setClosing(true)
+    setSendError(null)
+    try {
+      const res = await fetch(`/api/leads/${liveLead.id}/conversation`, {
+        method: 'PUT',
+        headers: authHeaders(),
+        body: JSON.stringify({ status }),
+      })
+      if (!res.ok) {
+        const data = await res.json().catch(() => null)
+        setSendError(data?.error || 'Não foi possível alterar a conversa.')
+        return
+      }
+      // A lista se atualiza pelo socket (lead:updated). Ao encerrar, sai da
+      // conversa: ela acabou de deixar a aba em que o usuario esta.
+      if (status === 'closed') onSelectLead(null)
+      else setListTab('open')
+    } catch {
+      setSendError('Falha de comunicação com o servidor.')
+    } finally {
+      setClosing(false)
+    }
+  }
 
   const handleToggleAi = async () => {
     if (!selectedLead) return
@@ -264,12 +342,31 @@ export const WhatsAppChatView: React.FC<WhatsAppChatViewProps> = ({
       >
         <div className="p-3.5 border-b border-slate-200 dark:border-slate-800 space-y-3">
           <div className="flex items-center justify-between gap-2">
-            <h3 className="text-xs font-bold text-slate-800 dark:text-slate-200">
-              Conversas WhatsApp ({leads.length})
-            </h3>
-            <span className="text-[10px] font-semibold text-emerald-600 dark:text-emerald-400 bg-emerald-100 dark:bg-emerald-950/60 px-2 py-0.5 rounded-full whitespace-nowrap">
-              {whatsappStatus.provider === 'baileys' ? 'Baileys Web' : 'Meta Cloud'}
-            </span>
+            <div className="min-w-0">
+              <h3 className="text-xs font-bold text-slate-800 dark:text-slate-200">Conversas</h3>
+              <p className="text-[10px] font-semibold" style={{ color: 'var(--ink-faint)' }}>
+                via {isMeta ? 'API oficial da Meta' : 'Baileys Web'}
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setNewContactOpen(true)}
+              className="action-btn action-btn--primary inline-flex shrink-0 items-center gap-1.5 rounded-full px-3 py-2 text-[11px] font-extrabold"
+              title={isMeta ? 'Adicionar contato e enviar um template' : 'Adicionar contato'}
+            >
+              <UserRoundPlus className="h-3.5 w-3.5" />
+              Novo contato
+            </button>
+          </div>
+          {/* Abertas x encerradas. O polegar desliza; o tamanho nunca muda. */}
+          <div className="chat-tabs" role="tablist" aria-label="Filtrar conversas" data-tab={listTab}>
+            <span className="chat-tabs-thumb" aria-hidden="true" />
+            <button type="button" role="tab" aria-selected={listTab === 'open'} onClick={() => setListTab('open')}>
+              Abertas <span className="tnum">{openCount}</span>
+            </button>
+            <button type="button" role="tab" aria-selected={listTab === 'closed'} onClick={() => setListTab('closed')}>
+              Encerradas <span className="tnum">{closedCount}</span>
+            </button>
           </div>
           <div className="relative">
             <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
@@ -287,8 +384,12 @@ export const WhatsAppChatView: React.FC<WhatsAppChatViewProps> = ({
           {filteredLeads.length === 0 ? (
             <div className="p-6 text-center">
               <Search className="w-5 h-5 mx-auto text-slate-300 dark:text-slate-600" />
-              <p className="mt-2 text-xs font-semibold text-slate-600 dark:text-slate-300">Nenhuma conversa encontrada</p>
-              <p className="mt-1 text-[11px] text-slate-400">Tente outro nome ou telefone.</p>
+              <p className="mt-2 text-xs font-semibold text-slate-600 dark:text-slate-300">
+                {contactSearch.trim() ? 'Nenhuma conversa encontrada' : listTab === 'closed' ? 'Nenhuma conversa encerrada' : 'Nenhuma conversa aberta'}
+              </p>
+              <p className="mt-1 text-[11px] text-slate-400">
+                {contactSearch.trim() ? 'Tente outro nome ou telefone.' : listTab === 'closed' ? 'O que você encerrar fica guardado aqui.' : 'Adicione um contato para começar.'}
+              </p>
             </div>
           ) : filteredLeads.map((lead) => {
             const isSelected = selectedLead?.id === lead.id
@@ -329,6 +430,11 @@ export const WhatsAppChatView: React.FC<WhatsAppChatViewProps> = ({
                         <Bot className="w-2.5 h-2.5" /> IA Ativa
                       </span>
                     )}
+                    {isClosed(lead) ? (
+                      <span className="chat-flag" data-tone="neutral"><Archive className="h-2.5 w-2.5" /> Encerrada</span>
+                    ) : isMeta && !windowInfo(lead, now).open ? (
+                      <span className="chat-flag" data-tone="wait" title="Janela de 24h fechada: só template"><LockKeyhole className="h-2.5 w-2.5" /> 24h</span>
+                    ) : null}
                   </div>
                 </div>
               </div>
@@ -374,7 +480,29 @@ export const WhatsAppChatView: React.FC<WhatsAppChatViewProps> = ({
             </div>
 
             {/* Quick Actions Header */}
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
+              {isMeta && !conversationClosed && (
+                <span
+                  className="chat-window"
+                  data-tone={windowBlocked ? 'wait' : windowState.closingSoon ? 'alert' : 'ok'}
+                  title="A Meta só aceita texto livre até 24h depois da última mensagem do cliente"
+                >
+                  {windowBlocked ? <LockKeyhole className="h-3 w-3" /> : <Hourglass className="h-3 w-3" />}
+                  {windowBlocked
+                    ? windowState.neverOpened ? 'Sem janela: só template' : 'Janela de 24h fechada'
+                    : `Janela fecha em ${windowState.remaining}`}
+                </span>
+              )}
+              <button
+                type="button"
+                onClick={() => handleConversationStatus(conversationClosed ? 'open' : 'closed')}
+                disabled={closing}
+                className="action-btn action-btn--ghost inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-extrabold disabled:opacity-50"
+                title={conversationClosed ? 'Trazer de volta para as conversas abertas' : 'Encerrar: a conversa sai das abertas e volta sozinha se o cliente escrever'}
+              >
+                {conversationClosed ? <ArchiveRestore className="h-3.5 w-3.5" /> : <Archive className="h-3.5 w-3.5" />}
+                {conversationClosed ? 'Reabrir' : 'Encerrar'}
+              </button>
               <button
                 onClick={handleToggleAi}
                 className={`px-3 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all border ${
@@ -415,6 +543,20 @@ export const WhatsAppChatView: React.FC<WhatsAppChatViewProps> = ({
               const isClient = msg.from === 'client'
               const isAi = msg.from === 'ai'
 
+              // Aviso do sistema: uma linha no meio, sem balao.
+              if (msg.from === 'system') {
+                return (
+                  <div key={msg.id} className="chat-system">
+                    <span>
+                      {msg.content}
+                      <time className="tnum">
+                        {new Date(msg.timestamp).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}
+                      </time>
+                    </span>
+                  </div>
+                )
+              }
+
               return (
                 <div
                   key={msg.id}
@@ -437,6 +579,13 @@ export const WhatsAppChatView: React.FC<WhatsAppChatViewProps> = ({
                       </div>
                     )}
 
+                    {msg.type === 'template' && (
+                      <div className="mb-1 flex items-center gap-1.5 border-b border-white/20 pb-1 text-[10px] font-extrabold text-white/80">
+                        <MessageSquareDashed className="h-3 w-3" />
+                        <span>Template{msg.templateName ? `: ${msg.templateName}` : ''}</span>
+                      </div>
+                    )}
+
                     {/* Content */}
                     <p className="whitespace-pre-wrap">{msg.content}</p>
 
@@ -454,18 +603,53 @@ export const WhatsAppChatView: React.FC<WhatsAppChatViewProps> = ({
                       </span>
                       {!isClient && (msg.deliveryStatus === 'pending_connection' ? (
                         <span className="font-semibold">Aguardando conexão</span>
+                      ) : msg.deliveryStatus === 'failed' ? (
+                        <span className="inline-flex items-center gap-1 font-extrabold text-rose-200"><CircleAlert className="h-3 w-3" /> Não entregue</span>
+                      ) : msg.deliveryStatus === 'read' ? (
+                        <CheckCheck className="w-3 h-3 text-sky-300" aria-label="Lida" />
+                      ) : msg.deliveryStatus === 'delivered' ? (
+                        <CheckCheck className="w-3 h-3" aria-label="Entregue" />
+                      ) : msg.type === 'template' ? (
+                        <Check className="w-3 h-3" aria-label="Enviada" />
                       ) : (
                         <CheckCheck className="w-3 h-3" />
                       ))}
                     </div>
                   </div>
+                  {msg.deliveryStatus === 'failed' && msg.deliveryError && (
+                    <p className="mt-1 max-w-lg text-right text-[10.5px] font-semibold" style={{ color: 'var(--alert)' }}>{msg.deliveryError}</p>
+                  )}
                 </div>
               )
             })}
             <div ref={messagesEndRef} />
           </div>
 
-          {/* Chat Input Bar */}
+          {/* Conversa encerrada ou janela fechada: o campo de texto da lugar a
+              uma faixa que explica o porque e oferece o unico caminho valido. */}
+          {conversationClosed ? (
+            <div className="chat-gate" data-tone="neutral">
+              <Archive className="h-4 w-4 shrink-0" />
+              <p className="min-w-0 flex-1">
+                <strong>Conversa encerrada.</strong> Ela volta sozinha para as abertas se o cliente escrever.
+              </p>
+              <button type="button" onClick={() => handleConversationStatus('open')} disabled={closing} className="action-btn action-btn--primary inline-flex shrink-0 items-center gap-1.5 rounded-full px-3.5 py-2 text-[11px] font-extrabold disabled:opacity-50">
+                <ArchiveRestore className="h-3.5 w-3.5" />
+                Reabrir
+              </button>
+            </div>
+          ) : windowBlocked ? (
+            <div className="chat-gate" data-tone="wait">
+              <LockKeyhole className="h-4 w-4 shrink-0" />
+              <p className="min-w-0 flex-1">
+                <strong>{windowState.neverOpened ? 'Este contato ainda não escreveu.' : 'A janela de 24h fechou.'}</strong> Pela regra da Meta, agora só dá para falar com um template aprovado. Quando o cliente responder, o texto livre volta.
+              </p>
+              <button type="button" onClick={() => setTemplateOpen(true)} className="action-btn action-btn--primary inline-flex shrink-0 items-center gap-1.5 rounded-full px-3.5 py-2 text-[11px] font-extrabold">
+                <MessageSquareDashed className="h-3.5 w-3.5" />
+                Enviar template
+              </button>
+            </div>
+          ) : (
           <form
             onSubmit={handleSendMessage}
             className="relative p-3 border-t border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 flex items-center gap-2"
@@ -547,6 +731,7 @@ export const WhatsAppChatView: React.FC<WhatsAppChatViewProps> = ({
               {loading ? <span className="block w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" /> : <Send className="w-4 h-4" />}
             </button>
           </form>
+          )}
           {sendError && (
             <p className="px-4 pb-3 text-[11px] font-medium text-rose-600 dark:text-rose-300" role="alert">
               {sendError}
@@ -563,6 +748,20 @@ export const WhatsAppChatView: React.FC<WhatsAppChatViewProps> = ({
             Escolha um lead na barra lateral para ver o histórico do WhatsApp, intervir nas respostas da IA ou emitir contratos.
           </p>
         </div>
+      )}
+
+      <NewContactModal
+        open={newContactOpen}
+        onClose={() => setNewContactOpen(false)}
+        provider={isMeta ? 'meta' : 'baileys'}
+        onCreated={(lead) => {
+          setListTab(isClosed(lead) ? 'closed' : 'open')
+          setContactSearch('')
+          onSelectLead(lead)
+        }}
+      />
+      {liveLead && (
+        <SendTemplateModal open={templateOpen} onClose={() => setTemplateOpen(false)} lead={liveLead} />
       )}
 
       {/* Ficha de fechamento: coluna fixa em tela larga, painel por cima nas demais */}

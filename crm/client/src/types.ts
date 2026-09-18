@@ -40,6 +40,13 @@ export interface Lead {
   deliveryDate?: string
   deliveryNotes?: string
   checklist?: Record<string, boolean>
+
+  // Atendimento (ver server/src/metaTemplates.js)
+  /** Sem valor = aberta. Conversa encerrada some da lista de abertas. */
+  conversationStatus?: 'open' | 'closed'
+  closedAt?: string
+  /** Ultima mensagem DO CLIENTE: e dela que a Meta conta a janela de 24h. */
+  lastInboundAt?: string
 }
 
 export type LeadAccess = 'terreo' | 'escada' | 'elevador' | 'nao_sei'
@@ -64,12 +71,38 @@ export interface QuoteItem {
 export interface Message {
   id: string
   leadId: string
-  from: 'client' | 'agent' | 'ai'
-  type: 'text' | 'image' | 'audio' | 'file'
+  from: 'client' | 'agent' | 'ai' | 'system'
+  type: 'text' | 'image' | 'audio' | 'file' | 'template'
   modelUsed?: string
+  templateName?: string
   content: string
-  deliveryStatus?: 'sending' | 'sent' | 'pending_connection'
+  deliveryStatus?: 'sending' | 'sent' | 'delivered' | 'read' | 'failed' | 'pending_connection'
+  deliveryError?: string
   timestamp: string
+}
+
+/** Template aprovado na Meta, ja resumido pelo servidor. */
+export interface MessageTemplate {
+  id: string
+  name: string
+  language: string
+  category: string
+  header: { format: string; text: string; variables: string[]; needsMedia: boolean }
+  body: { text: string; variables: string[] }
+  footer: string
+  buttons: { type: string; text: string }[]
+  supported: boolean
+  unsupportedReason: string
+}
+
+/** O que o seletor de template devolve para quem vai enviar. */
+export interface TemplateSelection {
+  templateId: string
+  bodyValues: string[]
+  headerValues: string[]
+  headerMediaUrl: string
+  /** Tudo preenchido: pode enviar. */
+  ready: boolean
 }
 
 export interface Equipment {
