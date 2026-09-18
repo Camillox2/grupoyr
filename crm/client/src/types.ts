@@ -134,7 +134,11 @@ export interface Contract {
   startDate: string
   endDate: string
   monthlyValue: number
-  status: 'rascunho' | 'pendente_assinatura' | 'assinado' | 'cancelado'
+  status: 'rascunho' | 'pendente_assinatura' | 'assinado' | 'cancelado' | 'encerrado'
+  /** Mudancas que o servidor aceita a partir do status atual. */
+  nextStatuses?: ('pendente_assinatura' | 'cancelado' | 'encerrado')[]
+  statusReason?: string
+  linkSentAt?: string
   signedAt: string | null
   signerIp: string | null
   signerName?: string | null
@@ -152,7 +156,7 @@ export interface Invoice {
   leadId: string | null
   amount: number
   dueDate: string
-  status: 'paga' | 'pendente' | 'atrasada'
+  status: 'paga' | 'pendente' | 'atrasada' | 'cancelada'
   paidAt: string | null
 }
 

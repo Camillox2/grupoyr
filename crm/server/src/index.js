@@ -18,6 +18,8 @@ import {
   renderContractHtml,
   ensureSigningToken,
   findContractBySigningToken,
+  changeContractStatus,
+  allowedContractStatuses,
 } from './contracts.js'
 import { sanitizeLeadDetails } from './leadDetails.js'
 import { listTemplates, sendTemplate, windowState, backfillLastInbound, MetaError } from './metaTemplates.js'
@@ -251,6 +253,58 @@ const sendMetaError = (res, err, fallback) => {
 }
 
 const newMessageId = () => `msg_${Date.now()}_${randomUUID().slice(0, 6)}`
+
+// Endereco publico do CRM (tunnel ou dominio). Vazio quando so existe localhost.
+const resolvePublicUrl = () => {
+  let publicUrl = String(process.env.PUBLIC_CRM_URL || '').trim()
+  const runtimeFile = path.join(__dirname, '../../.runtime/public_url.txt')
+  if (!publicUrl && fs.existsSync(runtimeFile)) publicUrl = fs.readFileSync(runtimeFile, 'utf-8').trim()
+  return /^https:\/\/[^\s]+$/i.test(publicUrl) ? publicUrl.replace(/\/+$/, '') : ''
+}
+
+class SendBlocked extends Error {
+  constructor(message, code) {
+    super(message)
+    this.code = code
+  }
+}
+
+/**
+ * Manda um texto para o lead e REGISTRA na conversa dele, dizendo a verdade
+ * sobre a entrega. Usado pelo link do contrato e pela cobranca: antes a
+ * cobranca respondia "enviado com sucesso" mesmo com o WhatsApp desligado e
+ * a mensagem nem aparecia no atendimento.
+ */
+const sendTextToLead = async (lead, text, { sentBy, kind }) => {
+  if (whatsappService.activeProvider === 'meta' && !windowState(lead).open) {
+    throw new SendBlocked('A janela de 24h deste cliente fechou. Pela regra da Meta, retome a conversa com um template antes de mandar texto livre.', 'window_closed')
+  }
+  const delivered = await whatsappService.sendMessage(lead.phone, text)
+  const message = db.insert('messages', {
+    id: newMessageId(),
+    leadId: lead.id,
+    from: 'agent',
+    type: 'text',
+    kind,
+    content: text,
+    deliveryStatus: delivered ? 'sent' : 'pending_connection',
+    sentBy,
+    timestamp: new Date().toISOString(),
+  })
+  const updatedLead = db.update('leads', lead.id, {
+    lastInteraction: new Date().toISOString(),
+    ...(lead.conversationStatus === 'closed' ? { conversationStatus: 'open', reopenedAt: new Date().toISOString() } : {}),
+  })
+  io.emit('message:new', message)
+  io.emit('lead:updated', updatedLead)
+  return { delivered, message }
+}
+
+const sendBlockedOr500 = (res, err, fallback) => {
+  if (err instanceof SendBlocked) return res.status(409).json({ error: err.message, code: err.code })
+  console.error('[WhatsApp]', fallback, '-', err?.message || err)
+  return res.status(500).json({ error: fallback })
+}
 
 // Linha de sistema no historico ("conversa encerrada por Fulano").
 const insertSystemNote = (leadId, content) => {
@@ -577,7 +631,60 @@ app.put('/api/equipments/:id/status', requireAuth(), (req, res) => {
    CONTRACTS & SIGNATURE ROUTES
    ========================================================================== */
 app.get('/api/contracts', requireAuth(), (req, res) => {
-  res.json(db.get('contracts').map(ensureSigningToken))
+  res.json(db.get('contracts').map(ensureSigningToken).map((contract) => ({
+    ...contract,
+    nextStatuses: allowedContractStatuses(contract),
+  })))
+})
+
+// Cancelar, encerrar ou reativar. A tabela de transicoes fica em contracts.js.
+app.put('/api/contracts/:id/status', requireAuth(), (req, res) => {
+  try {
+    const result = changeContractStatus(req.params.id, String(req.body.status || ''), {
+      reason: req.body.reason,
+      user: req.user,
+    })
+    io.emit('contract:updated', result.contract)
+    if (result.lead) io.emit('lead:updated', result.lead)
+    res.json({
+      contract: { ...result.contract, nextStatuses: allowedContractStatuses(result.contract) },
+      releasedEquipments: result.released.length,
+      cancelledInvoices: result.cancelledInvoices.length,
+    })
+  } catch (err) {
+    res.status(400).json({ error: err.message })
+  }
+})
+
+// Manda o link de assinatura direto no WhatsApp do lead do contrato.
+app.post('/api/contracts/:id/send-link', requireAuth(), async (req, res) => {
+  try {
+    const found = db.find('contracts', (c) => c.id === req.params.id)
+    if (!found) return res.status(404).json({ error: 'Contrato não encontrado' })
+    if (found.status !== 'pendente_assinatura') {
+      return res.status(409).json({ error: 'Só dá para enviar o link de um contrato que está aguardando assinatura.' })
+    }
+    const contract = ensureSigningToken(found)
+    const lead = db.find('leads', (l) => l.id === contract.leadId)
+    if (!lead?.phone) return res.status(409).json({ code: 'no_lead', error: 'Este contrato não está ligado a um contato com WhatsApp.' })
+
+    const baseUrl = resolvePublicUrl()
+    if (!baseUrl) {
+      return res.status(409).json({
+        code: 'no_public_url',
+        error: 'O CRM ainda não tem endereço público, então o link só abriria neste computador. Inicie o tunnel (ou defina PUBLIC_CRM_URL) e tente de novo.',
+      })
+    }
+
+    const firstName = String(lead.name || '').trim().split(/\s+/)[0] || 'tudo bem'
+    const text = `Olá, ${firstName}! Seu contrato ${contract.number} com o Grupo YR Hospitalar está pronto. É só abrir o link, conferir e assinar com o dedo na tela:\n${baseUrl}/assinar/${encodeURIComponent(contract.signingToken)}`
+    const { delivered, message } = await sendTextToLead(lead, text, { sentBy: req.user.id, kind: 'contract_link' })
+
+    db.update('contracts', contract.id, { linkSentAt: new Date().toISOString(), linkSentBy: req.user.id })
+    res.json({ ok: true, delivered, leadId: lead.id, message })
+  } catch (err) {
+    sendBlockedOr500(res, err, 'Não foi possível enviar o link do contrato.')
+  }
 })
 
 app.post('/api/contracts', requireAuth(), (req, res) => {
@@ -698,26 +805,37 @@ app.put('/api/finance/invoices/:id/pay', requireAuth(), (req, res) => {
 })
 
 app.post('/api/finance/invoices/:id/send-reminder', requireAuth(), async (req, res) => {
-  const invoice = db.find('invoices', (i) => i.id === req.params.id)
-  if (!invoice) return res.status(404).json({ error: 'Fatura não encontrada' })
+  try {
+    const invoice = db.find('invoices', (i) => i.id === req.params.id)
+    if (!invoice) return res.status(404).json({ error: 'Fatura não encontrada' })
+    if (invoice.status === 'paga' || invoice.status === 'cancelada') {
+      return res.status(409).json({ error: 'Esta fatura não está em aberto.' })
+    }
 
-  const lead = db.find('leads', (l) => l.id === invoice.leadId)
-  if (!lead) return res.status(404).json({ error: 'Cliente não encontrado' })
+    const lead = db.find('leads', (l) => l.id === invoice.leadId)
+    if (!lead) return res.status(404).json({ error: 'Cliente não encontrado' })
 
-  const text = `Olá, ${lead.name}! Lembramos que a fatura referente à locação do equipamento hospitalar (${invoice.contractNumber}) vence em ${new Date(invoice.dueDate).toLocaleDateString('pt-BR')} no valor de R$ ${invoice.amount.toFixed(2)}. Chave Pix: financeiro@grupoyrhospitalar.com.br. Qualquer dúvida estamos à disposição!`
+    const firstName = String(lead.name || '').trim().split(/\s+/)[0] || lead.name
+    // Data pura (YYYY-MM-DD) vira meia-noite UTC e mostra o dia anterior no Brasil.
+    const due = new Date(String(invoice.dueDate).length === 10 ? `${invoice.dueDate}T00:00:00` : invoice.dueDate)
+    const amount = Number(invoice.amount || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
+    const text = `Olá, ${firstName}! Passando para lembrar da fatura ${invoice.contractNumber ? `do contrato ${invoice.contractNumber} ` : ''}no valor de ${amount}, com vencimento em ${due.toLocaleDateString('pt-BR')}. Chave Pix: financeiro@grupoyrhospitalar.com.br. Qualquer dúvida, é só responder por aqui.`
 
-  await whatsappService.sendMessage(lead.phone, text)
+    const { delivered, message } = await sendTextToLead(lead, text, { sentBy: req.user.id, kind: 'invoice_reminder' })
+    db.update('invoices', invoice.id, { lastReminderAt: new Date().toISOString() })
 
-  db.insert('messages', {
-    id: `msg_${Date.now()}`,
-    leadId: lead.id,
-    from: 'agent',
-    type: 'text',
-    content: `[Lembrete de Cobrança Automático]: ${text}`,
-    timestamp: new Date().toISOString(),
-  })
-
-  res.json({ ok: true, message: 'Lembrete enviado via WhatsApp com sucesso!' })
+    res.json({
+      ok: true,
+      delivered,
+      leadId: lead.id,
+      message: delivered
+        ? `Cobrança enviada para ${lead.name} pelo WhatsApp.`
+        : 'O WhatsApp está desconectado: a cobrança ficou registrada na conversa, mas ainda não saiu.',
+      savedMessage: message,
+    })
+  } catch (err) {
+    sendBlockedOr500(res, err, 'Não foi possível enviar a cobrança.')
+  }
 })
 
 /* ===========================================================================
@@ -1003,14 +1121,7 @@ app.put('/api/settings', requireAuth(['admin']), (req, res) => {
 })
 
 app.get('/api/runtime/public-url', requireAuth(), (_req, res) => {
-  const publicUrlFromEnv = String(process.env.PUBLIC_CRM_URL || '').trim()
-  let publicUrl = publicUrlFromEnv
-  if (!publicUrl && fs.existsSync(path.join(__dirname, '../../.runtime/public_url.txt'))) {
-    publicUrl = fs.readFileSync(path.join(__dirname, '../../.runtime/public_url.txt'), 'utf-8').trim()
-  }
-  res.json({
-    url: /^https:\/\/[^\s]+$/i.test(publicUrl) ? publicUrl : '',
-  })
+  res.json({ url: resolvePublicUrl() })
 })
 
 const clientDist = path.join(__dirname, '../../client/dist')

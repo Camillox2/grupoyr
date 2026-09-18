@@ -114,6 +114,14 @@ function MainContent() {
     }
   }, [socket])
 
+  // Contratos e financeiro levam direto para a conversa do cliente.
+  const openLeadConversation = (leadId: string) => {
+    const lead = leads.find((item) => item.id === leadId)
+    if (!lead) return
+    setSelectedLead(lead)
+    setActiveTab('whatsapp')
+  }
+
   const handleUpdateLeadStage = async (leadId: string, newStage: Stage) => {
     const previousStage = leads.find((lead) => lead.id === leadId)?.stage
     // Optimistic UI update
@@ -304,6 +312,7 @@ function MainContent() {
                 leads={leads}
                 equipments={equipments}
                 onRefreshContracts={fetchAllData}
+                onOpenLead={openLeadConversation}
                 onOpenNewContractModal={() => {
                   setContractLead(leads[0] || null)
                   setNewContractModalOpen(true)
@@ -312,7 +321,7 @@ function MainContent() {
             )}
 
             {activeTab === 'finance' && (
-              <FinanceView invoices={invoices} leads={leads} onRefreshInvoices={fetchAllData} />
+              <FinanceView invoices={invoices} leads={leads} onRefreshInvoices={fetchAllData} onOpenLead={openLeadConversation} />
             )}
 
             {activeTab === 'blog' && <BlogManagerView />}

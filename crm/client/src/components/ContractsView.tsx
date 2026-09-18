@@ -8,6 +8,9 @@ import {
   Trash2,
   X,
   Copy,
+  Send,
+  Workflow,
+  MessageSquare,
 } from 'lucide-react'
 import { Contract, Lead, Equipment } from '../types'
 import { celebrateSignature } from './ui/celebrate'
@@ -15,6 +18,9 @@ import { PageHeader, Notice, ActionButton } from './ui/PageHeader'
 import { ResponsiveTable, EmptyState } from './ui/ResponsiveTable'
 import { ContractStatus } from './ui/Status'
 import { brl } from './ui/Feedback'
+import { Toast, useToast } from './ui/Toast'
+import { authHeaders } from '../lib/conversation'
+import { ContractStatusModal } from './ContractStatusModal'
 
 /** dd/mm sem o ano, que ocupa espaco e raramente muda dentro da lista. */
 const formatDate = (value: string) => {
@@ -33,6 +39,8 @@ interface ContractsViewProps {
   equipments: Equipment[]
   onRefreshContracts: () => void
   onOpenNewContractModal: () => void
+  /** Abre a conversa do lead no atendimento. */
+  onOpenLead?: (leadId: string) => void
 }
 
 export const ContractsView: React.FC<ContractsViewProps> = ({
@@ -41,7 +49,41 @@ export const ContractsView: React.FC<ContractsViewProps> = ({
   equipments,
   onRefreshContracts,
   onOpenNewContractModal,
+  onOpenLead,
 }) => {
+  const { toast, show: showToast, dismiss: dismissToast } = useToast()
+  const [sendingLinkId, setSendingLinkId] = useState<string | null>(null)
+  const [statusContract, setStatusContract] = useState<Contract | null>(null)
+
+  // Manda o link de assinatura direto no WhatsApp do lead do contrato.
+  const handleSendLink = async (contract: Contract) => {
+    if (sendingLinkId) return
+    setSendingLinkId(contract.id)
+    try {
+      const response = await fetch(`/api/contracts/${contract.id}/send-link`, { method: 'POST', headers: authHeaders() })
+      const data = await response.json().catch(() => null)
+      const openChat = data?.leadId && onOpenLead ? { label: 'Abrir conversa', onClick: () => onOpenLead(data.leadId) } : undefined
+      if (!response.ok) {
+        showToast({
+          tone: 'alert',
+          message: data?.error || 'Não foi possível enviar o link.',
+          action: data?.code === 'window_closed' && onOpenLead ? { label: 'Abrir conversa', onClick: () => onOpenLead(contract.leadId) } : undefined,
+        })
+        return
+      }
+      showToast(
+        data.delivered
+          ? { tone: 'ok', message: `Link de assinatura enviado para ${contract.clientName} pelo WhatsApp.`, action: openChat }
+          : { tone: 'wait', message: 'O WhatsApp está desconectado: o link ficou registrado na conversa, mas ainda não saiu.', action: openChat },
+      )
+      onRefreshContracts()
+    } catch {
+      showToast({ tone: 'alert', message: 'Falha de comunicação com o servidor.' })
+    } finally {
+      setSendingLinkId(null)
+    }
+  }
+
   const [signingContract, setSigningContract] = useState<Contract | null>(null)
   const [signerName, setSignerName] = useState('')
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
@@ -183,7 +225,7 @@ export const ContractsView: React.FC<ContractsViewProps> = ({
         icon={<FileSignature className="h-5 w-5" />}
         eyebrow="Contratos"
         title="Contratos e assinatura"
-        description="Gere o termo, colha a assinatura na tela ou envie o link para o celular do cliente."
+        description="Gere o termo, colha a assinatura na tela ou mande o link direto no WhatsApp do cliente. O status muda pelo botão Status de cada contrato."
         actions={
           <ActionButton onClick={onOpenNewContractModal}>
             <Plus className="h-4 w-4" />
@@ -268,11 +310,34 @@ export const ContractsView: React.FC<ContractsViewProps> = ({
           },
           {
             header: 'Status',
-            cell: (contract) => <ContractStatus status={contract.status} />,
+            cell: (contract) => (
+              <span className="inline-flex flex-col items-start gap-1">
+                <ContractStatus status={contract.status} />
+                {contract.statusReason && (contract.status === 'cancelado' || contract.status === 'encerrado') && (
+                  <span className="max-w-[220px] truncate text-[10.5px]" style={{ color: 'var(--ink-faint)' }} title={contract.statusReason}>
+                    {contract.statusReason}
+                  </span>
+                )}
+              </span>
+            ),
           },
         ]}
         actions={(contract) => (
           <>
+            {contract.status === 'pendente_assinatura' && (
+              <button
+                onClick={() => handleSendLink(contract)}
+                disabled={sendingLinkId === contract.id || !contract.leadId}
+                className="inline-flex min-w-[132px] items-center justify-center gap-1.5 rounded-[8px] px-2.5 py-2 text-[11px] font-bold transition-colors disabled:opacity-50"
+                style={{ background: 'var(--ok-surface)', color: 'var(--ok)', border: '1px solid var(--ok-border)' }}
+                title={contract.leadId ? 'Manda o link de assinatura no WhatsApp do cliente deste contrato' : 'Contrato sem contato vinculado'}
+              >
+                <Send className="h-3.5 w-3.5" />
+                {sendingLinkId === contract.id ? 'Enviando' : contract.linkSentAt ? 'Reenviar ao cliente' : 'Enviar ao cliente'}
+              </button>
+            )}
+
+            {contract.status === 'pendente_assinatura' && (
             <button
               onClick={() => handleCopySigningLink(contract)}
               disabled={!contract.signingToken}
@@ -283,8 +348,9 @@ export const ContractsView: React.FC<ContractsViewProps> = ({
               {copiedLinkId === contract.id ? <CheckCircle2 className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
               {copiedLinkId === contract.id ? 'Copiado' : 'Copiar link'}
             </button>
+            )}
 
-            {contract.status !== 'assinado' && (
+            {contract.status === 'pendente_assinatura' && (
               <button
                 onClick={() => {
                   setSigningContract(contract)
@@ -316,9 +382,43 @@ export const ContractsView: React.FC<ContractsViewProps> = ({
               <Printer className="h-3.5 w-3.5" />
               Imprimir
             </a>
+
+            {onOpenLead && contract.leadId && (
+              <button
+                onClick={() => onOpenLead(contract.leadId)}
+                className="inline-flex items-center gap-1.5 rounded-[8px] px-2.5 py-2 text-[11px] font-bold transition-colors"
+                style={{ background: 'var(--surface-sunken)', color: 'var(--ink-muted)', border: '1px solid var(--border-subtle)' }}
+                title="Abrir a conversa deste cliente no atendimento"
+              >
+                <MessageSquare className="h-3.5 w-3.5" />
+                Conversa
+              </button>
+            )}
+
+            {(contract.nextStatuses?.length ?? 0) > 0 && (
+              <button
+                onClick={() => setStatusContract(contract)}
+                className="inline-flex items-center gap-1.5 rounded-[8px] px-2.5 py-2 text-[11px] font-bold transition-colors"
+                style={{ background: 'var(--surface-sunken)', color: 'var(--ink)', border: '1px solid var(--border-strong)' }}
+                title="Cancelar, encerrar ou reativar este contrato"
+              >
+                <Workflow className="h-3.5 w-3.5" />
+                Status
+              </button>
+            )}
           </>
         )}
       />
+
+      <ContractStatusModal
+        contract={statusContract}
+        onClose={() => setStatusContract(null)}
+        onChanged={(summary) => {
+          showToast({ tone: 'ok', message: summary })
+          onRefreshContracts()
+        }}
+      />
+      <Toast toast={toast} onDismiss={dismissToast} />
 
       {/* Signature Modal */}
       {signingContract && (

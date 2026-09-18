@@ -40,6 +40,7 @@ export const INVOICE_STATUS: Record<string, { label: string; tone: Tone; Icon: t
   paga: { label: 'Paga', tone: 'ok', Icon: CircleCheck },
   pendente: { label: 'Pendente', tone: 'wait', Icon: Clock },
   atrasada: { label: 'Atrasada', tone: 'alert', Icon: TriangleAlert },
+  cancelada: { label: 'Cancelada', tone: 'neutral', Icon: CircleDot },
 }
 
 export const CONTRACT_STATUS: Record<string, { label: string; tone: Tone; Icon: typeof CircleDot }> = {
@@ -47,6 +48,7 @@ export const CONTRACT_STATUS: Record<string, { label: string; tone: Tone; Icon: 
   pendente_assinatura: { label: 'Aguardando assinatura', tone: 'wait', Icon: Clock },
   assinado: { label: 'Assinado', tone: 'ok', Icon: CircleCheck },
   cancelado: { label: 'Cancelado', tone: 'alert', Icon: TriangleAlert },
+  encerrado: { label: 'Encerrado', tone: 'neutral', Icon: CircleCheck },
 }
 
 interface StatusBadgeProps {

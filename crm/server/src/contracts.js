@@ -110,6 +110,11 @@ export function signContract(contractId, signatureDataUrl, signerIp = '127.0.0.1
   const contract = db.find('contracts', (c) => c.id === contractId)
   if (!contract) throw new Error('Contrato não encontrado')
   if (contract.status === 'assinado') throw new Error('Este contrato já foi assinado')
+  // O link de assinatura e publico e nao expira: sem esta trava, um contrato
+  // cancelado continuava podendo ser assinado por quem tivesse o link antigo.
+  if (['cancelado', 'encerrado'].includes(contract.status)) {
+    throw new Error('Este contrato não está mais disponível para assinatura.')
+  }
   if (typeof signatureDataUrl !== 'string' || !/^data:image\/(png|jpeg);base64,/i.test(signatureDataUrl)) {
     throw new Error('Assinatura digital inválida')
   }
@@ -161,6 +166,81 @@ export function signContract(contractId, signatureDataUrl, signerIp = '127.0.0.1
   })
 
   return updated
+}
+
+// De -> para. Tudo o que nao esta aqui e recusado.
+const STATUS_TRANSITIONS = {
+  rascunho: ['pendente_assinatura', 'cancelado'],
+  pendente_assinatura: ['cancelado'],
+  assinado: ['encerrado', 'cancelado'],
+  // So volta a valer o que nunca chegou a ser assinado.
+  cancelado: ['pendente_assinatura'],
+  encerrado: [],
+}
+
+export function allowedContractStatuses(contract) {
+  const next = STATUS_TRANSITIONS[contract.status] || []
+  return contract.status === 'cancelado' && contract.signedAt ? [] : next
+}
+
+/**
+ * Cancela, encerra ou reativa um contrato e arruma o que depende dele:
+ * equipamento volta para higienizacao, cobranca em aberto de contrato
+ * cancelado deixa de ser cobrada e o lead anda no funil.
+ */
+export function changeContractStatus(contractId, nextStatus, { reason = '', user = null } = {}) {
+  const contract = db.find('contracts', (c) => c.id === contractId)
+  if (!contract) throw new Error('Contrato não encontrado')
+  if (!allowedContractStatuses(contract).includes(nextStatus)) {
+    throw new Error('Essa mudança de status não é permitida para este contrato.')
+  }
+
+  const now = new Date().toISOString()
+  const cleanReason = String(reason || '').replace(/\s+/g, ' ').trim().slice(0, 300)
+  // Cancelar mexe em estoque e cobranca: o motivo e obrigatorio tambem aqui,
+  // nao so na tela.
+  if (nextStatus === 'cancelado' && cleanReason.length < 3) throw new Error('Informe o motivo do cancelamento.')
+  const history = Array.isArray(contract.statusHistory) ? contract.statusHistory : []
+  const updated = db.update('contracts', contractId, {
+    status: nextStatus,
+    statusReason: cleanReason,
+    statusChangedAt: now,
+    statusHistory: [...history, { from: contract.status, to: nextStatus, at: now, by: user?.id || null, byName: user?.name || '', reason: cleanReason }].slice(-20),
+  })
+
+  const leaving = nextStatus === 'cancelado' || nextStatus === 'encerrado'
+  const released = []
+  if (leaving) {
+    for (const equipmentId of contract.equipmentIds || []) {
+      const equipment = db.find('equipments', (item) => item.id === equipmentId)
+      // So mexe no que ESTE contrato alugou: o mesmo equipamento pode ja
+      // estar com outro cliente.
+      if (equipment && equipment.status === 'alugado' && equipment.currentLeadId === contract.leadId) {
+        released.push(db.update('equipments', equipmentId, { status: 'higienizacao', currentLeadId: null, currentClientName: null }))
+      }
+    }
+  }
+
+  const cancelledInvoices = []
+  if (nextStatus === 'cancelado') {
+    for (const invoice of db.filter('invoices', (item) => item.contractNumber === contract.number && ['pendente', 'atrasada'].includes(item.status))) {
+      cancelledInvoices.push(db.update('invoices', invoice.id, { status: 'cancelada', cancelledAt: now }))
+    }
+  }
+
+  const lead = db.find('leads', (item) => item.id === contract.leadId)
+  let updatedLead = null
+  if (lead) {
+    if (nextStatus === 'encerrado') {
+      updatedLead = db.update('leads', lead.id, { stage: 'finalizado' })
+    } else if (nextStatus === 'cancelado' && ['contrato_gerado', 'assinado_entrega', 'locacao_ativa'].includes(lead.stage)) {
+      updatedLead = db.update('leads', lead.id, { stage: 'proposta_enviada' })
+    } else if (nextStatus === 'pendente_assinatura' && lead.stage === 'proposta_enviada') {
+      updatedLead = db.update('leads', lead.id, { stage: 'contrato_gerado' })
+    }
+  }
+
+  return { contract: updated, lead: updatedLead, released, cancelledInvoices }
 }
 
 export function renderContractHtml(contract) {

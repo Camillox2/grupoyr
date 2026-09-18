@@ -2,7 +2,6 @@ import React, { useState, useMemo } from 'react'
 import {
   DollarSign,
   TrendingUp,
-  CheckCircle2,
   Send,
   Plus,
   Filter,
@@ -14,7 +13,6 @@ import {
   Percent,
   Calculator,
   Search,
-  X,
 } from 'lucide-react'
 import { ResponsiveTable, EmptyState } from './ui/ResponsiveTable'
 import { InvoiceStatus } from './ui/Status'
@@ -34,20 +32,27 @@ import { PageHeader, ActionButton } from './ui/PageHeader'
 import { Modal } from './ui/Modal'
 import { TextField, SelectField, FormError } from './ui/Field'
 import { SubmitButton } from './ui/Feedback'
+import { Toast, useToast } from './ui/Toast'
 
 interface FinanceViewProps {
   invoices: Invoice[]
   leads: Lead[]
   onRefreshInvoices: () => void
+  /** Abre a conversa do lead no atendimento. */
+  onOpenLead?: (leadId: string) => void
 }
 
-export const FinanceView: React.FC<FinanceViewProps> = ({ invoices, leads, onRefreshInvoices }) => {
+// Data pura (YYYY-MM-DD) parseada direto vira meia-noite UTC e, no Brasil,
+// aparece como o dia anterior.
+const dueDateLabel = (value: string) =>
+  new Date(value && value.length === 10 ? `${value}T00:00:00` : value).toLocaleDateString('pt-BR')
+
+export const FinanceView: React.FC<FinanceViewProps> = ({ invoices, leads, onRefreshInvoices, onOpenLead }) => {
+  const { toast, show: showToast, dismiss: dismissToast } = useToast()
   const [periodFilter, setPeriodFilter] = useState<'all' | '7d' | 'month' | 'quarter' | 'year'>('month')
   const [statusFilter, setStatusFilter] = useState<'all' | 'paga' | 'pendente' | 'atrasada'>('all')
   const [searchTerm, setSearchTerm] = useState('')
   const [sendingReminderId, setSendingReminderId] = useState<string | null>(null)
-  const [reminderSuccess, setReminderSuccess] = useState<string | null>(null)
-  const [reminderError, setReminderError] = useState<string | null>(null)
   const [showNewModal, setShowNewModal] = useState(false)
   const [formError, setFormError] = useState<string | null>(null)
   const [newInvoiceData, setNewInvoiceData] = useState({
@@ -148,7 +153,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({ invoices, leads, onRef
       return {
         mes: monthDate.toLocaleDateString('pt-BR', { month: 'short' }).replace('.', ''),
         realizado: monthInvoices.filter((invoice) => invoice.status === 'paga').reduce((sum, invoice) => sum + (invoice.amount || 0), 0),
-        previsto: monthInvoices.filter((invoice) => invoice.status !== 'paga').reduce((sum, invoice) => sum + (invoice.amount || 0), 0),
+        previsto: monthInvoices.filter((invoice) => invoice.status === 'pendente' || invoice.status === 'atrasada').reduce((sum, invoice) => sum + (invoice.amount || 0), 0),
       }
     })
   }, [invoices])
@@ -177,14 +182,14 @@ export const FinanceView: React.FC<FinanceViewProps> = ({ invoices, leads, onRef
   }
 
   const handleSendReminder = async (invoice: Invoice) => {
-    if (!invoice.leadId) {
-      setReminderError(`A fatura de ${invoice.clientName} não está vinculada a um cliente do CRM.`)
-      setTimeout(() => setReminderError(null), 5000)
+    const leadId = invoice.leadId
+    if (!leadId) {
+      showToast({ tone: 'alert', message: `A fatura de ${invoice.clientName} não está vinculada a um cliente do CRM.` })
       return
     }
+    const openChat = onOpenLead ? { label: 'Abrir conversa', onClick: () => onOpenLead(leadId) } : undefined
 
     setSendingReminderId(invoice.id)
-    setReminderError(null)
     try {
       const res = await fetch(`/api/finance/invoices/${invoice.id}/send-reminder`, {
         method: 'POST',
@@ -192,18 +197,21 @@ export const FinanceView: React.FC<FinanceViewProps> = ({ invoices, leads, onRef
           Authorization: `Bearer ${localStorage.getItem('yr_crm_token') || ''}`,
         },
       })
+      const data = await res.json().catch(() => null)
       if (res.ok) {
-        setReminderSuccess(`Lembrete de cobrança e Chave Pix enviados para ${invoice.clientName} via WhatsApp!`)
-        setTimeout(() => setReminderSuccess(null), 4000)
+        // O servidor diz se saiu de verdade: com o WhatsApp desligado a
+        // cobranca fica registrada na conversa, mas nao foi entregue.
+        showToast({ tone: data?.delivered ? 'ok' : 'wait', message: data?.message || 'Cobrança registrada.', action: openChat })
       } else {
-        const data = await res.json().catch(() => null)
-        setReminderError(data?.error || 'Não foi possível enviar o lembrete pelo WhatsApp.')
-        setTimeout(() => setReminderError(null), 5000)
+        showToast({
+          tone: 'alert',
+          message: data?.error || 'Não foi possível enviar a cobrança pelo WhatsApp.',
+          action: data?.code === 'window_closed' ? openChat : undefined,
+        })
       }
     } catch (e) {
       console.error('Erro ao enviar lembrete:', e)
-      setReminderError('Não foi possível enviar o lembrete pelo WhatsApp.')
-      setTimeout(() => setReminderError(null), 5000)
+      showToast({ tone: 'alert', message: 'Não foi possível enviar a cobrança pelo WhatsApp.' })
     } finally {
       setSendingReminderId(null)
     }
@@ -379,19 +387,6 @@ export const FinanceView: React.FC<FinanceViewProps> = ({ invoices, leads, onRef
           </>
         }
       />
-
-      {reminderSuccess && (
-        <div className="p-4 rounded-2xl bg-emerald-50 dark:bg-emerald-950/50 border border-emerald-200 dark:border-emerald-800 text-xs font-semibold text-emerald-800 dark:text-emerald-200 flex items-center gap-2 animate-fade-in">
-          <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-          <span>{reminderSuccess}</span>
-        </div>
-      )}
-
-      {reminderError && (
-        <div className="p-4 rounded-2xl bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800 text-xs font-semibold text-rose-800 dark:text-rose-200">
-          {reminderError}
-        </div>
-      )}
 
       {/* 2. Filtros de Período Personalizáveis */}
       <div className="bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm flex flex-col lg:flex-row lg:items-center justify-between gap-3">
@@ -724,13 +719,28 @@ export const FinanceView: React.FC<FinanceViewProps> = ({ invoices, leads, onRef
             {
               header: 'Cliente',
               secondary: true,
-              cell: (invoice) => invoice.clientName,
+              cell: (invoice) => {
+                const leadId = invoice.leadId
+                return leadId && onOpenLead ? (
+                  <button
+                    type="button"
+                    onClick={() => onOpenLead(leadId)}
+                    className="text-left font-semibold underline decoration-dotted underline-offset-4"
+                    style={{ color: 'var(--ink)' }}
+                    title="Abrir a conversa deste cliente"
+                  >
+                    {invoice.clientName}
+                  </button>
+                ) : (
+                  invoice.clientName
+                )
+              },
             },
             {
               header: 'Vencimento',
               cell: (invoice) => (
                 <span className="tnum whitespace-nowrap" style={{ color: 'var(--ink-muted)' }}>
-                  {new Date(invoice.dueDate).toLocaleDateString('pt-BR')}
+                  {dueDateLabel(invoice.dueDate)}
                 </span>
               ),
             },
@@ -753,16 +763,16 @@ export const FinanceView: React.FC<FinanceViewProps> = ({ invoices, leads, onRef
             },
           ]}
           actions={(invoice) =>
-            invoice.status === 'paga' ? (
+            invoice.status === 'paga' || invoice.status === 'cancelada' ? (
               <span className="text-[11px] font-semibold" style={{ color: 'var(--ink-faint)' }}>
-                Quitada
+                {invoice.status === 'paga' ? 'Quitada' : 'Contrato cancelado'}
               </span>
             ) : (
               <>
                 <button
                   onClick={() => handleSendReminder(invoice)}
                   disabled={sendingReminderId === invoice.id || !invoice.leadId}
-                  className="inline-flex items-center gap-1.5 rounded-[8px] px-2.5 py-2 text-[11px] font-bold transition-colors disabled:opacity-50"
+                  className="inline-flex min-w-[104px] items-center justify-center gap-1.5 rounded-[8px] px-2.5 py-2 text-[11px] font-bold transition-colors disabled:opacity-50"
                   style={{ background: 'var(--ok-surface)', color: 'var(--ok)', border: '1px solid var(--ok-border)' }}
                   title={
                     invoice.leadId
@@ -772,7 +782,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({ invoices, leads, onRef
                 >
                   <Send className="h-3.5 w-3.5" />
                   {sendingReminderId === invoice.id
-                    ? 'Enviando...'
+                    ? 'Enviando'
                     : invoice.leadId
                       ? 'Cobrar'
                       : 'Sem cliente'}
@@ -790,6 +800,8 @@ export const FinanceView: React.FC<FinanceViewProps> = ({ invoices, leads, onRef
           }
         />
       </section>
+
+      <Toast toast={toast} onDismiss={dismissToast} />
 
       {/* 7. Nova cobranca: dialogo no desktop, bottom sheet no celular */}
       <Modal
