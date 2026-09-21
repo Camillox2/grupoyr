@@ -18,6 +18,13 @@ export const hospitalBedGallery = [
   '/products/cama-yr-05.jpg',
 ]
 
+export const manualBedGallery = [
+  '/products/cama-manual-yr-01.jpg',
+  '/products/cama-manual-yr-02.jpg',
+  '/products/cama-manual-yr-03.jpg',
+  '/products/cama-manual-yr-04.jpg',
+]
+
 export const products = [
   {
     id: 1,
@@ -53,10 +60,11 @@ export const products = [
     category: 'Camas',
     description:
       'Três movimentos por manivela: encosto, pernas e altura. A opção mais direta para quem precisa de articulação sem depender de energia.',
-    image: '/products/cama-manual-3-movimentos.webp',
+    image: manualBedGallery[0],
+    gallery: manualBedGallery,
     // Foto em resolucao cheia para a cena de abertura; `focus` e o ponto que
     // o object-fit preserva quando a moldura corta a imagem.
-    scene: '/products/cena-cama-manual.webp',
+    scene: manualBedGallery[0],
     focus: '50% 62%',
     sale: true,
     rent: true,
