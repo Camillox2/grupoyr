@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import App, { BrandLogo } from './App.jsx'
 import { SelectionProvider, useSelection } from './SelectionContext.jsx'
 import QuoteDock from './QuoteDock.jsx'
@@ -14,12 +15,25 @@ function PageFrame({ children }) {
 }
 function Breadcrumb({ title }) { return <nav className="breadcrumb container" aria-label="Você está em"><a href="/">Início</a><span aria-hidden="true">/</span><span aria-current="page">{title}</span></nav> }
 
+function ProductGallery({ product }) {
+  const images = product.gallery?.length ? product.gallery : [product.scene || product.image]
+  const [activeIndex, setActiveIndex] = useState(0)
+  const activeImage = images[activeIndex]
+
+  return <div className="equipment-gallery">
+    <div className="equipment-image"><img src={activeImage} alt={`${product.name} — imagem ${activeIndex + 1} de ${images.length}`} width="1400" height="1100" fetchPriority="high" style={{ objectPosition: product.focus }} /><span>{product.gallery?.length ? 'Fotos reais do produto. Confirme modelo, acessórios e disponibilidade na cotação.' : 'Imagem de referência. Confirme o modelo na cotação.'}</span></div>
+    {images.length > 1 && <div className="equipment-thumbs" aria-label={`Fotos de ${product.name}`}>
+      {images.map((image, index) => <button className={index === activeIndex ? 'equipment-thumb is-active' : 'equipment-thumb'} key={image} type="button" onClick={() => setActiveIndex(index)} aria-label={`Ver imagem ${index + 1} de ${images.length}`} aria-pressed={index === activeIndex}><img src={image} alt="" width="96" height="96" /></button>)}
+    </div>}
+  </div>
+}
+
 function ProductPage({ product }) {
   const { choose } = useSelection()
   const related = products.filter(item => item.id !== product.id).sort((a,b) => Number(b.category === product.category) - Number(a.category === product.category)).slice(0,3)
   return <PageFrame><Breadcrumb title={product.name} />
     <section className="container equipment-hero">
-      <div className="equipment-image"><img src={product.scene || product.image} alt={product.name} width="1400" height="1100" fetchPriority="high" style={{ objectPosition: product.focus }} /><span>Imagem de referência. Confirme o modelo na cotação.</span></div>
+      <ProductGallery product={product} />
       <div className="equipment-copy"><p className="equipment-category">{product.category} / {product.rent ? 'Compra e locação' : 'Compra'}</p><h1>{product.name}</h1><p className="equipment-description">{product.description}</p><ul>{product.benefits.map(item => <li key={item}>{item}</li>)}</ul>
         <div className="equipment-cta"><button className="btn btn--primary" onClick={() => choose(product,'Comprar')}>Cotar compra <span aria-hidden="true">→</span></button>{product.rent && <button className="btn btn--secondary" onClick={() => choose(product,'Alugar')}>Cotar locação <span aria-hidden="true">→</span></button>}</div>
         <p className="equipment-note">Preço, modelo, disponibilidade e entrega sob consulta. Você recebe as condições antes de decidir.</p>

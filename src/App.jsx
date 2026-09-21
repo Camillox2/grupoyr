@@ -4,7 +4,7 @@ import { products, faqs, productPath } from './catalog.js'
 import HomeExperience from './HomeExperience.jsx'
 import { useSelection, placeLabels } from './SelectionContext.jsx'
 
-const heroBed = '/products/cama-hospitalar.webp'
+const heroBed = '/products/cama-yr-01.jpg'
 const logoImage = '/yr-hospitalar-logo.jpg'
 
 const trustItems = [
