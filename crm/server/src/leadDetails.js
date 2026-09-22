@@ -13,10 +13,10 @@ const MODALITY = ['locacao', 'compra']
 
 // Mesmo catalogo do site. `rent: false` = sai apenas em compra.
 export const CATALOG = [
-  { name: 'Cama elétrica luxo', rent: true },
-  { name: 'Cama manual 3 movimentos', rent: true },
-  { name: 'Colchão pneumático', rent: false },
-  { name: 'Cadeira de banho', rent: true },
+  { name: 'Cama elétrica luxo', code: 'YR-CAM-ELE', rent: true },
+  { name: 'Cama manual 3 movimentos', code: 'YR-CAM-MAN-3M', rent: true },
+  { name: 'Colchão pneumático', code: 'YR-COL-PNE', rent: false },
+  { name: 'Cadeira de banho', code: 'YR-CAD-BAN', rent: true },
 ]
 
 const text = (value, max) => (typeof value === 'string' ? value.trim().slice(0, max) : '')
@@ -49,7 +49,7 @@ function cleanItems(raw) {
   if (!Array.isArray(raw)) return []
   return raw.slice(0, 12).flatMap((item) => {
     if (!item || typeof item !== 'object') return []
-    const product = CATALOG.find((entry) => entry.name === item.product)
+    const product = CATALOG.find((entry) => entry.name === item.product || entry.code === item.productCode)
     if (!product) return [] // so entra o que existe no catalogo
     let modality = MODALITY.includes(item.modality) ? item.modality : 'locacao'
     // Regra de negocio: item sem locacao e sempre compra, diga o cliente o que disser.
@@ -57,6 +57,7 @@ function cleanItems(raw) {
     return [
       {
         product: product.name,
+        productCode: product.code,
         modality,
         qty: integer(item.qty, 1, 99),
         unitPrice: money(item.unitPrice),
@@ -115,7 +116,7 @@ export function sanitizeLeadDetails(body) {
   if (quoteItems.length > 0) {
     details.value = Math.round(itemsTotal * 100) / 100
     details.equipmentInterest = quoteItems
-      .map((item) => `${item.qty}x ${item.product} (${item.modality === 'locacao' ? 'locação' : 'compra'})`)
+      .map((item) => `${item.qty}x [${item.productCode}] ${item.product} (${item.modality === 'locacao' ? 'locação' : 'compra'})`)
       .join(', ')
       .slice(0, 300)
     details.modality = quoteItems.some((item) => item.modality === 'locacao') ? 'locacao' : 'compra'

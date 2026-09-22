@@ -21,6 +21,8 @@ export const NewEquipmentModal: React.FC<NewEquipmentModalProps> = ({
   onSuccess,
 }) => {
   const [name, setName] = useState('')
+  const [productCode, setProductCode] = useState('')
+  const [quantity, setQuantity] = useState('1')
   const [category, setCategory] = useState('Camas')
   const [monthlyPrice, setMonthlyPrice] = useState('480')
   const [salePrice, setSalePrice] = useState('3800')
@@ -44,6 +46,13 @@ export const NewEquipmentModal: React.FC<NewEquipmentModalProps> = ({
     setLoading(true)
     setError(null)
 
+    const parsedQuantity = Number(quantity)
+    if (!Number.isInteger(parsedQuantity) || parsedQuantity < 1 || parsedQuantity > 100) {
+      setLoading(false)
+      setError('Informe uma quantidade inteira entre 1 e 100.')
+      return
+    }
+
     try {
       const response = await fetch('/api/equipments', {
         method: 'POST',
@@ -53,6 +62,8 @@ export const NewEquipmentModal: React.FC<NewEquipmentModalProps> = ({
         },
         body: JSON.stringify({
           name: name.trim(),
+          productCode: productCode.trim(),
+          quantity: parsedQuantity,
           category,
           monthlyPrice: Number(monthlyPrice) || 0,
           salePrice: Number(salePrice) || 0,
@@ -66,6 +77,8 @@ export const NewEquipmentModal: React.FC<NewEquipmentModalProps> = ({
       }
 
       setName('')
+      setProductCode('')
+      setQuantity('1')
       onSuccess()
       onClose()
     } catch (err) {
@@ -80,8 +93,8 @@ export const NewEquipmentModal: React.FC<NewEquipmentModalProps> = ({
     <Modal
       open={open}
       onClose={handleClose}
-      title="Cadastrar equipamento"
-      subtitle="Entra no inventário como disponível"
+      title="Adicionar produto ao inventário"
+      subtitle="Cada unidade recebe um patrimônio próprio"
       icon={<Bed className="h-4 w-4" />}
       footer={
         <div className="flex gap-3">
@@ -104,6 +117,26 @@ export const NewEquipmentModal: React.FC<NewEquipmentModalProps> = ({
           onChange={(event) => setName(event.target.value)}
           placeholder="Ex.: Cama hospitalar articulada com controle"
         />
+
+        <div className="grid gap-4 sm:grid-cols-2">
+          <TextField
+            label="Código do produto"
+            value={productCode}
+            onChange={(event) => setProductCode(event.target.value.toUpperCase())}
+            placeholder="Ex.: YR-CAM-MAN-3M"
+            hint="Opcional: o CRM gera um padrão se ficar vazio."
+          />
+          <TextField
+            label="Quantidade"
+            type="number"
+            inputMode="numeric"
+            min={1}
+            max={100}
+            value={quantity}
+            onChange={(event) => setQuantity(event.target.value)}
+            hint="Cada unidade vira um item do inventário."
+          />
+        </div>
 
         <div className="grid gap-4 sm:grid-cols-2">
           <SelectField
@@ -147,10 +180,9 @@ export const NewEquipmentModal: React.FC<NewEquipmentModalProps> = ({
             color: 'var(--yr-700)',
           }}
         >
-          O equipamento entra como <strong>disponível</strong> e recebe um código interno de
-          patrimônio. O controle de higienização precisa ser preenchido com o laudo real do
-          equipamento; o código gerado automaticamente é apenas um identificador interno e não
-          substitui documentação sanitária.
+          As unidades entram como <strong>disponíveis</strong>, compartilham o código do produto e
+          recebem patrimônios individuais. O controle de higienização precisa ser preenchido com
+          o laudo real do equipamento; o código do produto não substitui documentação sanitária.
         </p>
       </form>
     </Modal>

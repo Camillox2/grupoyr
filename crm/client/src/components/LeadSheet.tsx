@@ -29,13 +29,16 @@ import { brl } from './ui/Feedback'
  */
 
 // Mesmo catalogo do site. `rent: false` = sai apenas em compra.
-const CATALOG: { name: string; rent: boolean }[] = [
-  { name: 'Cama elétrica luxo', rent: true },
-  { name: 'Cama manual 3 movimentos', rent: true },
-  { name: 'Colchão pneumático', rent: false },
-  { name: 'Cadeira de banho', rent: true },
+// O codigo identifica o modelo; a quantidade identifica quantas unidades
+// entram na cotacao, sem perder a rastreabilidade de cada patrimonio.
+const CATALOG: { name: string; code: string; rent: boolean }[] = [
+  { name: 'Cama elétrica luxo', code: 'YR-CAM-ELE', rent: true },
+  { name: 'Cama manual 3 movimentos', code: 'YR-CAM-MAN-3M', rent: true },
+  { name: 'Colchão pneumático', code: 'YR-COL-PNE', rent: false },
+  { name: 'Cadeira de banho', code: 'YR-CAD-BAN', rent: true },
 ]
 const canRent = (name: string) => CATALOG.find((item) => item.name === name)?.rent ?? true
+const productCodeFor = (name: string) => CATALOG.find((item) => item.name === name)?.code ?? ''
 
 const ACCESS: { id: LeadAccess; label: string }[] = [
   { id: 'terreo', label: 'Térreo' },
@@ -75,11 +78,15 @@ const fromLead = (lead: Lead): SheetState => ({
   floor: lead.floor ?? '',
   quoteItems:
     lead.quoteItems && lead.quoteItems.length > 0
-      ? lead.quoteItems
+      ? lead.quoteItems.map((item) => ({
+          ...item,
+          productCode: item.productCode || productCodeFor(item.product),
+        }))
       : CATALOG.some((item) => item.name === lead.equipmentInterest)
         ? [
             {
               product: lead.equipmentInterest,
+              productCode: productCodeFor(lead.equipmentInterest),
               modality: canRent(lead.equipmentInterest) && lead.modality === 'locacao' ? 'locacao' : 'compra',
               qty: 1,
               unitPrice: lead.value || 0,
@@ -247,10 +254,16 @@ export const LeadSheet: React.FC<LeadSheetProps> = ({
       }),
     })
 
-  const addItem = (product: string) =>
+  const addItem = (product: string) => {
+    const entry = CATALOG.find((item) => item.name === product)
+    if (!entry) return
     patch({
-      quoteItems: [...state.quoteItems, { product, modality: canRent(product) ? 'locacao' : 'compra', qty: 1, unitPrice: 0 }],
+      quoteItems: [
+        ...state.quoteItems,
+        { product: entry.name, productCode: entry.code, modality: entry.rent ? 'locacao' : 'compra', qty: 1, unitPrice: 0 },
+      ],
     })
+  }
 
   const removeItem = (index: number) => patch({ quoteItems: state.quoteItems.filter((_, i) => i !== index) })
 
@@ -446,9 +459,14 @@ export const LeadSheet: React.FC<LeadSheetProps> = ({
 
           <ul className="sheet-items">
             {state.quoteItems.map((item, index) => (
-              <li key={item.product}>
+              <li key={`${item.product}-${index}`}>
                 <div className="sheet-item-head">
-                  <strong>{item.product}</strong>
+                  <div className="min-w-0">
+                    <strong className="block truncate">{item.product}</strong>
+                    <span className="mt-1 block font-mono text-[10px]" style={{ color: 'var(--ink-faint)' }}>
+                      Código: {item.productCode || productCodeFor(item.product) || 'PENDENTE'}
+                    </span>
+                  </div>
                   <button type="button" onClick={() => removeItem(index)} aria-label={`Remover ${item.product}`}>
                     <Trash2 className="h-3.5 w-3.5" />
                   </button>
@@ -466,7 +484,7 @@ export const LeadSheet: React.FC<LeadSheetProps> = ({
                       <option value="compra">Compra</option>
                     </select>
                   </label>
-                  <Input label="Qtd." type="number" min={1} max={99} value={item.qty} onChange={(event) => setItem(index, { qty: Math.max(1, Number(event.target.value) || 1) })} />
+                  <Input label="Quantidade" type="number" min={1} max={99} inputMode="numeric" value={item.qty} onChange={(event) => setItem(index, { qty: Math.min(99, Math.max(1, Number(event.target.value) || 1)) })} />
                   <Input
                     label={item.modality === 'locacao' ? 'R$ / mês' : 'R$ unidade'}
                     type="number"
@@ -488,7 +506,8 @@ export const LeadSheet: React.FC<LeadSheetProps> = ({
               {available.map((entry) => (
                 <button key={entry.name} type="button" onClick={() => addItem(entry.name)}>
                   <Plus className="h-3 w-3" />
-                  {entry.name}
+                  <span>{entry.name}</span>
+                  <small className="font-mono text-[9px] opacity-70">{entry.code}</small>
                 </button>
               ))}
             </div>

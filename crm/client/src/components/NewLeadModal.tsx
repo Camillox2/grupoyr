@@ -12,13 +12,13 @@ interface NewLeadModalProps {
 
 // Mesmo catalogo do site. O colchao pneumatico sai apenas em compra (item de
 // contato direto com a pele), entao o formulario nao deixa marcar locacao.
-const CATALOG: { name: string; rent: boolean }[] = [
-  { name: 'Cama elétrica luxo', rent: true },
-  { name: 'Cama manual 3 movimentos', rent: true },
-  { name: 'Colchão pneumático', rent: false },
-  { name: 'Cadeira de banho', rent: true },
+const CATALOG: { name: string; code: string; rent: boolean }[] = [
+  { name: 'Cama elétrica luxo', code: 'YR-CAM-ELE', rent: true },
+  { name: 'Cama manual 3 movimentos', code: 'YR-CAM-MAN-3M', rent: true },
+  { name: 'Colchão pneumático', code: 'YR-COL-PNE', rent: false },
+  { name: 'Cadeira de banho', code: 'YR-CAD-BAN', rent: true },
 ]
-const EQUIPMENTS = CATALOG.map((item) => ({ value: item.name, label: item.name }))
+const EQUIPMENTS = CATALOG.map((item) => ({ value: item.name, label: `${item.name} · ${item.code}` }))
 const canRent = (name: string) => CATALOG.find((item) => item.name === name)?.rent ?? true
 
 const ORIGINS = [

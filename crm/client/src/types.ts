@@ -63,6 +63,7 @@ export interface LeadAddress {
 
 export interface QuoteItem {
   product: string
+  productCode?: string
   modality: 'locacao' | 'compra'
   qty: number
   unitPrice: number
@@ -108,6 +109,7 @@ export interface TemplateSelection {
 export interface Equipment {
   id: string
   serialNumber: string
+  productCode?: string
   name: string
   category: string
   status: 'disponivel' | 'alugado' | 'higienizacao' | 'manutencao'

@@ -29,6 +29,7 @@ export const EquipmentsView: React.FC<EquipmentsViewProps> = ({
     const matchesStatus = filterStatus === 'todos' || eq.status === filterStatus
     const matchesSearch =
       eq.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (eq.productCode || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
       eq.serialNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
       (eq.currentClientName && eq.currentClientName.toLowerCase().includes(searchTerm.toLowerCase()))
     return matchesStatus && matchesSearch
@@ -139,11 +140,16 @@ export const EquipmentsView: React.FC<EquipmentsViewProps> = ({
               className="p-5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm flex flex-col justify-between space-y-4 hover:border-blue-300 dark:hover:border-blue-700 transition-all"
             >
               <div>
-                {/* Serial & Status */}
+                {/* Código do produto, patrimônio e status */}
                 <div className="flex items-center justify-between">
-                  <span className="font-mono text-xs font-bold text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/60 px-2 py-0.5 rounded-md border border-blue-200 dark:border-blue-800">
-                    {eq.serialNumber}
-                  </span>
+                  <div className="min-w-0">
+                    <span className="block truncate font-mono text-xs font-bold text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/60 px-2 py-0.5 rounded-md border border-blue-200 dark:border-blue-800">
+                      {eq.productCode || 'Código pendente'}
+                    </span>
+                    <span className="mt-1 block font-mono text-[10px] text-slate-500 dark:text-slate-400">
+                      Patrimônio {eq.serialNumber}
+                    </span>
+                  </div>
                   <EquipmentStatus status={eq.status} />
                 </div>
 

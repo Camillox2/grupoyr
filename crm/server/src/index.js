@@ -609,30 +609,77 @@ app.get('/api/leads/:id/messages', requireAuth(), (req, res) => {
 /* ==========================================================================
    EQUIPMENT & INVENTORY ROUTES
    ========================================================================== */
+const PRODUCT_CATEGORY_CODES = {
+  Camas: 'CAM',
+  Macas: 'MAC',
+  Emergência: 'EMG',
+  Mobiliário: 'MOB',
+  Acessórios: 'ACE',
+}
+
+const normalizeProductCode = (value, name, category) => {
+  const clean = (input) => String(input || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toUpperCase()
+    .replace(/[^A-Z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+
+  const provided = clean(value)
+  if (provided) return (provided.startsWith('YR-') ? provided : `YR-${provided}`).slice(0, 32).replace(/-+$/, '')
+
+  const categoryCode = PRODUCT_CATEGORY_CODES[category] || 'PRO'
+  const modelCode = clean(name).split('-').filter(Boolean).slice(0, 3).join('-').slice(0, 20).replace(/-+$/, '') || 'ITEM'
+  return `YR-${categoryCode}-${modelCode}`.slice(0, 32).replace(/-+$/, '')
+}
+
+const nextPatrimonySequence = () => db.get('equipments').reduce((highest, item) => {
+  const sequence = Number(String(item.serialNumber || '').match(/(\d+)$/)?.[1] || 0)
+  return Math.max(highest, sequence)
+}, 0) + 1
+
 app.get('/api/equipments', requireAuth(), (req, res) => {
   res.json(db.get('equipments'))
 })
 
 app.post('/api/equipments', requireAuth(['admin']), (req, res) => {
   try {
-    const count = db.get('equipments').length + 1
-    const newEq = {
-      id: `eq_${Date.now()}`,
-      serialNumber: req.body.serialNumber || `YR-EQ-${String(count).padStart(3, '0')}`,
-      name: req.body.name,
-      category: req.body.category || 'Camas',
-      status: req.body.status || 'disponivel',
-      currentLeadId: null,
-      currentClientName: null,
-      monthlyPrice: Number(req.body.monthlyPrice) || 0,
-      salePrice: Number(req.body.salePrice) || 0,
-      location: req.body.location || 'Galpão Principal YR',
-      lastSanitized: new Date().toISOString(),
-      sanitizationCert: `LAUDO-ANV-2026-${Math.floor(100 + Math.random() * 900)}`,
+    const name = String(req.body.name || '').trim().slice(0, 160)
+    if (!name) throw new Error('Informe o nome ou modelo do equipamento.')
+
+    const quantity = Number(req.body.quantity ?? 1)
+    if (!Number.isInteger(quantity) || quantity < 1 || quantity > 100) {
+      throw new Error('A quantidade deve ser um número inteiro entre 1 e 100.')
     }
 
-    db.insert('equipments', newEq)
-    res.status(201).json(newEq)
+    const category = String(req.body.category || 'Camas').trim().slice(0, 40)
+    const productCode = normalizeProductCode(req.body.productCode, name, category)
+    let patrimony = nextPatrimonySequence()
+    const created = []
+
+    for (let index = 0; index < quantity; index += 1) {
+      const newEq = {
+        id: `eq_${randomUUID()}`,
+        serialNumber: quantity === 1 && req.body.serialNumber
+          ? String(req.body.serialNumber).trim().slice(0, 60)
+          : `YR-PAT-${String(patrimony++).padStart(4, '0')}`,
+        productCode,
+        name,
+        category,
+        status: req.body.status || 'disponivel',
+        currentLeadId: null,
+        currentClientName: null,
+        monthlyPrice: Number(req.body.monthlyPrice) || 0,
+        salePrice: Number(req.body.salePrice) || 0,
+        location: String(req.body.location || 'Galpão Principal YR').trim().slice(0, 120),
+        lastSanitized: new Date().toISOString(),
+        sanitizationCert: `LAUDO-ANVISA-${Math.floor(100 + Math.random() * 900)}`,
+      }
+      db.insert('equipments', newEq)
+      created.push(newEq)
+    }
+
+    res.status(201).json({ items: created, count: created.length, productCode })
   } catch (err) {
     res.status(400).json({ error: err.message })
   }
