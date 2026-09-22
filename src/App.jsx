@@ -6,6 +6,7 @@ import { useSelection, placeLabels } from './SelectionContext.jsx'
 
 const heroBed = '/products/cama-yr-01.jpg'
 const logoImage = '/yr-hospitalar-logo.jpg'
+const dcFoundryLogo = '/dcfoundry-digital-logo.png'
 
 const trustItems = [
   {
@@ -69,6 +70,17 @@ export function BrandLogo({ compact = false }) {
     <a className={`brand-logo ${compact ? 'brand-logo--compact' : ''}`} href="/#inicio" aria-label="Grupo YR Hospitalar - início">
       <span className="brand-original"><img src={logoImage} width="1280" height="1280" alt="Grupo YR Hospitalar — Soluções que transformam saúde" /></span>
     </a>
+  )
+}
+
+export function DeveloperCredit() {
+  return (
+    <div className="dc-credit">
+      <a href="https://dcfoundrydigital.com" target="_blank" rel="noreferrer noopener" aria-label="Desenvolvido e Mantido por DC Foundry Digital">
+        <img src={dcFoundryLogo} width="42" height="42" alt="DC Foundry Digital" />
+        <span>Desenvolvido e Mantido por <strong>DC Foundry Digital</strong></span>
+      </a>
+    </div>
   )
 }
 

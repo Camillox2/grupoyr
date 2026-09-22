@@ -19,10 +19,10 @@ export const hospitalBedGallery = [
 ]
 
 export const manualBedGallery = [
+  '/products/cama-manual-yr-04.jpg',
   '/products/cama-manual-yr-01.jpg',
   '/products/cama-manual-yr-02.jpg',
   '/products/cama-manual-yr-03.jpg',
-  '/products/cama-manual-yr-04.jpg',
 ]
 
 export const products = [

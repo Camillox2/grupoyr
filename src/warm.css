@@ -86,17 +86,17 @@ body,
 }
 .yr3-header .brand-original,
 .site-header .brand-original {
-  width: 78px;
-  height: 58px;
+  width: 94px;
+  height: 70px;
   border-radius: 8px;
   background: transparent;
 }
 .yr3-header .brand-original img,
 .site-header .brand-original img {
-  width: 92px;
-  height: 92px;
-  left: -7px;
-  top: -17px;
+  width: 110px;
+  height: 110px;
+  left: -8px;
+  top: -20px;
   mix-blend-mode: multiply;
 }
 .yr3-header .yr3-button,
@@ -383,6 +383,32 @@ body,
 .yr3-footer-bottom {
   color: #8a9490;
   border-top: 1px solid var(--areia);
+}
+
+.dc-credit {
+  padding: 20px 0 4px;
+  border-top: 1px solid var(--areia);
+  margin-top: 22px;
+}
+.dc-credit a {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--tinta-2);
+  font-size: 11px;
+  line-height: 1.4;
+  text-decoration: none;
+}
+.dc-credit img {
+  width: 28px;
+  height: 28px;
+  object-fit: contain;
+}
+.dc-credit strong {
+  color: var(--petroleo);
+}
+.dc-credit a:hover {
+  color: var(--petroleo-2);
 }
 
 /* ------------------------------------------------- paginas de equipamento */
