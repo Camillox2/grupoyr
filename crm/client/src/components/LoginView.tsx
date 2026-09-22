@@ -224,6 +224,41 @@ export const LoginView: React.FC = () => {
         <p className="text-center text-[11px]" style={{ color: 'var(--ink-faint)' }}>
           Grupo YR Hospitalar · Curitiba, PR · Uso interno
         </p>
+
+        <div
+          className="mx-auto mt-4 w-full max-w-[420px] border-t pt-4"
+          style={{ borderColor: 'var(--border-subtle)' }}
+        >
+          <a
+            href="https://dcfoundrydigital.com"
+            target="_blank"
+            rel="noreferrer noopener"
+            title="Desenvolvido e mantido por DC Foundry Digital"
+            className="inline-flex max-w-full items-center gap-3 transition-opacity hover:opacity-80"
+          >
+            <img
+              src="/dcfoundry-digital-logo.png"
+              alt="DC Foundry Digital"
+              className="h-10 w-10 shrink-0 object-contain sm:h-11 sm:w-11"
+            />
+            <span className="text-left text-[11px] leading-relaxed sm:text-[12px]" style={{ color: 'var(--ink-faint)' }}>
+              Desenvolvido e Mantido por{' '}
+              <span
+                className="font-extrabold"
+                style={{
+                  color: 'var(--yr-700)',
+                  textDecorationLine: 'underline',
+                  textDecorationStyle: 'wavy',
+                  textDecorationColor: 'var(--yr-500)',
+                  textDecorationThickness: '1.5px',
+                  textUnderlineOffset: '4px',
+                }}
+              >
+                DC Foundry Digital
+              </span>
+            </span>
+          </a>
+        </div>
       </main>
     </div>
   )
