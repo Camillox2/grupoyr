@@ -78,7 +78,7 @@ export function DeveloperCredit() {
     <div className="dc-credit">
       <a href="https://dcfoundrydigital.com" target="_blank" rel="noreferrer noopener" aria-label="Desenvolvido e Mantido por DC Foundry Digital">
         <img src={dcFoundryLogo} width="42" height="42" alt="DC Foundry Digital" />
-        <span>Desenvolvido e Mantido por <strong>DC Foundry Digital</strong></span>
+        <span className="dc-credit__label">Desenvolvido e Mantido por <strong className="dc-credit__name">DC Foundry Digital</strong></span>
       </a>
     </div>
   )

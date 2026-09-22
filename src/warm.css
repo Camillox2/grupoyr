@@ -393,22 +393,114 @@ body,
 .dc-credit a {
   display: inline-flex;
   align-items: center;
-  gap: 10px;
+  gap: 12px;
   color: var(--tinta-2);
   font-size: 11px;
   line-height: 1.4;
   text-decoration: none;
 }
 .dc-credit img {
-  width: 28px;
-  height: 28px;
+  width: 34px;
+  height: 34px;
   object-fit: contain;
 }
-.dc-credit strong {
+.dc-credit__label {
+  display: block;
+  max-width: 220px;
+}
+.dc-credit__name {
   color: var(--petroleo);
+  font-size: 1.05em;
+  font-weight: 800;
+  text-decoration-line: underline;
+  text-decoration-style: wavy;
+  text-decoration-color: var(--azul-600);
+  text-decoration-thickness: 1.5px;
+  text-underline-offset: 5px;
 }
 .dc-credit a:hover {
   color: var(--petroleo-2);
+}
+
+/* A assinatura da DC fica ao lado da marca YR no rodape desktop, com a
+   mesma linha ondulada azul usada na identidade da Foundry. */
+.yr3-footer-grid {
+  grid-template-columns: 1.55fr 1fr 1.1fr .8fr;
+}
+.footer-brand-pair {
+  display: flex;
+  align-items: center;
+  gap: 22px;
+  min-width: 0;
+}
+.yr3-footer-grid > .footer-brand-pair {
+  flex-direction: row;
+  align-items: center;
+  gap: 22px;
+  padding-top: 0;
+}
+.footer-brand-pair > .brand-logo {
+  flex: 0 0 auto;
+}
+.footer-brand-pair .dc-credit {
+  flex: 0 1 auto;
+  margin: 0;
+  padding: 0 0 0 22px;
+  border-top: 0;
+  border-left: 1px solid var(--areia);
+}
+.footer-brand-pair .dc-credit img {
+  width: 48px;
+  height: 48px;
+}
+.footer-brand-pair .dc-credit__label {
+  font-size: 13px;
+  max-width: 210px;
+}
+.footer-brand-pair .dc-credit__name {
+  font-size: 14px;
+}
+.detail-footer .footer-brand-pair {
+  flex-wrap: nowrap;
+  margin-top: 0;
+}
+
+@media (max-width: 860px) {
+  .yr3-footer-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+  .yr3-footer-grid > .footer-brand-pair {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 560px) {
+  .yr3-footer-grid {
+    grid-template-columns: 1fr;
+  }
+  .footer-brand-pair,
+  .yr3-footer-grid > .footer-brand-pair,
+  .detail-footer .footer-brand-pair {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 16px;
+  }
+  .footer-brand-pair .dc-credit {
+    width: 100%;
+    padding: 16px 0 0;
+    border-left: 0;
+    border-top: 1px solid var(--areia);
+  }
+  .footer-brand-pair .dc-credit img {
+    width: 38px;
+    height: 38px;
+  }
+  .footer-brand-pair .dc-credit__label {
+    font-size: 11px;
+  }
+  .footer-brand-pair .dc-credit__name {
+    font-size: 12px;
+  }
 }
 
 /* ------------------------------------------------- paginas de equipamento */
