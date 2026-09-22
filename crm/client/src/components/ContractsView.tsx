@@ -3,6 +3,9 @@ import {
   FileSignature,
   Plus,
   CheckCircle2,
+  ClipboardList,
+  ExternalLink,
+  Eye,
   Printer,
   ShieldCheck,
   Trash2,
@@ -12,7 +15,7 @@ import {
   Workflow,
   MessageSquare,
 } from 'lucide-react'
-import { Contract, Lead, Equipment } from '../types'
+import { Contract, Lead } from '../types'
 import { celebrateSignature } from './ui/celebrate'
 import { PageHeader, Notice, ActionButton } from './ui/PageHeader'
 import { ResponsiveTable, EmptyState } from './ui/ResponsiveTable'
@@ -21,6 +24,7 @@ import { brl } from './ui/Feedback'
 import { Toast, useToast } from './ui/Toast'
 import { authHeaders } from '../lib/conversation'
 import { ContractStatusModal } from './ContractStatusModal'
+import { Modal } from './ui/Modal'
 
 /** dd/mm sem o ano, que ocupa espaco e raramente muda dentro da lista. */
 const formatDate = (value: string) => {
@@ -33,10 +37,63 @@ const formatDate = (value: string) => {
   return parsed.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: '2-digit' })
 }
 
+type ContractChecklistItem = {
+  id: string
+  label: string
+  done: boolean
+  required: boolean
+}
+
+const getContractChecklist = (contract: Contract, lead?: Lead): ContractChecklistItem[] => {
+  const address = lead?.addressData
+  const hasAddress = Boolean(
+    (address?.street && address.number && address.city) ||
+      (contract.address && !/não informado|curitiba - pr/i.test(contract.address)),
+  )
+  const quoteItems = lead?.quoteItems || []
+  const hasItems = quoteItems.length > 0
+    ? quoteItems.every((item) => item.unitPrice > 0)
+    : Boolean(contract.equipmentNames && contract.monthlyValue > 0)
+
+  return [
+    { id: 'cliente', label: 'CPF ou CNPJ do cliente', done: Boolean((lead?.cpf || contract.clientCpf || '').replace(/[^\d]/g, '').length >= 11), required: true },
+    { id: 'endereco', label: 'Endereço de entrega completo', done: hasAddress, required: true },
+    { id: 'acesso', label: 'Acesso até o quarto definido', done: Boolean(lead?.access && lead.access !== 'nao_sei'), required: true },
+    { id: 'itens', label: 'Produto e valor definidos', done: hasItems, required: true },
+    { id: 'entrega', label: 'Data de entrega combinada', done: Boolean(lead?.deliveryDate || contract.startDate), required: true },
+    { id: 'periodo', label: 'Período de locação definido', done: contract.type === 'venda' || Number(lead?.rentalMonths) >= 1 || contract.startDate !== contract.endDate, required: contract.type === 'locacao' },
+    { id: 'proposta_aceita', label: 'Cliente aceitou a proposta', done: lead?.checklist?.proposta_aceita === true, required: true },
+    { id: 'documento_conferido', label: 'Documento do cliente conferido', done: lead?.checklist?.documento_conferido === true, required: true },
+    { id: 'pagamento_combinado', label: 'Forma de pagamento combinada', done: lead?.checklist?.pagamento_combinado === true, required: true },
+    { id: 'acesso_confirmado', label: 'Medidas de porta e escada confirmadas', done: lead?.checklist?.acesso_confirmado === true, required: false },
+  ]
+}
+
+const copyText = async (value: string): Promise<boolean> => {
+  try {
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(value)
+      return true
+    }
+  } catch {
+    // Alguns tunnels e navegadores bloqueiam a Clipboard API. Tenta o fallback abaixo.
+  }
+
+  const textarea = document.createElement('textarea')
+  textarea.value = value
+  textarea.setAttribute('readonly', '')
+  textarea.style.position = 'fixed'
+  textarea.style.opacity = '0'
+  document.body.appendChild(textarea)
+  textarea.select()
+  const copied = document.execCommand('copy')
+  textarea.remove()
+  return copied
+}
+
 interface ContractsViewProps {
   contracts: Contract[]
   leads: Lead[]
-  equipments: Equipment[]
   onRefreshContracts: () => void
   onOpenNewContractModal: () => void
   /** Abre a conversa do lead no atendimento. */
@@ -46,7 +103,6 @@ interface ContractsViewProps {
 export const ContractsView: React.FC<ContractsViewProps> = ({
   contracts,
   leads,
-  equipments,
   onRefreshContracts,
   onOpenNewContractModal,
   onOpenLead,
@@ -54,6 +110,11 @@ export const ContractsView: React.FC<ContractsViewProps> = ({
   const { toast, show: showToast, dismiss: dismissToast } = useToast()
   const [sendingLinkId, setSendingLinkId] = useState<string | null>(null)
   const [statusContract, setStatusContract] = useState<Contract | null>(null)
+  const [shareContract, setShareContract] = useState<Contract | null>(null)
+  const [previewContract, setPreviewContract] = useState<Contract | null>(null)
+  const [checklistContract, setChecklistContract] = useState<Contract | null>(null)
+  const [shareCopied, setShareCopied] = useState(false)
+  const [shareError, setShareError] = useState<string | null>(null)
 
   // Manda o link de assinatura direto no WhatsApp do lead do contrato.
   const handleSendLink = async (contract: Contract) => {
@@ -64,12 +125,16 @@ export const ContractsView: React.FC<ContractsViewProps> = ({
       const data = await response.json().catch(() => null)
       const openChat = data?.leadId && onOpenLead ? { label: 'Abrir conversa', onClick: () => onOpenLead(data.leadId) } : undefined
       if (!response.ok) {
+        setShareContract(contract)
         showToast({
           tone: 'alert',
           message: data?.error || 'Não foi possível enviar o link.',
           action: data?.code === 'window_closed' && onOpenLead ? { label: 'Abrir conversa', onClick: () => onOpenLead(contract.leadId) } : undefined,
         })
         return
+      }
+      if (!data.delivered) {
+        setShareContract(contract)
       }
       showToast(
         data.delivered
@@ -125,6 +190,10 @@ export const ContractsView: React.FC<ContractsViewProps> = ({
     return `${baseUrl}/assinar/${encodeURIComponent(contract.signingToken)}`
   }
 
+  const getContractHtmlUrl = (contract: Contract) => contract.signingToken
+    ? `/api/contracts/signing/${encodeURIComponent(contract.signingToken)}/html`
+    : `/api/contracts/${contract.id}/html`
+
   const handleCopySigningLink = async (contract: Contract) => {
     const signingUrl = getSigningUrl(contract)
     if (!signingUrl) {
@@ -133,7 +202,8 @@ export const ContractsView: React.FC<ContractsViewProps> = ({
     }
 
     try {
-      await navigator.clipboard.writeText(signingUrl)
+      const copied = await copyText(signingUrl)
+      if (!copied) throw new Error('clipboard unavailable')
       setCopiedLinkId(contract.id)
       setLinkError(null)
       setTimeout(() => setCopiedLinkId(null), 3500)
@@ -350,6 +420,41 @@ export const ContractsView: React.FC<ContractsViewProps> = ({
             </button>
             )}
 
+            <button
+              onClick={() => {
+                setShareError(null)
+                setShareCopied(false)
+                setShareContract(contract)
+              }}
+              disabled={!contract.signingToken}
+              className="inline-flex items-center gap-1.5 rounded-[8px] px-2.5 py-2 text-[11px] font-bold transition-colors disabled:opacity-40"
+              style={{ background: 'var(--surface-sunken)', color: 'var(--ink-muted)', border: '1px solid var(--border-subtle)' }}
+              title="Abrir as opções de envio e compartilhamento"
+            >
+              <Send className="h-3.5 w-3.5" />
+              Compartilhar
+            </button>
+
+            <button
+              onClick={() => setPreviewContract(contract)}
+              className="inline-flex items-center gap-1.5 rounded-[8px] px-2.5 py-2 text-[11px] font-bold transition-colors"
+              style={{ background: 'var(--surface-sunken)', color: 'var(--ink-muted)', border: '1px solid var(--border-subtle)' }}
+              title="Ver o template preenchido do contrato"
+            >
+              <Eye className="h-3.5 w-3.5" />
+              Ver contrato
+            </button>
+
+            <button
+              onClick={() => setChecklistContract(contract)}
+              className="inline-flex items-center gap-1.5 rounded-[8px] px-2.5 py-2 text-[11px] font-bold transition-colors"
+              style={{ background: 'var(--yr-050)', color: 'var(--yr-700)', border: '1px solid var(--yr-100)' }}
+              title="Conferir o checklist de fechamento deste contrato"
+            >
+              <ClipboardList className="h-3.5 w-3.5" />
+              Checklist
+            </button>
+
             {contract.status === 'pendente_assinatura' && (
               <button
                 onClick={() => {
@@ -362,26 +467,6 @@ export const ContractsView: React.FC<ContractsViewProps> = ({
                 Assinar na tela
               </button>
             )}
-
-            <a
-              href={
-                contract.signingToken
-                  ? `/api/contracts/signing/${encodeURIComponent(contract.signingToken)}/html`
-                  : `/api/contracts/${contract.id}/html`
-              }
-              target="_blank"
-              rel="noreferrer"
-              className="inline-flex items-center gap-1.5 rounded-[8px] px-2.5 py-2 text-[11px] font-bold transition-colors"
-              style={{
-                background: 'var(--surface-sunken)',
-                color: 'var(--ink-muted)',
-                border: '1px solid var(--border-subtle)',
-              }}
-              title="Abrir o contrato completo para conferir ou imprimir"
-            >
-              <Printer className="h-3.5 w-3.5" />
-              Imprimir
-            </a>
 
             {onOpenLead && contract.leadId && (
               <button
@@ -419,6 +504,191 @@ export const ContractsView: React.FC<ContractsViewProps> = ({
         }}
       />
       <Toast toast={toast} onDismiss={dismissToast} />
+
+      {shareContract && (
+        <Modal
+          open
+          onClose={() => setShareContract(null)}
+          title={`Enviar ${shareContract.number}`}
+          subtitle={`Link de assinatura para ${shareContract.clientName}`}
+          icon={<Send className="h-4 w-4" />}
+          size="md"
+          footer={(
+            <div className="flex flex-wrap justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setShareContract(null)}
+                className="rounded-xl border px-4 py-2.5 text-xs font-bold"
+                style={{ borderColor: 'var(--border-subtle)', color: 'var(--ink-muted)' }}
+              >
+                Fechar
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  const current = shareContract
+                  setShareContract(null)
+                  void handleSendLink(current)
+                }}
+                disabled={sendingLinkId === shareContract.id}
+                className="inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-xs font-extrabold disabled:opacity-50"
+                style={{ background: 'var(--yr-700)', color: 'var(--ink-on-brand)' }}
+              >
+                <Send className="h-3.5 w-3.5" />
+                {sendingLinkId === shareContract.id ? 'Enviando...' : 'Enviar pelo WhatsApp'}
+              </button>
+            </div>
+          )}
+        >
+          <div className="space-y-4">
+            <p className="text-[12.5px] leading-relaxed" style={{ color: 'var(--ink-muted)' }}>
+              Copie o endereço abaixo e envie por WhatsApp, e-mail ou outro canal. O cliente abre o link no celular, confere o contrato e assina na própria tela.
+            </p>
+            <div>
+              <label className="mb-1.5 block text-[11px] font-extrabold uppercase tracking-[0.06em]" style={{ color: 'var(--ink-faint)' }}>
+                Link público de assinatura
+              </label>
+              <input
+                readOnly
+                value={getSigningUrl(shareContract)}
+                onFocus={(event) => event.currentTarget.select()}
+                className="w-full rounded-xl border px-3 py-3 text-[12px] font-semibold outline-none"
+                style={{ background: 'var(--surface-sunken)', borderColor: 'var(--border-subtle)', color: 'var(--ink)' }}
+              />
+            </div>
+            {shareError && <p className="text-xs font-semibold" style={{ color: 'var(--alert)' }}>{shareError}</p>}
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={async () => {
+                  const copied = await copyText(getSigningUrl(shareContract))
+                  if (copied) {
+                    setShareCopied(true)
+                    setShareError(null)
+                    window.setTimeout(() => setShareCopied(false), 3500)
+                  } else {
+                    setShareError('Não foi possível copiar automaticamente. Clique no campo, selecione o endereço e use Ctrl+C.')
+                  }
+                }}
+                className="inline-flex items-center gap-2 rounded-xl border px-3.5 py-2.5 text-xs font-extrabold"
+                style={{ background: 'var(--yr-050)', borderColor: 'var(--yr-100)', color: 'var(--yr-700)' }}
+              >
+                {shareCopied ? <CheckCircle2 className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+                {shareCopied ? 'Link copiado' : 'Copiar link'}
+              </button>
+              <a
+                href={getSigningUrl(shareContract)}
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex items-center gap-2 rounded-xl border px-3.5 py-2.5 text-xs font-extrabold"
+                style={{ background: 'var(--surface-raised)', borderColor: 'var(--border-subtle)', color: 'var(--ink-muted)' }}
+              >
+                <ExternalLink className="h-4 w-4" />
+                Abrir link
+              </a>
+            </div>
+          </div>
+        </Modal>
+      )}
+
+      {previewContract && (
+        <Modal
+          open
+          onClose={() => setPreviewContract(null)}
+          title={`Template do contrato ${previewContract.number}`}
+          subtitle={`${previewContract.clientName} · confira antes de enviar ou imprimir`}
+          icon={<Eye className="h-4 w-4" />}
+          size="lg"
+          footer={(
+            <div className="flex flex-wrap justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setPreviewContract(null)}
+                className="rounded-xl border px-4 py-2.5 text-xs font-bold"
+                style={{ borderColor: 'var(--border-subtle)', color: 'var(--ink-muted)' }}
+              >
+                Fechar
+              </button>
+              <a
+                href={getContractHtmlUrl(previewContract)}
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-xs font-extrabold"
+                style={{ background: 'var(--yr-700)', color: 'var(--ink-on-brand)' }}
+              >
+                <Printer className="h-3.5 w-3.5" />
+                Abrir para imprimir
+              </a>
+            </div>
+          )}
+        >
+          <div className="overflow-hidden rounded-xl border" style={{ borderColor: 'var(--border-subtle)', background: '#fff' }}>
+            <iframe
+              title={`Template preenchido do contrato ${previewContract.number}`}
+              src={getContractHtmlUrl(previewContract)}
+              className="h-[58vh] min-h-[420px] w-full bg-white sm:h-[62vh]"
+            />
+          </div>
+        </Modal>
+      )}
+
+      {checklistContract && (
+        <Modal
+          open
+          onClose={() => setChecklistContract(null)}
+          title={`Checklist ${checklistContract.number}`}
+          subtitle={`Conferência de fechamento · ${checklistContract.clientName}`}
+          icon={<ClipboardList className="h-4 w-4" />}
+          size="md"
+          footer={(
+            <div className="flex justify-end">
+              <button
+                type="button"
+                onClick={() => setChecklistContract(null)}
+                className="rounded-xl border px-4 py-2.5 text-xs font-bold"
+                style={{ borderColor: 'var(--border-subtle)', color: 'var(--ink-muted)' }}
+              >
+                Fechar
+              </button>
+            </div>
+          )}
+        >
+          {(() => {
+            const lead = leads.find((item) => item.id === checklistContract.leadId)
+            const items = getContractChecklist(checklistContract, lead)
+            const done = items.filter((item) => item.done).length
+            const requiredMissing = items.filter((item) => item.required && !item.done).length
+            return (
+              <div className="space-y-4">
+                <div className="rounded-xl border p-3.5" style={{ background: requiredMissing ? 'var(--wait-surface)' : 'var(--ok-surface)', borderColor: requiredMissing ? 'var(--wait-border)' : 'var(--ok-border)' }}>
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="text-sm font-extrabold" style={{ color: requiredMissing ? 'var(--wait)' : 'var(--ok)' }}>
+                      {requiredMissing ? `${requiredMissing} item(ns) obrigatório(s) pendente(s)` : 'Checklist obrigatório completo'}
+                    </span>
+                    <span className="tnum text-xs font-bold" style={{ color: 'var(--ink-muted)' }}>{done}/{items.length}</span>
+                  </div>
+                  <div className="mt-2 h-2 overflow-hidden rounded-full" style={{ background: 'var(--surface-raised)' }}>
+                    <div className="h-full rounded-full" style={{ width: `${Math.round((done / items.length) * 100)}%`, background: requiredMissing ? 'var(--wait)' : 'var(--ok)' }} />
+                  </div>
+                </div>
+                <ul className="space-y-2">
+                  {items.map((item) => (
+                    <li key={item.id} className="flex items-start gap-3 rounded-xl border px-3 py-2.5" style={{ borderColor: 'var(--border-subtle)', background: 'var(--surface-sunken)' }}>
+                      <span className="mt-0.5 grid h-5 w-5 shrink-0 place-items-center rounded-full" style={{ background: item.done ? 'var(--ok)' : 'var(--surface-raised)', color: item.done ? 'var(--ink-on-brand)' : 'var(--ink-faint)', border: item.done ? 'none' : '1px solid var(--border-strong)' }}>
+                        {item.done ? <CheckCircle2 className="h-3.5 w-3.5" /> : <span className="h-1.5 w-1.5 rounded-full" style={{ background: 'currentColor' }} />}
+                      </span>
+                      <span className="min-w-0 text-[12.5px] font-semibold" style={{ color: item.done ? 'var(--ink)' : 'var(--ink-muted)' }}>
+                        {item.label}
+                        {!item.required && <em className="ml-1 not-italic text-[11px]" style={{ color: 'var(--ink-faint)' }}>opcional</em>}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )
+          })()}
+        </Modal>
+      )}
 
       {/* Signature Modal */}
       {signingContract && (

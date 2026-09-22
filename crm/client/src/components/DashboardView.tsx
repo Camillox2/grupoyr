@@ -16,7 +16,6 @@ import {
   Sparkles,
   ArrowRight,
   ShieldCheck,
-  Globe,
   Activity,
   Calendar,
   ArrowUpRight,
@@ -37,6 +36,7 @@ import { Mark } from './ui/PageHeader'
 import { CountUp, brl } from './ui/Feedback'
 import { useAuth } from '../contexts/AuthContext'
 import { useSocket } from '../contexts/SocketContext'
+import { SiteLinkActions } from './SiteLinkActions'
 
 interface DashboardViewProps {
   leads: Lead[]
@@ -250,7 +250,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 
         <div className="flex flex-wrap items-center gap-2">
           <button
-            onClick={!isConnected ? onOpenQr : undefined}
+            onClick={onOpenQr}
             className="action-btn action-btn--ghost inline-flex items-center gap-2 rounded-full px-4 py-2.5 text-[12px] font-extrabold"
           >
             <span
@@ -270,16 +270,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             <Bot className="h-3.5 w-3.5" style={{ color: 'var(--yr-500)' }} />
             Testar a IA
           </button>
-          <a
-            href="https://site.grupoyrhospitalar.com.br/"
-            target="_blank"
-            rel="noreferrer"
-            className="action-btn action-btn--ghost inline-flex items-center gap-2 rounded-full px-4 py-2.5 text-[12px] font-extrabold"
-          >
-            <Globe className="h-3.5 w-3.5" style={{ color: 'var(--yr-500)' }} />
-            Ver o site
-            <ExternalLink className="h-3 w-3 opacity-50" />
-          </a>
+          <SiteLinkActions />
         </div>
       </section>
 

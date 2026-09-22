@@ -4,6 +4,7 @@ import { useTheme } from '../contexts/ThemeContext'
 import { useAuth } from '../contexts/AuthContext'
 import { useSocket } from '../contexts/SocketContext'
 import { useIsMobile } from '../hooks/useMediaQuery'
+import { SiteLinkActions } from './SiteLinkActions'
 
 interface NavbarProps {
   onOpenQr: () => void
@@ -58,7 +59,7 @@ export const Navbar: React.FC<NavbarProps> = ({ onOpenQr, onToggleMobileMenu }) 
           style={{ background: '#fffdf9' }}
         >
           <img
-            src="https://site.grupoyrhospitalar.com.br/yr-hospitalar-logo.jpg"
+            src="/yr-hospitalar-logo.jpg"
             alt=""
             className="h-full w-full object-contain"
             style={{ mixBlendMode: 'multiply' }}
@@ -115,15 +116,15 @@ export const Navbar: React.FC<NavbarProps> = ({ onOpenQr, onToggleMobileMenu }) 
         )}
 
         <button
-          onClick={!isConnected ? onOpenQr : undefined}
-          disabled={isConnected}
+          onClick={onOpenQr}
+          disabled={false}
           className="flex items-center justify-center gap-2 rounded-[12px] px-3 py-2 text-[11.5px] font-extrabold transition-colors disabled:cursor-default sm:min-w-[178px]"
           style={
             isConnected
               ? { background: 'rgba(63, 191, 168, 0.16)', color: '#7fe0cf', border: '1px solid rgba(63, 191, 168, 0.4)' }
               : { background: '#fffdf9', color: '#102a4c', border: '1px solid #fffdf9' }
           }
-          title={isConnected ? 'WhatsApp conectado' : 'Conectar o WhatsApp por código ou QR Code'}
+          title={isConnected ? 'Abrir opções e desconectar o WhatsApp' : 'Conectar o WhatsApp por código ou QR Code'}
         >
           <span
             className="h-2 w-2 shrink-0 rounded-full"
@@ -143,6 +144,8 @@ export const Navbar: React.FC<NavbarProps> = ({ onOpenQr, onToggleMobileMenu }) 
         >
           {theme === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
         </button>
+
+        <SiteLinkActions compact />
 
         {user && (
           <div className="flex items-center gap-2 pl-1">

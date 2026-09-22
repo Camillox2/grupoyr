@@ -46,7 +46,14 @@ export function createContract({
   const equipments = equipmentIds.map((id) => db.find('equipments', (e) => e.id === id)).filter(Boolean)
   const equipmentNames = equipments.map((e) => `${e.name} (Patr. ${e.serialNumber})`).join(', ') || lead.equipmentInterest
 
-  const contractCount = db.get('contracts').length + 1
+  const contractCount = db.get('contracts').reduce((highest, item) => {
+    const sequence = Number(String(item.number || '').match(/-(\d+)$/)?.[1] || 0)
+    return Math.max(highest, sequence)
+  }, 0) + 1
+  const normalizedMonthlyValue = Number(monthlyValue)
+  if (!Number.isFinite(normalizedMonthlyValue) || normalizedMonthlyValue <= 0) {
+    throw new Error('Informe um valor de contrato maior que zero')
+  }
   const contractNumber = `CTR-2026-${String(contractCount).padStart(3, '0')}`
 
   const contract = {
@@ -62,7 +69,7 @@ export function createContract({
     equipmentNames,
     startDate: startDate || new Date().toISOString().split('T')[0],
     endDate: endDate || new Date(Date.now() + 30 * 86400000).toISOString().split('T')[0],
-    monthlyValue: Number(monthlyValue) || Number(lead.value) || 480.0,
+    monthlyValue: normalizedMonthlyValue,
     customClauses,
     status: 'pendente_assinatura',
     signedAt: null,

@@ -16,6 +16,7 @@ export const QrModal: React.FC<QrModalProps> = ({ open, onClose }) => {
   const [pairingError, setPairingError] = useState<string | null>(null)
   const [copied, setCopied] = useState(false)
   const [resetting, setResetting] = useState(false)
+  const [disconnecting, setDisconnecting] = useState(false)
 
   useEffect(() => {
     setPairingCode(whatsappStatus.pairingCode || null)
@@ -80,6 +81,23 @@ export const QrModal: React.FC<QrModalProps> = ({ open, onClose }) => {
     }
   }
 
+  const handleDisconnect = async () => {
+    setDisconnecting(true)
+    setPairingError(null)
+    try {
+      const res = await fetch('/api/whatsapp/disconnect', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${localStorage.getItem('yr_crm_token') || ''}` },
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Não foi possível desconectar o telefone.')
+    } catch (error: any) {
+      setPairingError(error.message || 'Não foi possível desconectar o telefone.')
+    } finally {
+      setDisconnecting(false)
+    }
+  }
+
   return (
     <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
       <div className="w-full max-w-md bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-2xl p-6 space-y-4 text-center">
@@ -120,6 +138,20 @@ export const QrModal: React.FC<QrModalProps> = ({ open, onClose }) => {
             <p className="text-[11px] text-slate-400 max-w-xs mx-auto">
               Todas as mensagens recebidas e disparadas passam agora pela triagem automática da IA e notificações no CRM.
             </p>
+            <button
+              type="button"
+              onClick={handleDisconnect}
+              disabled={disconnecting}
+              className="inline-flex items-center justify-center gap-2 rounded-xl border border-rose-200 bg-rose-50 px-4 py-2.5 text-xs font-bold text-rose-700 transition-colors hover:bg-rose-100 disabled:opacity-50"
+            >
+              <X className="h-3.5 w-3.5" />
+              {disconnecting ? 'Desconectando...' : 'Desconectar este telefone'}
+            </button>
+            {pairingError && (
+              <p className="mx-auto max-w-xs rounded-xl border border-rose-200 bg-rose-50 p-2.5 text-xs text-rose-700">
+                {pairingError}
+              </p>
+            )}
           </div>
         ) : (
           <div className="space-y-4">

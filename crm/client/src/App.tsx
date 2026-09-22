@@ -168,7 +168,7 @@ function MainContent() {
       <div className="flex h-[100dvh] flex-col items-center justify-center gap-4" style={{ background: 'var(--surface-canvas)', color: 'var(--ink-muted)' }}>
         <div className="w-16 h-16 rounded-xl bg-white border border-slate-200 flex items-center justify-center overflow-hidden shadow-sm">
           <img
-            src="https://site.grupoyrhospitalar.com.br/yr-hospitalar-logo.jpg"
+            src="/yr-hospitalar-logo.jpg"
             alt="Grupo YR Hospitalar"
             className="w-full h-full object-contain"
           />
@@ -190,7 +190,7 @@ function MainContent() {
       <div className="flex h-[100dvh] flex-col items-center justify-center gap-3" style={{ background: 'var(--surface-canvas)', color: 'var(--ink-muted)' }}>
         <div className="w-14 h-14 rounded-xl bg-white border border-slate-200 flex items-center justify-center overflow-hidden shadow-sm">
           <img
-            src="https://site.grupoyrhospitalar.com.br/yr-hospitalar-logo.jpg"
+            src="/yr-hospitalar-logo.jpg"
             alt="Grupo YR Hospitalar"
             className="w-full h-full object-contain"
           />
@@ -306,7 +306,6 @@ function MainContent() {
               <ContractsView
                 contracts={contracts}
                 leads={leads}
-                equipments={equipments}
                 onRefreshContracts={fetchAllData}
                 onOpenLead={openLeadConversation}
                 onOpenNewContractModal={() => {

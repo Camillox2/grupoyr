@@ -1,9 +1,10 @@
 import React, { useState } from 'react'
-import { Mail, Lock, Eye, EyeOff, ArrowRight, Sun, Moon, AlertCircle, ExternalLink, LoaderCircle } from 'lucide-react'
+import { Mail, Lock, Eye, EyeOff, ArrowRight, Sun, Moon, AlertCircle, LoaderCircle } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 import { useTheme } from '../contexts/ThemeContext'
 import { BedArt } from './ui/BedArt'
 import { Mark } from './ui/PageHeader'
+import { SiteLinkActions } from './SiteLinkActions'
 
 /**
  * Login na linguagem do site: painel azul-marinho com a cama vetorial animada
@@ -58,7 +59,7 @@ export const LoginView: React.FC = () => {
         <div className="flex items-center gap-3 p-8">
           <div className="grid h-11 w-11 place-items-center overflow-hidden rounded-[13px]" style={{ background: '#fffdf9' }}>
             <img
-              src="https://site.grupoyrhospitalar.com.br/yr-hospitalar-logo.jpg"
+              src="/yr-hospitalar-logo.jpg"
               alt=""
               className="h-full w-full object-contain"
               style={{ mixBlendMode: 'multiply' }}
@@ -89,7 +90,7 @@ export const LoginView: React.FC = () => {
           <div className="flex items-center gap-2.5 lg:invisible">
             <div className="grid h-10 w-10 place-items-center overflow-hidden rounded-[12px]" style={{ background: '#fffdf9', border: '1px solid var(--border-subtle)' }}>
               <img
-                src="https://site.grupoyrhospitalar.com.br/yr-hospitalar-logo.jpg"
+                src="/yr-hospitalar-logo.jpg"
                 alt=""
                 className="h-full w-full object-contain"
                 style={{ mixBlendMode: 'multiply' }}
@@ -101,15 +102,9 @@ export const LoginView: React.FC = () => {
           </div>
 
           <div className="flex items-center gap-2">
-            <a
-              href="https://site.grupoyrhospitalar.com.br/"
-              target="_blank"
-              rel="noreferrer"
-              className="action-btn action-btn--ghost hidden items-center gap-2 rounded-full px-4 py-2.5 text-[12px] font-extrabold sm:inline-flex"
-            >
-              Ver o site
-              <ExternalLink className="h-3 w-3 opacity-60" />
-            </a>
+            <div className="hidden sm:block">
+              <SiteLinkActions compact />
+            </div>
             <button
               onClick={(event) => {
                 const box = event.currentTarget.getBoundingClientRect()
@@ -126,10 +121,10 @@ export const LoginView: React.FC = () => {
         {/* No celular a cama aparece numa faixa compacta: e a assinatura da marca
             e no desktop ela vive no painel ao lado. */}
         <div
-          className="mx-auto mt-5 w-full max-w-[420px] overflow-hidden rounded-[24px] px-6 pt-4 lg:hidden"
+          className="mx-auto mt-5 flex min-h-[170px] w-full max-w-[420px] flex-none items-center justify-center overflow-hidden rounded-[24px] px-6 py-2 lg:hidden"
           style={{ background: 'var(--brand-panel)' }}
         >
-          <BedArt className="mx-auto block h-[150px] w-auto max-w-full" />
+          <BedArt className="mx-auto block h-[150px] w-auto max-w-full shrink-0" />
         </div>
 
         <div className="mx-auto flex w-full max-w-[420px] flex-1 flex-col justify-center py-8 lg:py-10">

@@ -126,7 +126,7 @@ export function ResponsiveTable<T>({
         boxShadow: 'var(--shadow-sm)',
       }}
     >
-      <table className="w-full text-left text-[13px]">
+      <table className="w-full table-fixed text-left text-[13px]">
         {caption && <caption className="sr-only">{caption}</caption>}
         <thead>
           <tr
@@ -145,7 +145,7 @@ export function ResponsiveTable<T>({
               </th>
             ))}
             {actions && (
-              <th scope="col" className="px-4 py-3 text-right text-[11px] font-extrabold uppercase tracking-[0.05em]" style={{ color: 'var(--ink-faint)' }}>
+                <th scope="col" className="w-[34%] px-4 py-3 text-right text-[11px] font-extrabold uppercase tracking-[0.05em]" style={{ color: 'var(--ink-faint)' }}>
                 Ações
               </th>
             )}
@@ -165,15 +165,15 @@ export function ResponsiveTable<T>({
                 {columns.map((column) => (
                   <td
                     key={column.header}
-                    className={`px-4 py-3 align-middle ${column.align === 'right' ? 'text-right' : ''}`}
+                    className={`min-w-0 px-4 py-3 align-middle ${column.align === 'right' ? 'text-right' : ''}`}
                     style={{ color: 'var(--ink)' }}
                   >
                     {column.cell(item)}
                   </td>
                 ))}
                 {actions && (
-                  <td className="px-4 py-3 text-right">
-                    <div className="flex justify-end gap-2">{actions(item)}</div>
+                  <td className="w-[34%] max-w-[420px] px-3 py-3 align-top text-right">
+                    <div className="flex min-w-0 flex-wrap justify-end gap-1.5">{actions(item)}</div>
                   </td>
                 )}
               </tr>

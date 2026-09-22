@@ -27,6 +27,7 @@ class WhatsAppService {
     this.activeProvider = 'baileys' // 'baileys' | 'meta'
     this.connectionAttempt = 0
     this.reconnectTimer = null
+    this.manualDisconnect = false
     this.lastError = null
     this.qrGeneratedAt = null
   }
@@ -82,7 +83,7 @@ class WhatsAppService {
   }
 
   scheduleReconnect(delay = 3000) {
-    if (this.reconnectTimer || this.activeProvider !== 'baileys') return
+    if (this.manualDisconnect || this.reconnectTimer || this.activeProvider !== 'baileys') return
     this.reconnectTimer = setTimeout(() => {
       this.reconnectTimer = null
       this.initBaileys()
@@ -90,6 +91,7 @@ class WhatsAppService {
   }
 
   async resetBaileysSession() {
+    this.manualDisconnect = false
     this.connectionAttempt += 1
     this.socket = null
     this.qrCode = null
@@ -98,6 +100,34 @@ class WhatsAppService {
     this.lastError = null
     this.archiveIncompleteSession()
     await this.initBaileys()
+  }
+
+  async disconnectBaileysSession() {
+    this.manualDisconnect = true
+    this.connectionAttempt += 1
+    if (this.reconnectTimer) {
+      clearTimeout(this.reconnectTimer)
+      this.reconnectTimer = null
+    }
+
+    const socket = this.socket
+    this.socket = null
+    this.qrCode = null
+    this.pairingCode = null
+    this.connectedNumber = null
+    this.status = 'disconnected'
+    this.lastError = 'Sessão do WhatsApp desconectada pelo administrador.'
+    this.broadcastStatus()
+
+    try {
+      if (socket?.logout) await socket.logout()
+      else socket?.end?.(new Error('Sessão encerrada pelo administrador'))
+    } catch (error) {
+      console.warn('[WhatsApp/Baileys] A sessão local foi encerrada; o logout remoto retornou erro:', error.message)
+    } finally {
+      this.archiveIncompleteSession()
+      this.broadcastStatus()
+    }
   }
 
   async initBaileys() {

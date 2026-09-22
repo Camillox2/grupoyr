@@ -49,11 +49,15 @@ export const NewContractModal: React.FC<NewContractModalProps> = ({
     if (wasOpen.current) return
     wasOpen.current = true
 
+    const firstEquipment = equipments.find((item) => item.status === 'disponivel') || equipments[0]
+    const leadValue = Number(lead?.value)
+    const equipmentValue = Number(firstEquipment?.monthlyPrice || firstEquipment?.salePrice)
+
     setSelectedLeadId(lead?.id || leads[0]?.id || '')
-    setSelectedEquipmentId(
-      equipments.find((item) => item.status === 'disponivel')?.id || equipments[0]?.id || '',
-    )
-    setMonthlyValue(lead?.value ? String(lead.value) : '480')
+    setSelectedEquipmentId(firstEquipment?.id || '')
+    // Leads antigos podem ter valor zero ou centavos de teste. Prefira o
+    // valor do equipamento quando o valor do lead não representa uma moeda.
+    setMonthlyValue(String(leadValue >= 1 ? leadValue : equipmentValue >= 1 ? equipmentValue : 480))
     setContractType(lead?.modality === 'compra' ? 'venda' : 'locacao')
     setError(null)
   }, [open, lead, leads, equipments])
@@ -189,8 +193,9 @@ export const NewContractModal: React.FC<NewContractModalProps> = ({
         <TextField
           label={contractType === 'locacao' ? 'Valor mensal acordado (R$)' : 'Valor da venda (R$)'}
           type="number"
-          inputMode="numeric"
-          min={0}
+          inputMode="decimal"
+          min={0.01}
+          step={0.01}
           value={monthlyValue}
           onChange={(event) => setMonthlyValue(event.target.value)}
         />

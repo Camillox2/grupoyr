@@ -148,7 +148,7 @@ export const PublicContractSigningView: React.FC<PublicContractSigningViewProps>
     <div className="min-h-screen bg-[#edf3f8] text-slate-900">
       <header className="border-b border-slate-200 bg-white">
         <div className="mx-auto flex max-w-6xl items-center gap-3 px-4 py-4 sm:px-6">
-          <img src="https://site.grupoyrhospitalar.com.br/yr-hospitalar-logo.jpg" alt="Grupo YR Hospitalar" className="h-11 w-11 rounded-xl border border-slate-200 object-contain" />
+          <img src="/yr-hospitalar-logo.jpg" alt="Grupo YR Hospitalar" className="h-11 w-11 rounded-xl border border-slate-200 object-contain" />
           <div>
             <p className="text-sm font-bold text-[#102a4c]">Grupo YR Hospitalar</p>
             <p className="text-xs text-slate-500">Assinatura eletrônica de contrato</p>

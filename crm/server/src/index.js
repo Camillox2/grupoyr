@@ -171,6 +171,16 @@ app.post('/api/whatsapp/reset-session', requireAuth(['admin']), async (_req, res
   }
 })
 
+app.post('/api/whatsapp/disconnect', requireAuth(['admin']), async (_req, res) => {
+  try {
+    await whatsappService.disconnectBaileysSession()
+    res.json({ ok: true, message: 'Telefone desconectado do CRM.' })
+  } catch (err) {
+    console.error('[WhatsApp/Baileys] Erro ao desconectar sessão:', err)
+    res.status(500).json({ error: 'Não foi possível desconectar o telefone do WhatsApp.' })
+  }
+})
+
 app.post('/api/whatsapp/send', requireAuth(), async (req, res) => {
   try {
     const { leadId } = req.body
