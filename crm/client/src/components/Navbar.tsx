@@ -1,5 +1,5 @@
 import React from 'react'
-import { Sun, Moon, QrCode, Radio, LogOut, ShieldCheck, Menu } from 'lucide-react'
+import { Sun, Moon, QrCode, Radio, LogOut, ShieldCheck, Menu, ExternalLink } from 'lucide-react'
 import { useTheme } from '../contexts/ThemeContext'
 import { useAuth } from '../contexts/AuthContext'
 import { useSocket } from '../contexts/SocketContext'
@@ -144,6 +144,18 @@ export const Navbar: React.FC<NavbarProps> = ({ onOpenQr, onToggleMobileMenu }) 
         >
           {theme === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
         </button>
+
+        <a
+          href="https://dcfoundrydigital.com/admin"
+          target="_blank"
+          rel="noreferrer"
+          className="inline-flex items-center gap-1.5 rounded-[12px] px-3 py-2 text-[11.5px] font-extrabold"
+          style={ghost}
+          title="Abrir o painel administrativo da DC Foundry Digital"
+        >
+          <ExternalLink className="h-3.5 w-3.5" />
+          <span className="hidden lg:inline">Painel DC</span>
+        </a>
 
         <SiteLinkActions compact />
 
