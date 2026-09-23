@@ -13,6 +13,7 @@ import './room.css'
 import './warm.css'
 import './motion-sections.css'
 import './motion.css'
+import './header-brand-size.css'
 import { enableProductMorph, enableBlurUp } from './viewTransitions.js'
 
 enableProductMorph()

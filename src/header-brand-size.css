@@ -1,0 +1,14 @@
+/* Logo principal do cabeçalho: +25% no desktop, sem alterar o layout mobile. */
+@media (min-width: 901px) {
+  .yr3-header .brand-original {
+    width: 117.5px;
+    height: 87.5px;
+  }
+
+  .yr3-header .brand-original img {
+    width: 137.5px;
+    height: 137.5px;
+    left: -10px;
+    top: -25px;
+  }
+}
