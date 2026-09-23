@@ -10,6 +10,7 @@ import { KanbanView } from './components/KanbanView'
 import { WhatsAppChatView } from './components/WhatsAppChatView'
 import { EquipmentsView } from './components/EquipmentsView'
 import { ContractsView } from './components/ContractsView'
+import { ClientsView } from './components/ClientsView'
 import { FinanceView } from './components/FinanceView'
 import { BlogManagerView } from './components/BlogManagerView'
 import { SettingsView } from './components/SettingsView'
@@ -325,6 +326,14 @@ function MainContent() {
                   setContractLead(leads[0] || null)
                   setNewContractModalOpen(true)
                 }}
+              />
+            )}
+
+            {activeTab === 'clients' && (
+              <ClientsView
+                leads={leads}
+                contracts={contracts}
+                onOpenConversation={openLeadConversation}
               />
             )}
 

@@ -9,6 +9,7 @@ import {
   BookOpen,
   Settings,
   X,
+  UsersRound,
 } from 'lucide-react'
 import { useIsMobile } from '../hooks/useMediaQuery'
 
@@ -16,6 +17,7 @@ export type TabType =
   | 'dashboard'
   | 'kanban'
   | 'whatsapp'
+  | 'clients'
   | 'equipments'
   | 'contracts'
   | 'finance'
@@ -77,6 +79,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
           icon: MessageSquare,
           note: metrics.conversations ? `${metrics.conversations}` : undefined,
         },
+        { id: 'clients', label: 'Clientes', icon: UsersRound },
         {
           id: 'equipments',
           label: 'Equipamentos',

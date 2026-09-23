@@ -27,6 +27,8 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onOpenQr }) => {
   const [metaWabaId, setMetaWabaId] = useState('')
   const [metaAppSecret, setMetaAppSecret] = useState('')
   const [aiServicePrompt, setAiServicePrompt] = useState('')
+  const [settingsLoaded, setSettingsLoaded] = useState(false)
+  const [settingsLoadFailed, setSettingsLoadFailed] = useState(false)
   const [defaultLeadAssigneeId, setDefaultLeadAssigneeId] = useState('')
   const [users, setUsers] = useState<User[]>([])
   const [notificationPermission, setNotificationPermission] = useState(() => (
@@ -43,21 +45,23 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onOpenQr }) => {
         Authorization: `Bearer ${localStorage.getItem('yr_crm_token') || ''}`,
       },
     })
-      .then((res) => (res.ok ? res.json() : null))
-      .then((data) => {
-        if (data) {
-          setGeminiConfigured(data.geminiApiKey === '__configured__')
-          setGeminiApiKey(data.geminiApiKey === '__configured__' ? '' : data.geminiApiKey || '')
-          setMetaTokenConfigured(data.metaConfig?.accessToken === '__configured__')
-          setMetaToken(data.metaConfig?.accessToken === '__configured__' ? '' : data.metaConfig?.accessToken || '')
-          setMetaPhoneId(data.metaConfig?.phoneNumberId || '')
-          setMetaWabaId(data.metaConfig?.wabaId || '')
-          setMetaAppSecretConfigured(data.metaConfig?.appSecret === '__configured__')
-          setAiServicePrompt(data.aiServicePrompt || '')
-          setDefaultLeadAssigneeId(data.defaultLeadAssigneeId || '')
-        }
+      .then((res) => {
+        if (!res.ok) throw new Error('Não foi possível carregar as configurações.')
+        return res.json()
       })
-      .catch(() => {})
+      .then((data) => {
+        setGeminiConfigured(data.geminiApiKey === '__configured__')
+        setGeminiApiKey(data.geminiApiKey === '__configured__' ? '' : data.geminiApiKey || '')
+        setMetaTokenConfigured(data.metaConfig?.accessToken === '__configured__')
+        setMetaToken(data.metaConfig?.accessToken === '__configured__' ? '' : data.metaConfig?.accessToken || '')
+        setMetaPhoneId(data.metaConfig?.phoneNumberId || '')
+        setMetaWabaId(data.metaConfig?.wabaId || '')
+        setMetaAppSecretConfigured(data.metaConfig?.appSecret === '__configured__')
+        setAiServicePrompt(data.aiServicePrompt || '')
+        setDefaultLeadAssigneeId(data.defaultLeadAssigneeId || '')
+        setSettingsLoaded(true)
+      })
+      .catch(() => setSettingsLoadFailed(true))
 
     fetch('/api/users', { headers: { Authorization: `Bearer ${localStorage.getItem('yr_crm_token') || ''}` } })
       .then((res) => (res.ok ? res.json() : []))
@@ -89,6 +93,10 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onOpenQr }) => {
 
   const handleSaveSettings = async (e: React.FormEvent) => {
     e.preventDefault()
+    if (!settingsLoaded) {
+      showToast({ tone: 'alert', message: 'As configurações não foram carregadas; recarregue antes de salvar para preservar o texto da YRIA.' })
+      return
+    }
     try {
       const res = await fetch('/api/settings', {
         method: 'PUT',
@@ -335,7 +343,8 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onOpenQr }) => {
           </div>
 
           <div>
-            <label htmlFor="ai-service-prompt" className="mb-1 block text-xs font-semibold text-slate-700 dark:text-slate-300">Orientação personalizada para a IA</label>
+            <label htmlFor="ai-service-prompt" className="mb-1 block text-xs font-semibold text-slate-700 dark:text-slate-300">Como a YRIA deve agir</label>
+            {settingsLoadFailed && <p className="mb-2 rounded-lg border border-amber-200 bg-amber-50 p-2 text-[11px] text-amber-900 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-200">Não foi possível carregar suas configurações. Recarregue a tela antes de salvar; o texto salvo da YRIA será preservado.</p>}
             <textarea
               id="ai-service-prompt"
               rows={5}
@@ -343,9 +352,10 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onOpenQr }) => {
               value={aiServicePrompt}
               onChange={(event) => setAiServicePrompt(event.target.value)}
               placeholder="Ex.: fale com cordialidade e objetividade; priorize entender o equipamento, cidade, prazo e condições de entrega."
-              className="w-full resize-y rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-xs leading-relaxed text-slate-900 placeholder:text-slate-400 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
+              disabled={!settingsLoaded}
+              className="w-full resize-y rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-xs leading-relaxed text-slate-900 placeholder:text-slate-400 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 disabled:cursor-wait disabled:opacity-60 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
             />
-            <p className="mt-1 text-[11px] leading-relaxed text-slate-500">A IA faz somente a triagem comercial, escreve em texto simples sem asteriscos e para após qualificar, avisando o responsável. Essas regras não podem ser substituídas pelo texto personalizado.</p>
+            <p className="mt-1 text-[11px] leading-relaxed text-slate-500">{aiServicePrompt.length}/5000 caracteres. A IA faz somente a triagem comercial, escreve em texto simples sem asteriscos e para após qualificar, avisando o responsável. Essas regras não podem ser substituídas pelo texto personalizado.</p>
           </div>
 
           {/* Cascade visual representation */}
@@ -381,7 +391,8 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onOpenQr }) => {
         <div className="flex justify-end xl:col-span-2">
           <button
             type="submit"
-            className="px-6 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs shadow-md shadow-blue-500/20 flex items-center gap-2 transition-all"
+            disabled={!settingsLoaded}
+            className="px-6 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs shadow-md shadow-blue-500/20 flex items-center gap-2 transition-all disabled:cursor-not-allowed disabled:opacity-50"
           >
             <Save className="w-4 h-4" />
             Salvar Configurações
