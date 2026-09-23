@@ -39,6 +39,7 @@ export interface Lead {
   rentalMonths?: number
   deliveryDate?: string
   deliveryNotes?: string
+  internalNotes?: string
   checklist?: Record<string, boolean>
 
   // Atendimento (ver server/src/metaTemplates.js)
@@ -73,10 +74,13 @@ export interface Message {
   id: string
   leadId: string
   from: 'client' | 'agent' | 'ai' | 'system'
-  type: 'text' | 'image' | 'audio' | 'file' | 'template'
+  type: 'text' | 'image' | 'audio' | 'video' | 'file' | 'template'
   modelUsed?: string
   templateName?: string
   content: string
+  mediaUrl?: string
+  mediaMimeType?: string
+  mediaFileName?: string
   deliveryStatus?: 'sending' | 'sent' | 'delivered' | 'read' | 'failed' | 'pending_connection'
   deliveryError?: string
   timestamp: string
@@ -167,6 +171,27 @@ export interface User {
   name: string
   email: string
   role: 'admin' | 'vendedor' | 'tecnico'
+}
+
+export interface LeadAttachment {
+  id: string
+  leadId: string
+  fileName: string
+  mimeType: string
+  size: number
+  uploadedBy: string
+  createdAt: string
+}
+
+export interface CrmNotification {
+  id: string
+  recipientId: string
+  leadId: string
+  kind: string
+  title: string
+  message: string
+  createdAt: string
+  readAt: string | null
 }
 
 export interface WhatsAppStatus {

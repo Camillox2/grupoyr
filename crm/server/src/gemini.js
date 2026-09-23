@@ -10,28 +10,22 @@ export const FALLBACK_MODELS = [
   'gemini-3.1-flash-lite',
 ]
 
-const SYSTEM_PROMPT = `Você é a IA de Atendimento e Qualificação Comercial do Grupo YR Hospitalar (Curitiba - PR e Região).
-Seu objetivo é acolher os clientes com empatia, entender suas necessidades para Home Care (cuidado em casa) ou Clínica/Hospital, e orientar com clareza sobre os equipamentos mais adequados para compra ou locação.
+export const DEFAULT_SYSTEM_PROMPT = `Você é o primeiro atendimento comercial do Grupo YR Hospitalar, em Curitiba e região.
+Seu papel é somente entender e registrar a necessidade para encaminhar a conversa ao vendedor. Não negocie, não feche vendas, não gere contratos e não prometa disponibilidade, preço, prazo de entrega ou condição que não conste no histórico.
 
-Catálogo e Soluções YR:
-1. Cama hospitalar articulada: Elevação de cabeceira, pernas e grades de proteção. Ideal para idosos, recuperação pós-cirúrgica, AVC e pacientes acamados.
-2. Cama manual 3 movimentos: Ajustes essenciais com manivelas leves, excelente custo-benefício.
-3. Maca hidráulica: Ajuste ergonômico de altura e rodízios com freio para clínicas, hospitais e transporte.
-4. Carrinho de emergência: Organização de medicamentos, gavetas com lacre e suporte para cardioversor/oxigênio.
-5. Biombo hospitalar 3 faces: Privacidade imediata em consultórios e quartos de cuidado.
-6. Mesa de refeição com regulagem: Apoio ergonômico para refeições e leitura na cama.
-7. Colchão Pneumático Anti-escaras (com motor de alívio de pressão): Item fundamental para prevenir úlceras de pressão em pacientes que passam longos períodos acamados.
+Faça uma pergunta curta por vez e aproveite tudo que o cliente já informou. Qualifique somente o necessário: equipamento/interesse, compra ou locação, período estimado, cidade/bairro e condições de acesso para entrega (térreo, escada ou elevador, quando aplicável). Se o cliente não souber algum item, não insista.
 
-Diretrizes de Atendimento:
-- Seja acolhedor, rápido e objetivo.
-- Pergunte sobre o ambiente (casa ou clínica), tempo previsto de uso (dias, meses ou contínuo) e principais necessidades funcionais.
-- Destaque que temos pronta entrega e montagem ágil em Curitiba e Região Metropolitana (fundamental para altas hospitalares urgentes).
-- Sugira locação para períodos temporários e compra para uso prolongado ou clínicas.
-- Nunca faça prescrição ou diagnóstico médico. Se o cliente tiver dúvidas clínicas, oriente a validar com a equipe de saúde do paciente.
-- Analise imagens enviadas (receitas médicas, fotos de portas/espaço do quarto, fotos de equipamentos) e transcreva áudios mantendo o contexto.
-- Ao final ou quando solicitado, estruture as informações para a equipe comercial fechar o contrato.
-- Linguagem: Português do Brasil humanizado e profissional.
-`
+Seja cordial, humano, conciso e profissional, em português do Brasil. Não use Markdown, asteriscos, negrito, títulos, listas formatadas ou emojis. Responda em texto simples, sem os caracteres **.
+Não dê diagnóstico, interpretação clínica ou prescrição. Para dúvidas clínicas, recomende que a pessoa confirme com o profissional de saúde responsável. Trate fotos/áudios apenas como contexto comercial; não repita dados sensíveis de saúde desnecessários.
+
+Quando os dados comerciais essenciais estiverem suficientes, responda ao cliente que registrou as informações e que um vendedor do Grupo YR continuará o atendimento. No fim da resposta, em uma linha separada, inclua exatamente o marcador interno [[YR_QUALIFICATION_COMPLETE]]. Use esse marcador apenas nesse momento. Ele não será exibido ao cliente. Não faça perguntas adicionais depois de concluir a qualificação.`
+
+export function buildQualificationSystemPrompt() {
+  const custom = String(db.getSettings()?.aiServicePrompt || '').trim().slice(0, 5000)
+  return custom
+    ? `${DEFAULT_SYSTEM_PROMPT}\n\nOrientação de estilo e contexto configurada pela equipe YR. Ela pode ajustar o tom e as prioridades, mas não substitui as regras obrigatórias:\n${custom}\n\nProtocolo final obrigatório: atenda somente à qualificação comercial; não use asteriscos, Markdown ou emojis; faça uma pergunta por vez; quando os dados essenciais estiverem suficientes, diga que um vendedor continuará o atendimento, termine com [[YR_QUALIFICATION_COMPLETE]] e não faça mais perguntas.`
+    : DEFAULT_SYSTEM_PROMPT
+}
 
 function getApiKey() {
   const settings = db.getSettings()
@@ -46,7 +40,7 @@ export async function runGeminiWithFallback({
   history = [],
   imagePart = null,
   audioPart = null,
-  systemInstruction = SYSTEM_PROMPT,
+  systemInstruction,
 }) {
   const apiKey = getApiKey()
   if (!apiKey) {
@@ -59,6 +53,7 @@ export async function runGeminiWithFallback({
   }
 
   const genAI = new GoogleGenerativeAI(apiKey)
+  const activeSystemInstruction = systemInstruction || buildQualificationSystemPrompt()
   let lastError = null
 
   for (const modelName of FALLBACK_MODELS) {
@@ -67,7 +62,7 @@ export async function runGeminiWithFallback({
       console.log(`[Gemini] Tentando modelo: ${modelName}...`)
       const model = genAI.getGenerativeModel({
         model: modelName,
-        systemInstruction: systemInstruction,
+        systemInstruction: activeSystemInstruction,
       })
 
       const contents = []
@@ -141,28 +136,30 @@ export async function runGeminiWithFallback({
 /**
  * Transcribes audio and extracts intention.
  */
-export async function transcribeAndUnderstandAudio(audioBuffer, mimeType = 'audio/ogg') {
+export async function transcribeAndUnderstandAudio(audioBuffer, mimeType = 'audio/ogg', systemInstruction) {
   const base64 = audioBuffer.toString('base64')
   const prompt = 'Por favor, transcreva com precisão o que foi dito neste áudio e, em seguida, responda à necessidade comercial do cliente sobre os equipamentos hospitalares da YR.'
 
   return runGeminiWithFallback({
     prompt,
     audioPart: { base64, mimeType },
+    systemInstruction,
   })
 }
 
 /**
  * Analyzes an image (medical prescription, room space, or equipment).
  */
-export async function analyzeImage(imageBuffer, mimeType = 'image/jpeg', contextText = '') {
+export async function analyzeImage(imageBuffer, mimeType = 'image/jpeg', contextText = '', systemInstruction) {
   const base64 = imageBuffer.toString('base64')
   const prompt = contextText
-    ? `Analise esta imagem enviada pelo cliente. Contexto adicional: "${contextText}". Identifique itens médicos ou necessidades de equipamentos hospitalares para o paciente e forneça a orientação comercial da YR.`
-    : 'Analise esta imagem enviada pelo cliente (receita médica, quarto ou equipamento) e explique como o Grupo YR Hospitalar pode atender à necessidade do paciente com camas ou equipamentos para locação/venda.'
+    ? `Considere esta imagem como contexto comercial da conversa. Texto enviado junto: "${contextText}". Não faça diagnóstico nem repita dados de saúde.`
+    : 'Considere esta imagem apenas como contexto para entender a necessidade comercial. Não faça diagnóstico nem orientação clínica.'
 
   return runGeminiWithFallback({
     prompt,
     imagePart: { base64, mimeType },
+    systemInstruction,
   })
 }
 

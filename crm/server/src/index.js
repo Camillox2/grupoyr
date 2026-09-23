@@ -29,8 +29,32 @@ import * as siteBlog from './blog.js'
 const app = express()
 const server = http.createServer(app)
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
+const CRM_DATA_DIR = path.join(__dirname, '..', 'data')
 const BLOG_UPLOAD_DIR = path.join(__dirname, '..', 'data', 'uploads', 'blog')
+const LEAD_UPLOAD_DIR = path.join(__dirname, '..', 'data', 'uploads', 'leads')
+const WHATSAPP_UPLOAD_DIR = path.join(__dirname, '..', 'data', 'uploads', 'whatsapp')
 fs.mkdirSync(BLOG_UPLOAD_DIR, { recursive: true })
+fs.mkdirSync(LEAD_UPLOAD_DIR, { recursive: true })
+fs.mkdirSync(WHATSAPP_UPLOAD_DIR, { recursive: true })
+
+const safeFileExtension = (mimetype, originalName = '') => {
+  const byMime = {
+    'image/jpeg': '.jpg', 'image/png': '.png', 'image/webp': '.webp', 'image/gif': '.gif',
+    'audio/ogg': '.ogg', 'audio/mpeg': '.mp3', 'audio/mp4': '.m4a', 'audio/webm': '.webm',
+    'video/mp4': '.mp4', 'video/3gpp': '.3gp', 'video/quicktime': '.mov', 'video/webm': '.webm',
+    'application/pdf': '.pdf', 'text/plain': '.txt',
+  }
+  if (byMime[mimetype]) return byMime[mimetype]
+  const extension = path.extname(String(originalName || '')).toLowerCase()
+  return /^\.[a-z0-9]{1,8}$/.test(extension) ? extension : '.bin'
+}
+
+const storedFilePath = (storageKey) => {
+  const absolute = path.resolve(CRM_DATA_DIR, String(storageKey || ''))
+  const relative = path.relative(CRM_DATA_DIR, absolute)
+  if (!relative || relative.startsWith('..') || path.isAbsolute(relative)) return null
+  return absolute
+}
 
 const imageUpload = multer({
   storage: multer.diskStorage({
@@ -61,8 +85,7 @@ const whatsappMediaUpload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 10 * 1024 * 1024 },
   fileFilter: (_req, file, callback) => {
-    const accepted = file.mimetype.startsWith('image/')
-      || file.mimetype.startsWith('audio/')
+    const accepted = ['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'audio/ogg', 'audio/mpeg', 'audio/mp4', 'audio/webm', 'video/mp4', 'video/3gpp', 'video/quicktime', 'video/webm'].includes(file.mimetype)
       || [
         'application/pdf',
         'application/msword',
@@ -74,6 +97,20 @@ const whatsappMediaUpload = multer({
         'text/plain',
       ].includes(file.mimetype)
     callback(null, accepted)
+  },
+})
+
+const leadAttachmentUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 15 * 1024 * 1024, files: 1 },
+  fileFilter: (_req, file, callback) => {
+    const allowed = [
+      'image/jpeg', 'image/png', 'image/webp', 'image/gif',
+      'application/pdf', 'text/plain', 'application/msword',
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      'application/vnd.ms-excel', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    ]
+    callback(null, allowed.includes(file.mimetype))
   },
 })
 const allowedOrigins = (process.env.CORS_ORIGIN || 'http://localhost:3001,http://127.0.0.1:3001')
@@ -114,6 +151,14 @@ io.on('connection', (socket) => {
     console.log(`[Socket.io] Cliente desconectado: ${socket.id}`)
   })
 })
+
+const serializeMessage = (message) => {
+  if (!message) return message
+  const { mediaStorageKey, ...safeMessage } = message
+  return mediaStorageKey
+    ? { ...safeMessage, mediaUrl: `/api/leads/${encodeURIComponent(message.leadId)}/messages/${encodeURIComponent(message.id)}/media` }
+    : safeMessage
+}
 
 /* ==========================================================================
    AUTH ROUTES
@@ -230,7 +275,22 @@ app.post('/api/whatsapp/send-media', requireAuth(), whatsappMediaUpload.single('
     const { leadId, caption = '' } = req.body
     const lead = db.find('leads', (l) => l.id === leadId)
     if (!lead) return res.status(404).json({ error: 'Lead não encontrado' })
-    if (!req.file) return res.status(400).json({ error: 'Envie uma imagem, áudio ou documento válido de até 10 MB.' })
+    if (!req.file) return res.status(400).json({ error: 'Envie uma imagem, áudio, vídeo ou documento válido de até 10 MB.' })
+
+    const mediaType = req.file.mimetype.startsWith('image/')
+      ? 'image'
+      : req.file.mimetype.startsWith('audio/')
+        ? 'audio'
+        : req.file.mimetype.startsWith('video/')
+          ? 'video'
+          : 'file'
+    const leadFolder = String(lead.id).replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 80)
+    const mediaFolder = path.join(WHATSAPP_UPLOAD_DIR, leadFolder)
+    fs.mkdirSync(mediaFolder, { recursive: true })
+    const mediaName = `${randomUUID()}${safeFileExtension(req.file.mimetype, req.file.originalname)}`
+    const mediaPath = path.join(mediaFolder, mediaName)
+    fs.writeFileSync(mediaPath, req.file.buffer)
+    const mediaStorageKey = path.relative(CRM_DATA_DIR, mediaPath)
 
     const delivered = await whatsappService.sendMedia(
       lead.phone,
@@ -239,25 +299,24 @@ app.post('/api/whatsapp/send-media', requireAuth(), whatsappMediaUpload.single('
       req.file.originalname,
       caption,
     )
-    const mediaType = req.file.mimetype.startsWith('image/')
-      ? 'image'
-      : req.file.mimetype.startsWith('audio/')
-        ? 'audio'
-        : 'file'
     const savedMsg = db.insert('messages', {
       id: `msg_${Date.now()}`,
       leadId: lead.id,
       from: 'agent',
       type: mediaType,
-      content: caption ? `${caption}\n[Arquivo: ${req.file.originalname}]` : `[Arquivo: ${req.file.originalname}]`,
+      content: caption || (mediaType === 'image' ? '[Imagem]' : mediaType === 'video' ? '[Vídeo]' : mediaType === 'audio' ? '[Áudio]' : `[Arquivo: ${req.file.originalname}]`),
+      mediaStorageKey,
+      mediaMimeType: req.file.mimetype,
+      mediaFileName: String(req.file.originalname || 'anexo').slice(0, 180),
+      mediaSize: req.file.size,
       deliveryStatus: delivered ? 'sent' : 'pending_connection',
       timestamp: new Date().toISOString(),
     })
 
     db.update('leads', lead.id, { lastInteraction: new Date().toISOString() })
-    io.emit('message:new', savedMsg)
+    io.emit('message:new', serializeMessage(savedMsg))
     io.emit('lead:updated', db.find('leads', (l) => l.id === lead.id))
-    res.json({ ok: true, message: savedMsg, delivered })
+    res.json({ ok: true, message: serializeMessage(savedMsg), delivered })
   } catch (err) {
     res.status(500).json({ error: err.message || 'Não foi possível enviar o anexo.' })
   }
@@ -523,6 +582,37 @@ app.get('/api/leads', requireAuth(), (req, res) => {
   res.json(leads)
 })
 
+app.get('/api/users', requireAuth(['admin']), (_req, res) => {
+  res.json(db.get('users').map(({ id, name, email, role }) => ({ id, name, email, role })))
+})
+
+app.get('/api/notifications', requireAuth(), (req, res) => {
+  const notifications = db.filter('notifications', (item) => item.recipientId === req.user.id)
+    .sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)))
+    .slice(0, 50)
+  res.json(notifications)
+})
+
+app.get('/api/notifications/:id', requireAuth(), (req, res) => {
+  const notification = db.find('notifications', (item) => item.id === req.params.id && item.recipientId === req.user.id)
+  if (!notification) return res.status(404).json({ error: 'Notificação não encontrada' })
+  res.json(notification)
+})
+
+app.put('/api/notifications/:id/read', requireAuth(), (req, res) => {
+  const notification = db.find('notifications', (item) => item.id === req.params.id && item.recipientId === req.user.id)
+  if (!notification) return res.status(404).json({ error: 'Notificação não encontrada' })
+  const updated = db.update('notifications', notification.id, { readAt: notification.readAt || new Date().toISOString() })
+  res.json(updated)
+})
+
+app.put('/api/notifications/read-all', requireAuth(), (req, res) => {
+  const readAt = new Date().toISOString()
+  const updated = db.filter('notifications', (item) => item.recipientId === req.user.id && !item.readAt)
+    .map((item) => db.update('notifications', item.id, { readAt }))
+  res.json({ ok: true, updated: updated.length })
+})
+
 app.post('/api/leads', requireAuth(), (req, res) => {
   try {
     const newLead = {
@@ -603,7 +693,62 @@ app.post('/api/leads/:id/ai-summary', requireAuth(), async (req, res) => {
 
 app.get('/api/leads/:id/messages', requireAuth(), (req, res) => {
   const messages = db.filter('messages', (m) => m.leadId === req.params.id)
-  res.json(messages)
+  res.json(messages.map(serializeMessage))
+})
+
+app.get('/api/leads/:id/messages/:messageId/media', requireAuth(), (req, res) => {
+  const message = db.find('messages', (item) => item.id === req.params.messageId && item.leadId === req.params.id)
+  if (!message?.mediaStorageKey) return res.status(404).json({ error: 'Mídia não encontrada' })
+  const filePath = storedFilePath(message.mediaStorageKey)
+  if (!filePath || !fs.existsSync(filePath)) return res.status(404).json({ error: 'Arquivo não encontrado' })
+  res.setHeader('Content-Type', message.mediaMimeType || 'application/octet-stream')
+  res.setHeader('X-Content-Type-Options', 'nosniff')
+  if (req.query.download === '1') return res.download(filePath, String(message.mediaFileName || 'anexo').replace(/[\r\n"\\]/g, '_'))
+  res.setHeader('Content-Disposition', 'inline')
+  res.sendFile(filePath)
+})
+
+app.get('/api/leads/:id/attachments', requireAuth(), (req, res) => {
+  const lead = db.find('leads', (item) => item.id === req.params.id)
+  if (!lead) return res.status(404).json({ error: 'Lead não encontrado' })
+  const attachments = db.filter('leadAttachments', (item) => item.leadId === lead.id)
+    .sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)))
+    .map(({ storageKey, ...item }) => item)
+  res.json(attachments)
+})
+
+app.post('/api/leads/:id/attachments', requireAuth(), leadAttachmentUpload.single('file'), (req, res) => {
+  const lead = db.find('leads', (item) => item.id === req.params.id)
+  if (!lead) return res.status(404).json({ error: 'Lead não encontrado' })
+  if (!req.file) return res.status(400).json({ error: 'Selecione um anexo permitido de até 15 MB.' })
+
+  const leadFolder = String(lead.id).replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 80)
+  const targetFolder = path.join(LEAD_UPLOAD_DIR, leadFolder)
+  fs.mkdirSync(targetFolder, { recursive: true })
+  const id = `att_${randomUUID()}`
+  const fileName = `${randomUUID()}${safeFileExtension(req.file.mimetype, req.file.originalname)}`
+  const filePath = path.join(targetFolder, fileName)
+  fs.writeFileSync(filePath, req.file.buffer)
+  const attachment = db.insert('leadAttachments', {
+    id,
+    leadId: lead.id,
+    storageKey: path.relative(CRM_DATA_DIR, filePath),
+    fileName: String(req.file.originalname || 'anexo').slice(0, 180),
+    mimeType: req.file.mimetype,
+    size: req.file.size,
+    uploadedBy: req.user.id,
+    createdAt: new Date().toISOString(),
+  })
+  const { storageKey, ...safeAttachment } = attachment
+  res.status(201).json(safeAttachment)
+})
+
+app.get('/api/leads/:id/attachments/:attachmentId', requireAuth(), (req, res) => {
+  const attachment = db.find('leadAttachments', (item) => item.id === req.params.attachmentId && item.leadId === req.params.id)
+  if (!attachment) return res.status(404).json({ error: 'Anexo não encontrado' })
+  const filePath = storedFilePath(attachment.storageKey)
+  if (!filePath || !fs.existsSync(filePath)) return res.status(404).json({ error: 'Arquivo não encontrado' })
+  res.download(filePath, String(attachment.fileName || 'anexo').replace(/[\r\n"\\]/g, '_'))
 })
 
 /* ==========================================================================
@@ -1225,12 +1370,21 @@ app.get('/api/settings', requireAuth(['admin']), (req, res) => {
 app.put('/api/settings', requireAuth(['admin']), (req, res) => {
   const current = db.getSettings()
   const requestedMeta = req.body.metaConfig || {}
+  const users = db.get('users')
+  const requestedAssignee = String(req.body.defaultLeadAssigneeId || '').slice(0, 100)
+  const defaultLeadAssigneeId = users.some((user) => user.id === requestedAssignee)
+    ? requestedAssignee
+    : (current.defaultLeadAssigneeId || users.find((user) => user.role === 'admin')?.id || '')
   const keepOrReplace = (requested, existing) => (
     requested && requested !== '__configured__' ? requested : existing || ''
   )
 
   const updated = db.updateSettings({
     ...req.body,
+    aiServicePrompt: typeof req.body.aiServicePrompt === 'string'
+      ? req.body.aiServicePrompt.trim().slice(0, 5000)
+      : (current.aiServicePrompt || ''),
+    defaultLeadAssigneeId,
     geminiApiKey: keepOrReplace(req.body.geminiApiKey, current.geminiApiKey),
     metaConfig: {
       ...current.metaConfig,

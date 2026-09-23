@@ -2,7 +2,9 @@ import React, { useEffect, useMemo, useRef, useState } from 'react'
 import {
   Check,
   CircleDashed,
+  Download,
   FileSignature,
+  FileText,
   LoaderCircle,
   MapPin,
   Package,
@@ -12,8 +14,9 @@ import {
   Truck,
   User,
   X,
+  Paperclip,
 } from 'lucide-react'
-import { Lead, QuoteItem, LeadAddress, LeadAccess } from '../types'
+import { Lead, QuoteItem, LeadAddress, LeadAccess, LeadAttachment } from '../types'
 import { brl } from './ui/Feedback'
 
 /**
@@ -67,6 +70,7 @@ interface SheetState {
   rentalMonths: string
   deliveryDate: string
   deliveryNotes: string
+  internalNotes: string
   checklist: Record<string, boolean>
 }
 
@@ -97,6 +101,7 @@ const fromLead = (lead: Lead): SheetState => ({
   rentalMonths: lead.rentalMonths ? String(lead.rentalMonths) : '',
   deliveryDate: lead.deliveryDate ?? '',
   deliveryNotes: lead.deliveryNotes ?? '',
+  internalNotes: lead.internalNotes ?? lead.notes ?? '',
   checklist: { ...(lead.checklist ?? {}) },
 })
 
@@ -115,6 +120,11 @@ const authHeaders = () => ({
   'Content-Type': 'application/json',
   Authorization: `Bearer ${localStorage.getItem('yr_crm_token') || ''}`,
 })
+
+const HTML_ENTITIES: Record<string, string> = {
+  '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
+}
+const escapeHtml = (value: unknown) => String(value ?? '').replace(/[&<>"']/g, (character) => HTML_ENTITIES[character])
 
 const Section: React.FC<{ icon: React.ReactNode; title: string; done?: boolean; children: React.ReactNode }> = ({
   icon,
@@ -160,6 +170,10 @@ export const LeadSheet: React.FC<LeadSheetProps> = ({
   const [cepStatus, setCepStatus] = useState<'idle' | 'loading' | 'notfound'>('idle')
   const [creating, setCreating] = useState(false)
   const [contractError, setContractError] = useState<string | null>(null)
+  const [attachments, setAttachments] = useState<LeadAttachment[]>([])
+  const [attachmentBusy, setAttachmentBusy] = useState(false)
+  const [attachmentError, setAttachmentError] = useState<string | null>(null)
+  const attachmentInputRef = useRef<HTMLInputElement>(null)
   const dirty = useRef(false)
   const stateRef = useRef(state)
   stateRef.current = state
@@ -171,7 +185,13 @@ export const LeadSheet: React.FC<LeadSheetProps> = ({
     setState(fromLead(lead))
     setSave('idle')
     setContractError(null)
+    setAttachments([])
+    setAttachmentError(null)
     dirty.current = false
+    fetch(`/api/leads/${encodeURIComponent(lead.id)}/attachments`, { headers: authHeaders() })
+      .then((response) => response.ok ? response.json() : [])
+      .then((data) => setAttachments(Array.isArray(data) ? data : []))
+      .catch(() => setAttachmentError('Não foi possível carregar os anexos deste cliente.'))
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lead.id])
 
@@ -298,6 +318,58 @@ export const LeadSheet: React.FC<LeadSheetProps> = ({
   const missing = checks.filter((item) => item.required && !item.done)
   const ready = missing.length === 0
 
+  const uploadAttachment = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    event.target.value = ''
+    if (!file) return
+    setAttachmentBusy(true)
+    setAttachmentError(null)
+    try {
+      const form = new FormData()
+      form.append('file', file)
+      const response = await fetch(`/api/leads/${encodeURIComponent(lead.id)}/attachments`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${localStorage.getItem('yr_crm_token') || ''}` },
+        body: form,
+      })
+      if (!response.ok) {
+        const data = await response.json().catch(() => null)
+        throw new Error(data?.error || 'Não foi possível anexar o arquivo.')
+      }
+      const attachment = await response.json() as LeadAttachment
+      setAttachments((current) => [attachment, ...current])
+    } catch (error) {
+      setAttachmentError(error instanceof Error ? error.message : 'Não foi possível anexar o arquivo.')
+    } finally {
+      setAttachmentBusy(false)
+    }
+  }
+
+  const downloadChecklist = () => {
+    const address = state.addressData
+    const fullAddress = [
+      [address.street, address.number].filter(Boolean).join(', '), address.complement,
+      address.district, [address.city, address.state].filter(Boolean).join(' - '), address.cep,
+    ].filter(Boolean).join(' · ') || 'Endereço não informado'
+    const rows = checks.map((item) => `<tr><td>${item.done ? 'Concluído' : 'Pendente'}</td><td>${escapeHtml(item.label)}</td></tr>`).join('')
+    const productRows = state.quoteItems.map((item) => `<tr><td>${escapeHtml(item.product)}</td><td>${escapeHtml(item.productCode || productCodeFor(item.product))}</td><td>${item.qty}</td><td>${item.modality === 'locacao' ? 'Locação' : 'Compra'}</td><td>${escapeHtml(brl(item.unitPrice * item.qty))}${item.modality === 'locacao' ? ' / mês' : ''}</td></tr>`).join('')
+    const html = `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>Checklist de entrega - ${escapeHtml(lead.name)}</title><style>
+      body{font:14px Arial,sans-serif;color:#15243a;margin:36px auto;padding:0 24px;max-width:850px}header{border-bottom:3px solid #1d5fae;padding-bottom:16px;margin-bottom:22px}h1{font-size:22px;margin:0 0 6px}h2{font-size:15px;color:#164f91;margin:24px 0 8px}.muted{color:#65758b;font-size:12px}.grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}.card{border:1px solid #dce5ef;border-radius:9px;padding:12px;min-width:0}.label{display:block;color:#65758b;font-size:10px;text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px}table{width:100%;border-collapse:collapse;font-size:12px}th,td{border:1px solid #dce5ef;padding:8px;text-align:left}th{background:#eef4fb}.notes{white-space:pre-wrap}@media print{body{margin:12mm auto;padding:0}.no-print{display:none}}
+      </style></head><body><header><h1>Checklist de entrega e atendimento</h1><div class="muted">Grupo YR Hospitalar · Gerado em ${new Date().toLocaleString('pt-BR')}</div></header>
+      <h2>Cliente e local</h2><div class="grid"><div class="card"><span class="label">Cliente</span>${escapeHtml(lead.name)}</div><div class="card"><span class="label">Telefone</span>${escapeHtml(lead.phone)}</div><div class="card"><span class="label">CPF/CNPJ</span>${escapeHtml(state.cpf || 'Não informado')}</div><div class="card"><span class="label">E-mail</span>${escapeHtml(state.email || 'Não informado')}</div><div class="card" style="grid-column:1/-1"><span class="label">Endereço da entrega</span>${escapeHtml(fullAddress)}</div><div class="card"><span class="label">Acesso até o quarto</span>${escapeHtml(ACCESS.find((entry) => entry.id === state.access)?.label || 'Não definido')} ${escapeHtml(state.floor)}</div><div class="card"><span class="label">Data prevista da entrega</span>${escapeHtml(state.deliveryDate ? new Date(`${state.deliveryDate}T00:00:00`).toLocaleDateString('pt-BR') : 'Não definida')}</div></div>
+      <h2>Produtos e valores</h2><table><thead><tr><th>Produto</th><th>Código</th><th>Qtd.</th><th>Modalidade</th><th>Valor</th></tr></thead><tbody>${productRows || '<tr><td colspan="5">Nenhum produto informado.</td></tr>'}</tbody></table>
+      <div class="grid" style="margin-top:10px"><div class="card"><span class="label">Frete</span>${escapeHtml(brl(freight))}</div><div class="card"><span class="label">Locação mensal</span>${escapeHtml(brl(rentalMonthly))}</div><div class="card"><span class="label">Compra</span>${escapeHtml(brl(purchaseTotal))}</div><div class="card"><span class="label">Primeira cobrança estimada</span>${escapeHtml(brl(rentalMonthly + oneTime))}</div><div class="card"><span class="label">Período da locação</span>${state.rentalMonths ? `${escapeHtml(state.rentalMonths)} mês(es)` : 'Não informado'}</div><div class="card"><span class="label">Observações de entrega</span>${escapeHtml(state.deliveryNotes || 'Nenhuma')}</div></div>
+      <h2>Conferência operacional</h2><table><thead><tr><th>Status</th><th>Item</th></tr></thead><tbody>${rows}</tbody></table>
+      <h2>Informações internas do cliente</h2><div class="card notes">${escapeHtml(state.internalNotes || 'Nenhuma informação registrada.')}</div><p class="muted no-print">Para gerar PDF, use Imprimir → Salvar como PDF no navegador.</p></body></html>`
+    const url = URL.createObjectURL(new Blob([html], { type: 'text/html;charset=utf-8' }))
+    const link = document.createElement('a')
+    const base = lead.name.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '-')
+    link.href = url
+    link.download = `checklist-entrega-${base || 'cliente'}.html`
+    link.click()
+    URL.revokeObjectURL(url)
+  }
+
   const createContract = async () => {
     if (!ready || creating) return
     setCreating(true)
@@ -410,6 +482,10 @@ export const LeadSheet: React.FC<LeadSheetProps> = ({
           <div className="sheet-grid">
             <Input label="CPF ou CNPJ" value={state.cpf} inputMode="numeric" placeholder="000.000.000-00" onChange={(event) => patch({ cpf: event.target.value })} />
             <Input label="E-mail" type="email" value={state.email} placeholder="cliente@email.com" onChange={(event) => patch({ email: event.target.value })} />
+            <label className="sheet-field is-wide">
+              <span>Informações internas do cliente</span>
+              <textarea className="field-control sheet-input" rows={3} maxLength={3000} value={state.internalNotes} placeholder="Preferências, combinações e informações úteis para a equipe comercial" onChange={(event) => patch({ internalNotes: event.target.value })} />
+            </label>
           </div>
         </Section>
 
@@ -535,6 +611,9 @@ export const LeadSheet: React.FC<LeadSheetProps> = ({
         </Section>
 
         <Section icon={<Check className="h-3.5 w-3.5" />} title="Checklist do contrato">
+          <button type="button" onClick={downloadChecklist} className="mb-3 inline-flex items-center gap-2 rounded-xl border border-blue-200 bg-blue-50 px-3 py-2 text-[11px] font-bold text-blue-800 hover:bg-blue-100 dark:border-blue-800 dark:bg-blue-950/40 dark:text-blue-200 dark:hover:bg-blue-900/50">
+            <Download className="h-3.5 w-3.5" />Baixar checklist de entrega
+          </button>
           <ul className="sheet-checklist">
             {checks.map((item) =>
               item.manual ? (
@@ -562,6 +641,44 @@ export const LeadSheet: React.FC<LeadSheetProps> = ({
               ),
             )}
           </ul>
+        </Section>
+
+        <Section icon={<Paperclip className="h-3.5 w-3.5" />} title="Arquivos do cliente">
+          <input ref={attachmentInputRef} type="file" accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.txt" onChange={uploadAttachment} className="hidden" />
+          <p className="mb-3 text-[11px] leading-relaxed text-slate-500">Anexe documentos, comprovantes e imagens úteis para este atendimento. Os arquivos ficam privados e só aparecem para usuários autenticados do CRM.</p>
+          <button type="button" disabled={attachmentBusy} onClick={() => attachmentInputRef.current?.click()} className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-[11px] font-bold text-slate-700 disabled:opacity-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200">
+            {attachmentBusy ? <LoaderCircle className="h-3.5 w-3.5 animate-spin" /> : <Paperclip className="h-3.5 w-3.5" />}
+            {attachmentBusy ? 'Enviando arquivo…' : 'Adicionar arquivo'}
+          </button>
+          {attachmentError && <p role="alert" className="mt-2 text-[11px] font-semibold text-rose-600 dark:text-rose-300">{attachmentError}</p>}
+          {attachments.length === 0 ? <p className="sheet-empty mt-3">Nenhum arquivo anexado.</p> : (
+            <ul className="mt-3 grid gap-2">
+              {attachments.map((attachment) => (
+                <li key={attachment.id}>
+                  <a href={`/api/leads/${encodeURIComponent(lead.id)}/attachments/${encodeURIComponent(attachment.id)}`} onClick={async (event) => {
+                    event.preventDefault()
+                    try {
+                      const response = await fetch(event.currentTarget.href, { headers: authHeaders() })
+                      if (!response.ok) throw new Error('download')
+                      const url = URL.createObjectURL(await response.blob())
+                      const link = document.createElement('a')
+                      link.href = url
+                      link.download = attachment.fileName
+                      link.click()
+                      URL.revokeObjectURL(url)
+                    } catch {
+                      setAttachmentError('Não foi possível baixar este arquivo.')
+                    }
+                  }} className="flex min-w-0 items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-[11px] hover:border-blue-300 dark:border-slate-700 dark:bg-slate-900">
+                    <FileText className="h-4 w-4 shrink-0 text-blue-700 dark:text-blue-300" />
+                    <span className="min-w-0 flex-1 truncate font-semibold">{attachment.fileName}</span>
+                    <span className="shrink-0 text-[10px] text-slate-400">{(attachment.size / 1024 / 1024).toFixed(1)} MB</span>
+                    <Download className="h-3.5 w-3.5 shrink-0 text-slate-400" />
+                  </a>
+                </li>
+              ))}
+            </ul>
+          )}
         </Section>
       </div>
 

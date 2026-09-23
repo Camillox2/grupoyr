@@ -1991,3 +1991,123 @@
     animation: none;
   }
 }
+
+/* Atendimento: a conversa precisa continuar utilizável em celular estreito. */
+.whatsapp-chat-root {
+  min-width: 0;
+  max-width: 100%;
+}
+.chat-message-bubble {
+  min-width: 0;
+  max-width: min(90%, 42rem);
+  overflow-wrap: anywhere;
+}
+.chat-media-missing {
+  display: block;
+  color: var(--ink-muted);
+  font-size: 11px;
+}
+.chat-media-link {
+  display: block;
+  max-width: min(100%, 360px);
+  margin-bottom: 6px;
+}
+.chat-media-image {
+  display: block;
+  max-height: 58vh;
+  max-width: 100%;
+  border-radius: 10px;
+  object-fit: contain;
+}
+.chat-media-video {
+  display: block;
+  width: min(100%, 360px);
+  max-height: 58vh;
+  margin-bottom: 6px;
+  border-radius: 10px;
+  background: #080d15;
+}
+.chat-media-audio {
+  display: block;
+  width: min(100%, 320px);
+  min-width: 210px;
+  margin: 2px 0 6px;
+}
+.chat-media-download {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 9px;
+  margin-bottom: 6px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 10px;
+  padding: 10px;
+  color: var(--ink);
+  background: var(--surface-raised);
+  text-decoration: none;
+}
+.chat-media-download:hover {
+  border-color: var(--yr-500);
+}
+@media (max-width: 820px) {
+  .whatsapp-chat-root {
+    height: calc(100dvh - 112px);
+    min-height: min(420px, calc(100dvh - 140px));
+    border-radius: 14px;
+  }
+  .whatsapp-conversation-header {
+    align-items: flex-start;
+    padding: 10px 11px;
+  }
+  .whatsapp-conversation-header > div:first-child {
+    min-width: 0;
+    flex: 1 1 180px;
+  }
+  .whatsapp-conversation-header > div:last-child {
+    max-width: 100%;
+    justify-content: flex-end;
+  }
+  .whatsapp-composer {
+    display: grid;
+    grid-template-columns: 40px 40px minmax(0, 1fr) 40px;
+    gap: 7px;
+    padding: 9px;
+  }
+  .whatsapp-composer > button {
+    display: grid;
+    width: 40px;
+    height: 40px;
+    place-items: center;
+    padding: 0;
+  }
+  .whatsapp-composer-input {
+    width: 100%;
+    padding: 10px 11px;
+    font-size: 12px;
+  }
+  .chat-message-bubble {
+    max-width: 94%;
+    padding: 11px;
+  }
+  .chat-media-audio {
+    min-width: 0;
+    width: min(100%, 300px);
+  }
+}
+@media (max-width: 380px) {
+  .whatsapp-composer {
+    grid-template-columns: 36px 36px minmax(0, 1fr) 36px;
+    gap: 5px;
+    padding: 7px;
+  }
+  .whatsapp-composer > button {
+    width: 36px;
+    height: 38px;
+  }
+  .whatsapp-composer-input {
+    padding-inline: 8px;
+  }
+  .whatsapp-conversation-header > div:last-child {
+    gap: 5px;
+  }
+}

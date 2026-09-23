@@ -5,9 +5,11 @@ import { useAuth } from '../contexts/AuthContext'
 import { useSocket } from '../contexts/SocketContext'
 import { useIsMobile } from '../hooks/useMediaQuery'
 import { SiteLinkActions } from './SiteLinkActions'
+import { NotificationCenter } from './NotificationCenter'
 
 interface NavbarProps {
   onOpenQr: () => void
+  onOpenLead: (leadId: string) => void
   onToggleMobileMenu?: () => void
 }
 
@@ -15,7 +17,7 @@ interface NavbarProps {
  * Barra superior em azul-marinho: e o contraste forte da tela, o mesmo papel
  * que a faixa azul faz no site. O resto do app fica na base pastel.
  */
-export const Navbar: React.FC<NavbarProps> = ({ onOpenQr, onToggleMobileMenu }) => {
+export const Navbar: React.FC<NavbarProps> = ({ onOpenQr, onOpenLead, onToggleMobileMenu }) => {
   const { theme, toggleTheme } = useTheme()
   const { user, logout } = useAuth()
   const { whatsappStatus, switchWhatsAppProvider } = useSocket()
@@ -76,6 +78,7 @@ export const Navbar: React.FC<NavbarProps> = ({ onOpenQr, onToggleMobileMenu }) 
       </div>
 
       <div className="flex shrink-0 items-center gap-2">
+        <NotificationCenter onOpenLead={onOpenLead} />
         {/* O seletor de provedor so cabe no desktop; no mobile fica em Configuracoes. */}
         {!isMobile && (
           /* Controle segmentado com "polegar" deslizante. As duas metades tem

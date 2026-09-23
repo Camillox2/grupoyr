@@ -107,6 +107,7 @@ export function sanitizeLeadDetails(body) {
     rentalMonths: integer(source.rentalMonths, 0, 120),
     deliveryDate: isoDate(source.deliveryDate),
     deliveryNotes: text(source.deliveryNotes, 400),
+    internalNotes: text(source.internalNotes, 3000),
     checklist: cleanChecklist(source.checklist),
     detailsUpdatedAt: new Date().toISOString(),
   }

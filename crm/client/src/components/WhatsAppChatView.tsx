@@ -20,6 +20,9 @@ import {
   CircleAlert,
   Check,
   MessageSquareDashed,
+  Download,
+  FileText,
+  Phone,
 } from 'lucide-react'
 import { Lead, Message } from '../types'
 import { useSocket } from '../contexts/SocketContext'
@@ -28,6 +31,52 @@ import { authHeaders, isClosed, windowInfo } from '../lib/conversation'
 import { LeadSheet } from './LeadSheet'
 import { NewContactModal } from './NewContactModal'
 import { SendTemplateModal } from './SendTemplateModal'
+
+const MessageMedia: React.FC<{ message: Message }> = ({ message }) => {
+  const [source, setSource] = useState('')
+  const [failed, setFailed] = useState(false)
+
+  useEffect(() => {
+    let objectUrl = ''
+    let active = true
+    if (!message.mediaUrl) return
+    fetch(message.mediaUrl, { headers: authHeaders(false) })
+      .then((response) => {
+        if (!response.ok) throw new Error('media')
+        return response.blob()
+      })
+      .then((blob) => {
+        if (!active) return
+        objectUrl = URL.createObjectURL(blob)
+        setSource(objectUrl)
+      })
+      .catch(() => { if (active) setFailed(true) })
+    return () => {
+      active = false
+      if (objectUrl) URL.revokeObjectURL(objectUrl)
+    }
+  }, [message.mediaUrl])
+
+  if (!message.mediaUrl) return <span className="chat-media-missing">Anexo não disponível no histórico.</span>
+  if (failed) return <span className="chat-media-missing">Não foi possível carregar este anexo.</span>
+  if (!source) return <span className="chat-media-missing">Carregando anexo…</span>
+
+  if (message.type === 'image') return (
+    <a href={source} target="_blank" rel="noreferrer" className="chat-media-link">
+      <img src={source} alt={message.mediaFileName || 'Imagem recebida pelo WhatsApp'} className="chat-media-image" />
+    </a>
+  )
+  if (message.type === 'video') return <video className="chat-media-video" src={source} controls playsInline preload="metadata" aria-label={message.mediaFileName || 'Vídeo recebido pelo WhatsApp'} />
+  if (message.type === 'audio') return <audio className="chat-media-audio" src={source} controls preload="metadata" />
+
+  return (
+    <a href={source} download={message.mediaFileName || 'anexo'} className="chat-media-download">
+      <FileText className="h-4 w-4 shrink-0" />
+      <span className="min-w-0 flex-1 truncate">{message.mediaFileName || 'Baixar arquivo'}</span>
+      <Download className="h-3.5 w-3.5 shrink-0" />
+    </a>
+  )
+}
 
 interface WhatsAppChatViewProps {
   leads: Lead[]
@@ -322,7 +371,7 @@ export const WhatsAppChatView: React.FC<WhatsAppChatViewProps> = ({
     // `dvh` no lugar de `vh`: a barra do Chrome mobile nao corta o campo de envio.
     // No mobile mostra a LISTA ou a CONVERSA, nunca as duas com scroll aninhado.
     <div
-      className={`no-cascade flex h-[calc(100dvh-112px)] min-h-[420px] overflow-hidden rounded-[16px] ${isMobile ? 'flex-col' : 'flex-row'}`}
+      className={`whatsapp-chat-root no-cascade flex h-[calc(100dvh-112px)] min-h-[420px] overflow-hidden rounded-[16px] ${isMobile ? 'flex-col' : 'flex-row'}`}
       style={{
         background: 'var(--surface-raised)',
         border: '1px solid var(--border-subtle)',
@@ -448,7 +497,7 @@ export const WhatsAppChatView: React.FC<WhatsAppChatViewProps> = ({
         <div className="flex min-h-0 min-w-0 flex-1 flex-col">
           {/* Cabecalho da conversa */}
           <div
-            className="flex min-h-16 shrink-0 flex-wrap items-center justify-between gap-2 px-4 py-3 sm:px-5"
+            className="whatsapp-conversation-header flex min-h-16 shrink-0 flex-wrap items-center justify-between gap-2 px-4 py-3 sm:px-5"
             style={{ borderBottom: '1px solid var(--border-subtle)' }}
           >
             <div className="flex items-center gap-3">
@@ -466,14 +515,18 @@ export const WhatsAppChatView: React.FC<WhatsAppChatViewProps> = ({
               <div className="w-10 h-10 rounded-full bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 font-bold flex items-center justify-center text-xs">
                 {selectedLead.name.slice(0, 2).toUpperCase()}
               </div>
-              <div>
-                <h3 className="text-xs font-bold text-slate-900 dark:text-white flex items-center gap-2">
-                  {selectedLead.name}
-                  <span className="text-[10px] font-mono font-medium text-slate-500">
-                    +{selectedLead.phone}
-                  </span>
+              <div className="min-w-0">
+                <h3 className="flex min-w-0 items-center gap-2 text-xs font-bold text-slate-900 dark:text-white">
+                  <span className="truncate">{selectedLead.name}</span>
+                  <a
+                    href={`tel:+${selectedLead.phone.replace(/\D/g, '')}`}
+                    className="inline-flex shrink-0 items-center gap-1 rounded-lg border border-slate-200 px-2 py-1 text-[10px] font-bold text-blue-700 hover:bg-blue-50 dark:border-slate-700 dark:text-blue-300 dark:hover:bg-slate-800"
+                    title={`Ligar para +${selectedLead.phone}`}
+                  >
+                    <Phone className="h-3 w-3" /><span className="hidden sm:inline">Ligar</span>
+                  </a>
                 </h3>
-                <p className="text-[11px] text-slate-500">
+                <p className="truncate text-[11px] text-slate-500">
                   Interesse: <span className="font-semibold">{selectedLead.equipmentInterest}</span> ({selectedLead.modality === 'locacao' ? 'locação' : 'compra'})
                 </p>
               </div>
@@ -563,7 +616,7 @@ export const WhatsAppChatView: React.FC<WhatsAppChatViewProps> = ({
                   className={`flex flex-col ${isClient ? 'items-start' : 'items-end'}`}
                 >
                   <div
-                    className={`max-w-lg p-3.5 rounded-2xl text-xs leading-relaxed shadow-sm ${
+                    className={`chat-message-bubble max-w-lg p-3.5 rounded-2xl text-xs leading-relaxed shadow-sm ${
                       isClient
                         ? 'bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 rounded-tl-none border border-slate-200/80 dark:border-slate-700'
                         : isAi
@@ -586,8 +639,12 @@ export const WhatsAppChatView: React.FC<WhatsAppChatViewProps> = ({
                       </div>
                     )}
 
+                    {/* A mídia vem da rota autenticada e não de um endereço público. */}
+                    {msg.mediaUrl && <MessageMedia message={msg} />}
                     {/* Content */}
-                    <p className="whitespace-pre-wrap">{msg.content}</p>
+                    {!(msg.mediaUrl && /^\[(Imagem|Vídeo|Áudio|Arquivo)\]$/.test(msg.content)) && (
+                      <p className="whitespace-pre-wrap">{msg.content}</p>
+                    )}
 
                     {/* Timestamp & checks */}
                     <div
@@ -652,12 +709,12 @@ export const WhatsAppChatView: React.FC<WhatsAppChatViewProps> = ({
           ) : (
           <form
             onSubmit={handleSendMessage}
-            className="relative p-3 border-t border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 flex items-center gap-2"
+            className="whatsapp-composer relative p-3 border-t border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 flex items-center gap-2"
           >
             <input
               ref={fileInputRef}
               type="file"
-              accept="image/*,audio/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt"
+              accept="image/*,audio/*,video/mp4,video/quicktime,video/3gpp,video/webm,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt"
               onChange={handleFileSelection}
               className="hidden"
             />
@@ -691,7 +748,7 @@ export const WhatsAppChatView: React.FC<WhatsAppChatViewProps> = ({
               onClick={() => fileInputRef.current?.click()}
               disabled={!isConnected || loading || recording}
               className="p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 text-slate-500 hover:border-blue-300 hover:text-blue-600 disabled:opacity-40 disabled:cursor-not-allowed shrink-0"
-              title="Anexar imagem, áudio ou documento (até 10 MB)"
+              title="Anexar imagem, áudio, vídeo ou documento (até 10 MB)"
               aria-label="Anexar arquivo"
             >
               <Paperclip className="w-4 h-4" />
@@ -720,7 +777,7 @@ export const WhatsAppChatView: React.FC<WhatsAppChatViewProps> = ({
               value={inputText}
               onChange={(e) => setInputText(e.target.value)}
               aria-label="Mensagem para o cliente"
-              className="flex-1 px-4 py-2.5 rounded-xl text-xs bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+              className="whatsapp-composer-input min-w-0 flex-1 px-4 py-2.5 rounded-xl text-xs bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
             />
             <button
               type="submit"

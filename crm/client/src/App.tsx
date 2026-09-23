@@ -122,6 +122,18 @@ function MainContent() {
     setActiveTab('whatsapp')
   }
 
+  useEffect(() => {
+    const leadId = new URLSearchParams(window.location.search).get('lead')
+    if (!user || !leadId || leads.length === 0) return
+    const lead = leads.find((item) => item.id === leadId)
+    if (!lead) return
+    setSelectedLead(lead)
+    setActiveTab('whatsapp')
+    const url = new URL(window.location.href)
+    url.searchParams.delete('lead')
+    window.history.replaceState({}, '', url)
+  }, [user, leads])
+
   const handleUpdateLeadStage = async (leadId: string, newStage: Stage) => {
     const previousStage = leads.find((lead) => lead.id === leadId)?.stage
     // Optimistic UI update
@@ -209,6 +221,7 @@ function MainContent() {
     <div className="app-shell screen" style={{ background: 'var(--surface-canvas)', color: 'var(--ink)' }}>
       <Navbar
         onOpenQr={() => setQrModalOpen(true)}
+        onOpenLead={openLeadConversation}
         onToggleMobileMenu={() => setMobileSidebarOpen((prev) => !prev)}
       />
 

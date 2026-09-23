@@ -7,10 +7,13 @@ import {
   Key,
   QrCode,
   Save,
+  BellRing,
+  UserRound,
 } from 'lucide-react'
 import { PageHeader } from './ui/PageHeader'
 import { Toast, useToast } from './ui/Toast'
 import { useSocket } from '../contexts/SocketContext'
+import { User } from '../types'
 
 interface SettingsViewProps {
   onOpenQr: () => void
@@ -23,6 +26,12 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onOpenQr }) => {
   const [metaPhoneId, setMetaPhoneId] = useState('')
   const [metaWabaId, setMetaWabaId] = useState('')
   const [metaAppSecret, setMetaAppSecret] = useState('')
+  const [aiServicePrompt, setAiServicePrompt] = useState('')
+  const [defaultLeadAssigneeId, setDefaultLeadAssigneeId] = useState('')
+  const [users, setUsers] = useState<User[]>([])
+  const [notificationPermission, setNotificationPermission] = useState(() => (
+    typeof Notification === 'undefined' ? 'unsupported' : Notification.permission
+  ))
   const [metaAppSecretConfigured, setMetaAppSecretConfigured] = useState(false)
   const [geminiConfigured, setGeminiConfigured] = useState(false)
   const [metaTokenConfigured, setMetaTokenConfigured] = useState(false)
@@ -44,10 +53,39 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onOpenQr }) => {
           setMetaPhoneId(data.metaConfig?.phoneNumberId || '')
           setMetaWabaId(data.metaConfig?.wabaId || '')
           setMetaAppSecretConfigured(data.metaConfig?.appSecret === '__configured__')
+          setAiServicePrompt(data.aiServicePrompt || '')
+          setDefaultLeadAssigneeId(data.defaultLeadAssigneeId || '')
         }
       })
       .catch(() => {})
+
+    fetch('/api/users', { headers: { Authorization: `Bearer ${localStorage.getItem('yr_crm_token') || ''}` } })
+      .then((res) => (res.ok ? res.json() : []))
+      .then((data: User[]) => setUsers(Array.isArray(data) ? data : []))
+      .catch(() => {})
   }, [])
+
+  const enableDesktopNotifications = async () => {
+    if (typeof Notification === 'undefined') {
+      showToast({ tone: 'alert', message: 'Este navegador não oferece notificações do sistema.' })
+      return
+    }
+    try {
+      const permission = Notification.permission === 'default'
+        ? await Notification.requestPermission()
+        : Notification.permission
+      setNotificationPermission(permission)
+      if (permission === 'granted') {
+        localStorage.setItem('yr_crm_windows_notifications', 'enabled')
+        showToast({ tone: 'ok', message: 'Notificações do computador ativadas neste navegador.' })
+      } else {
+        localStorage.removeItem('yr_crm_windows_notifications')
+        showToast({ tone: 'alert', message: 'Permita notificações para o CRM nas configurações do navegador.' })
+      }
+    } catch {
+      showToast({ tone: 'alert', message: 'Não foi possível ativar as notificações neste navegador.' })
+    }
+  }
 
   const handleSaveSettings = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -60,6 +98,8 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onOpenQr }) => {
         },
         body: JSON.stringify({
           geminiApiKey,
+          aiServicePrompt,
+          defaultLeadAssigneeId,
           metaConfig: {
             accessToken: metaToken,
             phoneNumberId: metaPhoneId,
@@ -267,6 +307,45 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onOpenQr }) => {
             <p className="mt-1.5 text-[11px] text-slate-400">
               {geminiConfigured ? 'A chave está salva com segurança. Deixe em branco para mantê-la.' : 'A chave é armazenada no servidor e nunca é exibida novamente.'}
             </p>
+          </div>
+
+          <div className="grid gap-4 sm:grid-cols-2">
+            <label className="block min-w-0 text-xs font-semibold text-slate-700 dark:text-slate-300">
+              <span className="mb-1 flex items-center gap-1.5"><UserRound className="h-3.5 w-3.5 text-blue-600" />Vendedor que recebe leads novos</span>
+              <select
+                value={defaultLeadAssigneeId}
+                onChange={(event) => setDefaultLeadAssigneeId(event.target.value)}
+                className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-xs text-slate-900 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
+              >
+                <option value="">Responsável padrão da equipe</option>
+                {users.map((user) => <option key={user.id} value={user.id}>{user.name} · {user.role}</option>)}
+              </select>
+              <span className="mt-1 block font-normal text-slate-500">A qualificação concluída será encaminhada para esta pessoa.</span>
+            </label>
+
+            <div className="min-w-0 rounded-xl border border-blue-100 bg-blue-50/70 p-3 dark:border-blue-900/60 dark:bg-blue-950/30">
+              <p className="flex items-center gap-1.5 text-xs font-bold text-slate-800 dark:text-slate-100"><BellRing className="h-3.5 w-3.5 text-blue-600" />Avisos no Windows</p>
+              <p className="mt-1 text-[11px] leading-relaxed text-slate-600 dark:text-slate-300">
+                {notificationPermission === 'granted' ? 'Permissão concedida neste navegador.' : notificationPermission === 'denied' ? 'Permissão bloqueada. Altere nas configurações do site no navegador.' : notificationPermission === 'unsupported' ? 'Este navegador não oferece notificações.' : 'Ative para receber um aviso nativo quando a IA encaminhar um lead.'}
+              </p>
+              <button type="button" onClick={enableDesktopNotifications} className="mt-2 rounded-lg border border-blue-200 bg-white px-3 py-1.5 text-[11px] font-bold text-blue-800 dark:border-blue-800 dark:bg-slate-900 dark:text-blue-200">
+                {notificationPermission === 'granted' ? 'Permissão ativa' : 'Ativar notificações'}
+              </button>
+            </div>
+          </div>
+
+          <div>
+            <label htmlFor="ai-service-prompt" className="mb-1 block text-xs font-semibold text-slate-700 dark:text-slate-300">Orientação personalizada para a IA</label>
+            <textarea
+              id="ai-service-prompt"
+              rows={5}
+              maxLength={5000}
+              value={aiServicePrompt}
+              onChange={(event) => setAiServicePrompt(event.target.value)}
+              placeholder="Ex.: fale com cordialidade e objetividade; priorize entender o equipamento, cidade, prazo e condições de entrega."
+              className="w-full resize-y rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-xs leading-relaxed text-slate-900 placeholder:text-slate-400 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
+            />
+            <p className="mt-1 text-[11px] leading-relaxed text-slate-500">A IA faz somente a triagem comercial, escreve em texto simples sem asteriscos e para após qualificar, avisando o responsável. Essas regras não podem ser substituídas pelo texto personalizado.</p>
           </div>
 
           {/* Cascade visual representation */}

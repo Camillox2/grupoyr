@@ -1,16 +1,62 @@
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import fs from 'node:fs'
+import { randomUUID } from 'node:crypto'
 import QRCode from 'qrcode'
 import axios from 'axios'
 import pino from 'pino'
 import { db } from './db.js'
 import { phoneKey } from './phone.js'
-import { runGeminiWithFallback, analyzeImage, transcribeAndUnderstandAudio, generateCustomerSummary } from './gemini.js'
+import { runGeminiWithFallback, analyzeImage, transcribeAndUnderstandAudio, generateCustomerSummary, buildQualificationSystemPrompt } from './gemini.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const AUTH_DIR = path.join(__dirname, '..', 'data', 'baileys_auth')
 const DATA_DIR = path.dirname(AUTH_DIR)
+const WHATSAPP_MEDIA_DIR = path.join(DATA_DIR, 'uploads', 'whatsapp')
+fs.mkdirSync(WHATSAPP_MEDIA_DIR, { recursive: true })
+
+const mediaExtension = (mimeType, originalName = '') => {
+  const known = {
+    'image/jpeg': '.jpg', 'image/png': '.png', 'image/webp': '.webp', 'image/gif': '.gif',
+    'audio/ogg': '.ogg', 'audio/mpeg': '.mp3', 'audio/mp4': '.m4a', 'audio/webm': '.webm',
+    'video/mp4': '.mp4', 'video/3gpp': '.3gp', 'video/quicktime': '.mov', 'video/webm': '.webm',
+    'application/pdf': '.pdf',
+  }
+  if (known[mimeType]) return known[mimeType]
+  const extension = path.extname(String(originalName || '')).toLowerCase()
+  return /^\.[a-z0-9]{1,8}$/.test(extension) ? extension : '.bin'
+}
+
+const saveWhatsAppMedia = (buffer, leadId, mimeType, originalName) => {
+  if (!Buffer.isBuffer(buffer) || !buffer.length) return null
+  const folder = String(leadId).replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 80)
+  const targetDirectory = path.join(WHATSAPP_MEDIA_DIR, folder)
+  fs.mkdirSync(targetDirectory, { recursive: true })
+  const fileName = `${randomUUID()}${mediaExtension(mimeType, originalName)}`
+  fs.writeFileSync(path.join(targetDirectory, fileName), buffer)
+  return path.relative(DATA_DIR, path.join(targetDirectory, fileName))
+}
+
+const toClientMessage = (message) => {
+  const { mediaStorageKey, ...safeMessage } = message
+  return mediaStorageKey
+    ? { ...safeMessage, mediaUrl: `/api/leads/${encodeURIComponent(message.leadId)}/messages/${encodeURIComponent(message.id)}/media` }
+    : safeMessage
+}
+
+const QUALIFICATION_COMPLETE_MARKER = '[[YR_QUALIFICATION_COMPLETE]]'
+const cleanAssistantReply = (value) => {
+  const raw = String(value || '')
+  const qualificationComplete = raw.includes(QUALIFICATION_COMPLETE_MARKER)
+  const text = raw
+    .replaceAll(QUALIFICATION_COMPLETE_MARKER, '')
+    .replace(/^\s*[*+-]\s+/gm, '')
+    .replace(/\*{1,3}|_{2,3}|~~|`{1,3}/g, '')
+    .replace(/^\s{0,3}#{1,6}\s+/gm, '')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim()
+  return { text, qualificationComplete }
+}
 
 if (!fs.existsSync(AUTH_DIR)) {
   fs.mkdirSync(AUTH_DIR, { recursive: true })
@@ -30,6 +76,7 @@ class WhatsAppService {
     this.manualDisconnect = false
     this.lastError = null
     this.qrGeneratedAt = null
+    this.aiBusyLeads = new Set()
   }
 
   init(io) {
@@ -237,12 +284,39 @@ class WhatsAppService {
     }
   }
 
+  async downloadMetaMedia(mediaId) {
+    const { accessToken } = db.getSettings().metaConfig || {}
+    if (!accessToken || !mediaId) return { buffer: null, mimeType: '', fileName: '' }
+    try {
+      const metadata = await axios.get(`https://graph.facebook.com/v21.0/${encodeURIComponent(mediaId)}`, {
+        headers: { Authorization: `Bearer ${accessToken}` },
+      })
+      if (!metadata.data?.url) return { buffer: null, mimeType: metadata.data?.mime_type || '', fileName: '' }
+      const response = await axios.get(metadata.data.url, {
+        headers: { Authorization: `Bearer ${accessToken}` },
+        responseType: 'arraybuffer',
+        maxContentLength: 15 * 1024 * 1024,
+        maxBodyLength: 15 * 1024 * 1024,
+      })
+      return {
+        buffer: Buffer.from(response.data),
+        mimeType: metadata.data.mime_type || response.headers['content-type'] || '',
+        fileName: metadata.data.file_name || '',
+      }
+    } catch (error) {
+      console.warn('[WhatsApp/Meta] Não foi possível baixar a mídia recebida:', error.response?.data || error.message)
+      return { buffer: null, mimeType: '', fileName: '' }
+    }
+  }
+
   async handleIncomingMessage(rawMsg, provider = 'baileys') {
     try {
       let fromPhone = ''
       let text = ''
-      let mediaType = 'text' // text | image | audio
+      let mediaType = 'text' // text | image | audio | video | file
       let mediaBuffer = null
+      let mediaMimeType = ''
+      let mediaFileName = ''
       let phoneJid = null
       let replyJid = null
       let remoteIdentifier = ''
@@ -263,22 +337,45 @@ class WhatsAppService {
         const sourceMessageId = rawMsg.key.id
         if (sourceMessageId && db.find('messages', (message) => message.sourceMessageId === sourceMessageId)) return
 
-        const messageContent = rawMsg.message
+        let messageContent = rawMsg.message
+        // Baileys encapsula mensagens em wrappers de ephemeral/view-once.
+        // Desembrulhar evita perder fotos e vídeos enviados nesse formato.
+        for (let depth = 0; depth < 5; depth += 1) {
+          const nested = messageContent?.ephemeralMessage?.message
+            || messageContent?.viewOnceMessage?.message
+            || messageContent?.viewOnceMessageV2?.message
+            || messageContent?.documentWithCaptionMessage?.message
+          if (!nested) break
+          messageContent = nested
+        }
         if (!messageContent) return
 
         if (messageContent.conversation) {
           text = messageContent.conversation
         } else if (messageContent.extendedTextMessage?.text) {
           text = messageContent.extendedTextMessage.text
-        } else if (messageContent.imageMessage) {
-          mediaType = 'image'
-          text = messageContent.imageMessage.caption || ''
-          const { downloadMediaMessage } = await import('@whiskeysockets/baileys')
-          mediaBuffer = await downloadMediaMessage(rawMsg, 'buffer', {})
-        } else if (messageContent.audioMessage) {
-          mediaType = 'audio'
-          const { downloadMediaMessage } = await import('@whiskeysockets/baileys')
-          mediaBuffer = await downloadMediaMessage(rawMsg, 'buffer', {})
+        } else {
+          const media = messageContent.imageMessage
+            ? { type: 'image', content: messageContent.imageMessage }
+            : messageContent.audioMessage
+              ? { type: 'audio', content: messageContent.audioMessage }
+              : messageContent.videoMessage
+                ? { type: 'video', content: messageContent.videoMessage }
+                : messageContent.documentMessage
+                  ? { type: 'file', content: messageContent.documentMessage }
+                  : null
+          if (media) {
+            mediaType = media.type
+            text = media.content.caption || ''
+            mediaMimeType = media.content.mimetype || (media.type === 'image' ? 'image/jpeg' : media.type === 'video' ? 'video/mp4' : '')
+            mediaFileName = media.content.fileName || media.content.title || ''
+            try {
+              const { downloadMediaMessage } = await import('@whiskeysockets/baileys')
+              mediaBuffer = await downloadMediaMessage(rawMsg, 'buffer', {})
+            } catch (error) {
+              console.warn('[WhatsApp/Baileys] Falha ao baixar mídia recebida:', error.message)
+            }
+          }
         }
       } else {
         // Meta Provider
@@ -290,6 +387,19 @@ class WhatsAppService {
           text = rawMsg.image?.caption || ''
         } else if (rawMsg.type === 'audio') {
           mediaType = 'audio'
+        } else if (rawMsg.type === 'video') {
+          mediaType = 'video'
+          text = rawMsg.video?.caption || ''
+        } else if (rawMsg.type === 'document') {
+          mediaType = 'file'
+          text = rawMsg.document?.caption || ''
+        }
+        if (['image', 'audio', 'video', 'file'].includes(mediaType)) {
+          const mediaObject = rawMsg[mediaType === 'file' ? 'document' : mediaType] || {}
+          const downloaded = await this.downloadMetaMedia(mediaObject.id)
+          mediaBuffer = downloaded.buffer
+          mediaMimeType = downloaded.mimeType || mediaObject.mime_type || ''
+          mediaFileName = downloaded.fileName || mediaObject.filename || ''
         }
       }
 
@@ -317,6 +427,13 @@ class WhatsAppService {
             && (savedPhone.includes(normalizedCandidate) || normalizedCandidate.includes(savedPhone))
         })
       })
+      const currentSettings = db.getSettings()
+      const users = db.get('users')
+      const configuredAssignee = users.find((user) => user.id === currentSettings.defaultLeadAssigneeId)
+        || users.find((user) => user.role === 'admin')
+      const assignedTo = users.some((user) => user.id === lead?.assignedTo)
+        ? lead.assignedTo
+        : configuredAssignee?.id
       if (!lead) {
         lead = db.insert('leads', {
           id: `lead_${Date.now()}`,
@@ -334,7 +451,7 @@ class WhatsAppService {
           aiSummary: 'Contato inicial iniciado via WhatsApp. Em processo de qualificação.',
           aiEnabled: true,
           lastInteraction: new Date().toISOString(),
-          assignedTo: 'usr_vendedor',
+          assignedTo,
           value: 480.0,
           notes: 'Lead criado automaticamente ao receber mensagem no WhatsApp.',
           whatsappJid: provider === 'baileys' ? replyJid : undefined,
@@ -353,24 +470,30 @@ class WhatsAppService {
             : {}),
           ...(provider === 'baileys' ? { whatsappJid: replyJid } : {}),
           ...(provider === 'baileys' && phoneJid ? { phone: fromPhone } : {}),
+          ...(!lead.assignedTo && assignedTo ? { assignedTo } : {}),
         }
         db.update('leads', lead.id, contactUpdate)
         lead = { ...lead, ...contactUpdate }
       }
 
       // Save message in DB
+      const mediaStorageKey = mediaBuffer
+        ? saveWhatsAppMedia(mediaBuffer, lead.id, mediaMimeType, mediaFileName)
+        : null
+      const mediaLabel = mediaType === 'image' ? '[Imagem]' : mediaType === 'audio' ? '[Áudio]' : mediaType === 'video' ? '[Vídeo]' : '[Arquivo]'
       const savedMsg = db.insert('messages', {
         id: `msg_${Date.now()}`,
         sourceMessageId: provider === 'baileys' ? rawMsg.key.id : rawMsg.id,
         leadId: lead.id,
         from: 'client',
         type: mediaType,
-        content: text || (mediaType === 'audio' ? '[Mensagem de Áudio]' : '[Imagem]'),
+        content: text || mediaLabel,
+        ...(mediaStorageKey ? { mediaStorageKey, mediaMimeType, mediaFileName: String(mediaFileName || mediaLabel.slice(1, -1)).slice(0, 180), mediaSize: mediaBuffer.length } : {}),
         timestamp: new Date().toISOString(),
       })
 
       if (this.io) {
-        this.io.emit('message:new', savedMsg)
+        this.io.emit('message:new', toClientMessage(savedMsg))
         this.io.emit('lead:updated', lead)
       }
 
@@ -410,23 +533,28 @@ class WhatsAppService {
   }
 
   async respondWithAi(lead, userMsg, mediaBuffer = null) {
+    if (this.aiBusyLeads.has(lead.id)) return
+    this.aiBusyLeads.add(lead.id)
     try {
       // Avisos do sistema ("conversa encerrada") nao sao fala de ninguem.
       const history = db.filter('messages', (m) => m.leadId === lead.id && m.from !== 'system').slice(-10)
 
+      const systemInstruction = buildQualificationSystemPrompt()
       let aiResult
       if (userMsg.type === 'image' && mediaBuffer) {
-        aiResult = await analyzeImage(mediaBuffer, 'image/jpeg', userMsg.content)
+        aiResult = await analyzeImage(mediaBuffer, userMsg.mediaMimeType || 'image/jpeg', userMsg.content, systemInstruction)
       } else if (userMsg.type === 'audio' && mediaBuffer) {
-        aiResult = await transcribeAndUnderstandAudio(mediaBuffer, 'audio/ogg')
+        aiResult = await transcribeAndUnderstandAudio(mediaBuffer, userMsg.mediaMimeType || 'audio/ogg', systemInstruction)
       } else {
         aiResult = await runGeminiWithFallback({
           prompt: userMsg.content,
           history: history.slice(0, -1),
+          systemInstruction,
         })
       }
 
-      const replyText = aiResult.text
+      const { text: replyText, qualificationComplete } = cleanAssistantReply(aiResult.text)
+      if (!replyText) return
 
       // Salva mensagem da IA no banco
       const aiMsg = db.insert('messages', {
@@ -452,17 +580,44 @@ class WhatsAppService {
       const updatedHistory = db.filter('messages', (m) => m.leadId === lead.id)
       const summary = await generateCustomerSummary(lead, updatedHistory)
 
-      db.update('leads', lead.id, {
+      const users = db.get('users')
+      const settings = db.getSettings()
+      const assignee = users.find((user) => user.id === lead.assignedTo)
+        || users.find((user) => user.id === settings.defaultLeadAssigneeId)
+        || users.find((user) => user.role === 'admin')
+      const updatedLead = db.update('leads', lead.id, {
         stage: lead.stage === 'novo_lead' ? 'qualificacao_ia' : lead.stage,
         aiSummary: summary,
         lastInteraction: new Date().toISOString(),
+        ...(assignee && !lead.assignedTo ? { assignedTo: assignee.id } : {}),
+        ...(qualificationComplete ? {
+          aiEnabled: false,
+          qualificationCompletedAt: new Date().toISOString(),
+          ...(assignee ? { assignedTo: assignee.id } : {}),
+        } : {}),
       })
 
       if (this.io) {
-        this.io.emit('lead:updated', db.find('leads', (l) => l.id === lead.id))
+        this.io.emit('lead:updated', updatedLead)
+      }
+
+      if (qualificationComplete && assignee) {
+        const notification = db.insert('notifications', {
+          id: `ntf_${randomUUID()}`,
+          recipientId: assignee.id,
+          leadId: lead.id,
+          kind: 'lead_qualified',
+          title: 'Lead qualificado pela IA',
+          message: `${lead.name} concluiu a qualificação e aguarda o atendimento comercial.`,
+          createdAt: new Date().toISOString(),
+          readAt: null,
+        })
+        this.io?.emit('notification:new', { id: notification.id, recipientId: notification.recipientId })
       }
     } catch (err) {
       console.error('[WhatsApp/AI] Erro ao responder com IA:', err)
+    } finally {
+      this.aiBusyLeads.delete(lead.id)
     }
   }
 
@@ -537,6 +692,8 @@ class WhatsAppService {
       ? { image: buffer, caption }
       : mimetype.startsWith('audio/')
         ? { audio: buffer, mimetype, ptt: true }
+        : mimetype.startsWith('video/')
+          ? { video: buffer, mimetype, caption }
         : { document: buffer, mimetype, fileName: filename, caption }
 
     await this.socket.sendMessage(jid, payload)
