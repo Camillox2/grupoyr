@@ -253,6 +253,9 @@ class WhatsAppService {
           this.status = 'disconnected'
           this.socket = null
           this.connectedNumber = null
+          this.qrCode = null
+          this.qrGeneratedAt = null
+          this.pairingCode = null
 
           this.lastError = reason === DisconnectReason.restartRequired
             ? 'QR aceito. Finalizando a conexão com o WhatsApp...'
@@ -714,26 +717,54 @@ class WhatsAppService {
   }
 
   async requestPairingCode(phoneNumber) {
-    const cleanPhone = phoneNumber.replace(/\D/g, '')
+    const cleanPhone = String(phoneNumber || '').replace(/\D/g, '')
     if (cleanPhone.length < 11) throw new Error('Informe o número com DDI e DDD.')
-    try {
-      if (!this.socket || this.status === 'disconnected') {
+    if (this.activeProvider !== 'baileys') throw new Error('O pareamento por código exige o provedor Baileys.')
+    if (this.status === 'connected') throw new Error('O WhatsApp já está conectado ao CRM.')
+
+    if (!this.socket || this.status === 'disconnected') {
+      await this.initBaileys()
+    }
+
+    const deadline = Date.now() + 20000
+    while (Date.now() < deadline && this.status !== 'qr_ready') {
+      if (this.status === 'connected') throw new Error('O WhatsApp já está conectado ao CRM.')
+      if (this.status === 'disconnected' && !this.reconnectTimer) {
         await this.initBaileys()
       }
-      if (this.status === 'qr_ready') throw new Error('O QR Code já está pronto. Use a aba Escanear QR Code.')
-      if (this.socket && typeof this.socket.requestPairingCode === 'function') {
-        const code = await this.socket.requestPairingCode(cleanPhone)
-        if (code) {
-          this.pairingCode = code
-          console.log(`[WhatsApp/Baileys] Código de pareamento real gerado para ${cleanPhone}.`)
-          this.broadcastStatus()
-          return code
-        }
+      await new Promise((resolve) => setTimeout(resolve, 200))
+    }
+
+    const socket = this.socket
+    if (!socket || this.status !== 'qr_ready') {
+      throw new Error('O WhatsApp ainda está conectando. Aguarde alguns segundos e tente gerar o código novamente.')
+    }
+    if (typeof socket.requestPairingCode !== 'function') {
+      throw new Error('Esta sessão não oferece pareamento por código. Use o QR Code atualizado.')
+    }
+
+    try {
+      const code = await socket.requestPairingCode(cleanPhone)
+      if (!code) throw new Error('O WhatsApp não retornou um código de pareamento.')
+      this.pairingCode = code
+      this.qrCode = null
+      this.qrGeneratedAt = null
+      this.lastError = null
+      console.log('[WhatsApp/Baileys] Código de pareamento gerado.')
+      this.broadcastStatus()
+      return code
+    } catch (error) {
+      const statusCode = Number(error?.output?.statusCode)
+      const errorCode = String(error?.code || '')
+      console.warn('[WhatsApp/Baileys] Falha ao gerar código de pareamento.', {
+        name: String(error?.name || 'Error').slice(0, 40),
+        code: errorCode.slice(0, 32),
+        statusCode: Number.isFinite(statusCode) ? statusCode : null,
+      })
+      if (statusCode === 428 || /connection (closed|terminated)/i.test(String(error?.message || ''))) {
+        throw new Error('A conexão com o WhatsApp foi encerrada. Aguarde a reconexão e gere o código novamente.')
       }
-      throw new Error('O WhatsApp ainda está preparando a sessão. Aguarde o QR Code ou tente novamente em alguns segundos.')
-    } catch (err) {
-      console.error('[WhatsApp/Baileys] Erro ao gerar código de pareamento:', err)
-      throw new Error('Não foi possível gerar um código real. Abra a aba QR Code e faça a leitura.')
+      throw new Error('O WhatsApp não gerou o código. Confira o número com DDI e DDD e tente novamente.')
     }
   }
 
