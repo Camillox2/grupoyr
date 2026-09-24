@@ -551,6 +551,7 @@ export const WhatsAppChatView: React.FC<WhatsAppChatViewProps> = ({
                 onClick={() => handleConversationStatus(conversationClosed ? 'open' : 'closed')}
                 disabled={closing}
                 className="action-btn action-btn--ghost inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-extrabold disabled:opacity-50"
+                aria-label={conversationClosed ? 'Reabrir conversa' : 'Encerrar conversa'}
                 title={conversationClosed ? 'Trazer de volta para as conversas abertas' : 'Encerrar: a conversa sai das abertas e volta sozinha se o cliente escrever'}
               >
                 {conversationClosed ? <ArchiveRestore className="h-3.5 w-3.5" /> : <Archive className="h-3.5 w-3.5" />}
@@ -563,16 +564,28 @@ export const WhatsAppChatView: React.FC<WhatsAppChatViewProps> = ({
                     ? 'bg-purple-50 dark:bg-purple-950/40 text-purple-700 dark:text-purple-300 border-purple-200 dark:border-purple-800'
                     : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-700'
                 }`}
+                aria-label={aiEnabled ? 'Pausar respostas automáticas' : 'Ativar respostas automáticas'}
                 title="Pausar ou ativar respostas automáticas da IA para este lead"
               >
                 <Bot className="w-3.5 h-3.5" />
-                {aiEnabled ? 'IA Respondendo' : 'IA Pausada'}
+                {aiEnabled ? (
+                  <>
+                    <span className="whatsapp-ai-label-full">IA Respondendo</span>
+                    <span className="whatsapp-ai-label-compact">IA ativa</span>
+                  </>
+                ) : (
+                  <>
+                    <span className="whatsapp-ai-label-full">IA Pausada</span>
+                    <span className="whatsapp-ai-label-compact">IA pausada</span>
+                  </>
+                )}
               </button>
 
               {!isWide && (
                 <button
                   onClick={() => setSheetOpen(true)}
                   className="action-btn action-btn--primary inline-flex items-center gap-1.5 rounded-full px-3.5 py-2 text-xs font-extrabold"
+                  aria-label="Abrir ficha do cliente"
                   title="Abrir a ficha de fechamento deste cliente"
                 >
                   <FileSignature className="w-3.5 h-3.5" />
