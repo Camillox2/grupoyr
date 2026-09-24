@@ -43,6 +43,15 @@ const FILTERS: { id: EventFilter; label: string }[] = [
 ]
 const safeDate = (value: string) => parseLocalDate(value) || new Date()
 
+const AgendaAnimatedMark = () => (
+  <svg className="yr-calendar-mark" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+    <rect x="3.5" y="4.5" width="17" height="16" rx="3" stroke="currentColor" strokeWidth="1.5" />
+    <path d="M8 3.5v3M16 3.5v3M4 9.5h16" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+    <path className="yr-calendar-mark__route" d="M6.5 16h3.4l2.3-3.2h5.3" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
+    <circle cx="17.5" cy="12.8" r="1.1" fill="currentColor" />
+  </svg>
+)
+
 const AgendaVectorArt = () => (
   <div className="yr-vector-float" aria-hidden="true">
     <svg className="yr-agenda-art" viewBox="0 0 210 148" fill="none">
@@ -195,7 +204,7 @@ export const CalendarView: React.FC<CalendarViewProps> = ({ customEvents, contra
   return (
     <div className="yr-calendar-page space-y-5 pb-14">
       <PageHeader
-        icon={<CalendarDays className="h-5 w-5" />}
+        icon={<AgendaAnimatedMark />}
         eyebrow="Operação"
         title="Agenda"
         description="Entregas, retiradas, visitas, retornos e cobranças em um só lugar."

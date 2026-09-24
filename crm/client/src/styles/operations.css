@@ -158,9 +158,12 @@
 .yr-vector-float { display: grid; place-items: center; animation: yr-vector-float 3.5s ease-in-out infinite; }
 .yr-agenda-art { display: block; width: 150px; height: auto; }
 .yr-agenda-art__route { animation: yr-route-draw 2.4s ease-in-out infinite alternate; }
+.yr-calendar-mark { display: block; width: 20px; height: 20px; overflow: visible; color: var(--yr-600); }
+.yr-calendar-mark__route { stroke-dasharray: 14; stroke-dashoffset: 14; animation: yr-calendar-mark-draw 3.8s cubic-bezier(.22, 1, .36, 1) infinite; }
 @keyframes yr-calendar-in { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
 @keyframes yr-vector-float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-4px); } }
 @keyframes yr-route-draw { from { stroke-dashoffset: 20; } to { stroke-dashoffset: 0; } }
+@keyframes yr-calendar-mark-draw { 0%, 18% { stroke-dashoffset: 14; opacity: .45; } 62%, 100% { stroke-dashoffset: 0; opacity: 1; } }
 
 .yr-calendar-form { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 13px; }
 .yr-calendar-field { display: grid; min-width: 0; gap: 6px; color: var(--ink); font-size: 11px; font-weight: 800; }
