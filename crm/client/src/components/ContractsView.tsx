@@ -9,7 +9,6 @@ import {
   Printer,
   ShieldCheck,
   Trash2,
-  X,
   Copy,
   Send,
   Workflow,
@@ -19,7 +18,7 @@ import {
 import { Contract, Lead } from '../types'
 import { celebrateSignature } from './ui/celebrate'
 import { PageHeader, Notice, ActionButton } from './ui/PageHeader'
-import { ResponsiveTable, EmptyState } from './ui/ResponsiveTable'
+import { EmptyState } from './ui/ResponsiveTable'
 import { ContractStatus } from './ui/Status'
 import { brl } from './ui/Feedback'
 import { Toast, useToast } from './ui/Toast'
@@ -155,24 +154,69 @@ export const ContractsView: React.FC<ContractsViewProps> = ({
   const [signingContract, setSigningContract] = useState<Contract | null>(null)
   const [signerName, setSignerName] = useState('')
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
+  const signatureReadyRef = useRef(false)
   const [isDrawing, setIsDrawing] = useState(false)
   const [hasSignature, setHasSignature] = useState(false)
+  const [signError, setSignError] = useState<string | null>(null)
   const [submittingSign, setSubmittingSign] = useState(false)
   const [publicBaseUrl, setPublicBaseUrl] = useState('')
   const [copiedLinkId, setCopiedLinkId] = useState<string | null>(null)
   const [linkError, setLinkError] = useState<string | null>(null)
 
-  // Initialize canvas for signature
+  const setSignatureReady = (ready: boolean) => {
+    signatureReadyRef.current = ready
+    setHasSignature(ready)
+  }
+
+  // Ajusta o quadro ao tamanho real, inclusive no celular e em telas de alta densidade.
   useEffect(() => {
-    if (signingContract && canvasRef.current) {
-      const canvas = canvasRef.current
+    if (!signingContract || !canvasRef.current) return
+
+    const canvas = canvasRef.current
+    let initialized = false
+    const configureCanvas = () => {
+      const rect = canvas.getBoundingClientRect()
+      if (rect.width <= 0 || rect.height <= 0) return
+      const pixelRatio = Math.max(1, window.devicePixelRatio || 1)
+      const width = Math.round(rect.width * pixelRatio)
+      const height = Math.round(rect.height * pixelRatio)
+      const canvasSizeChanged = canvas.width !== width || canvas.height !== height
+      const hadSignature = canvasSizeChanged && initialized && signatureReadyRef.current
+      const previousSignature = hadSignature
+        ? canvas.toDataURL('image/png')
+        : null
+      if (canvasSizeChanged) {
+        canvas.width = width
+        canvas.height = height
+      }
       const ctx = canvas.getContext('2d')
       if (ctx) {
+        ctx.setTransform(pixelRatio, 0, 0, pixelRatio, 0, 0)
         ctx.strokeStyle = '#0f172a'
         ctx.lineWidth = 2.5
         ctx.lineCap = 'round'
         ctx.lineJoin = 'round'
+
+        if (previousSignature) {
+          const image = new Image()
+          image.onload = () => {
+            ctx.drawImage(image, 0, 0, rect.width, rect.height)
+            ctx.beginPath()
+          }
+          image.src = previousSignature
+        } else if (hadSignature) {
+          setSignatureReady(false)
+          setSignError('O quadro foi redimensionado. Desenhe a assinatura novamente.')
+        }
       }
+      initialized = true
+    }
+
+    const frame = window.requestAnimationFrame(configureCanvas)
+    window.addEventListener('resize', configureCanvas)
+    return () => {
+      window.cancelAnimationFrame(frame)
+      window.removeEventListener('resize', configureCanvas)
     }
   }, [signingContract])
 
@@ -216,7 +260,25 @@ export const ContractsView: React.FC<ContractsViewProps> = ({
     }
   }
 
-  const startDrawing = (e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>) => {
+  const openSigningDialog = (contract: Contract) => {
+    setSigningContract(contract)
+    setSignerName(contract.clientName || '')
+    setSignatureReady(false)
+    setIsDrawing(false)
+    setSignError(null)
+  }
+
+  const closeSigningDialog = () => {
+    if (submittingSign) return
+    setSigningContract(null)
+    setSignerName('')
+    setSignatureReady(false)
+    setIsDrawing(false)
+    setSignError(null)
+  }
+
+  const startDrawing = (e: React.PointerEvent<HTMLCanvasElement>) => {
+    if (e.button !== 0) return
     setIsDrawing(true)
     const canvas = canvasRef.current
     if (!canvas) return
@@ -224,14 +286,12 @@ export const ContractsView: React.FC<ContractsViewProps> = ({
     if (!ctx) return
 
     const rect = canvas.getBoundingClientRect()
-    const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX
-    const clientY = 'touches' in e ? e.touches[0].clientY : e.clientY
-
     ctx.beginPath()
-    ctx.moveTo(clientX - rect.left, clientY - rect.top)
+    ctx.moveTo(e.clientX - rect.left, e.clientY - rect.top)
+    e.currentTarget.setPointerCapture(e.pointerId)
   }
 
-  const draw = (e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>) => {
+  const draw = (e: React.PointerEvent<HTMLCanvasElement>) => {
     if (!isDrawing) return
     const canvas = canvasRef.current
     if (!canvas) return
@@ -239,12 +299,9 @@ export const ContractsView: React.FC<ContractsViewProps> = ({
     if (!ctx) return
 
     const rect = canvas.getBoundingClientRect()
-    const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX
-    const clientY = 'touches' in e ? e.touches[0].clientY : e.clientY
-
-    ctx.lineTo(clientX - rect.left, clientY - rect.top)
+    ctx.lineTo(e.clientX - rect.left, e.clientY - rect.top)
     ctx.stroke()
-    setHasSignature(true)
+    if (!signatureReadyRef.current) setSignatureReady(true)
   }
 
   const stopDrawing = () => {
@@ -257,12 +314,14 @@ export const ContractsView: React.FC<ContractsViewProps> = ({
     const ctx = canvas.getContext('2d')
     if (!ctx) return
     ctx.clearRect(0, 0, canvas.width, canvas.height)
-    setHasSignature(false)
+    setSignatureReady(false)
+    setSignError(null)
   }
 
   const handleSignSubmit = async () => {
     if (!signingContract || !canvasRef.current || !hasSignature) return
     setSubmittingSign(true)
+    setSignError(null)
 
     const signatureDataUrl = canvasRef.current.toDataURL('image/png')
 
@@ -279,18 +338,126 @@ export const ContractsView: React.FC<ContractsViewProps> = ({
         }),
       })
 
+      const data = await res.json().catch(() => null)
+      if (!res.ok) {
+        setSignError(data?.error || 'Não foi possível registrar a assinatura. Confira os dados e tente novamente.')
+        return
+      }
+
       if (res.ok) {
         setSigningContract(null)
-        clearCanvas()
+        setSignerName('')
+        setSignatureReady(false)
+        setIsDrawing(false)
         onRefreshContracts()
         celebrateSignature()
       }
     } catch (e) {
       console.error('Erro ao assinar contrato:', e)
+      setSignError('Falha de comunicação com o servidor. A assinatura não foi registrada.')
     } finally {
       setSubmittingSign(false)
     }
   }
+
+  const renderContractActions = (contract: Contract) => (
+    <>
+      {contract.status === 'pendente_assinatura' && (
+        <button
+          onClick={() => handleSendLink(contract)}
+          disabled={sendingLinkId === contract.id || !contract.leadId}
+          className="inline-flex min-w-[132px] items-center justify-center gap-1.5 rounded-[8px] px-2.5 py-2 text-[11px] font-bold transition-colors disabled:opacity-50"
+          style={{ background: 'var(--ok-surface)', color: 'var(--ok)', border: '1px solid var(--ok-border)' }}
+          title={contract.leadId ? 'Manda o link de assinatura no WhatsApp do cliente deste contrato' : 'Contrato sem contato vinculado'}
+        >
+          <Send className="h-3.5 w-3.5" />
+          {sendingLinkId === contract.id ? 'Enviando' : contract.linkSentAt ? 'Reenviar ao cliente' : 'Enviar ao cliente'}
+        </button>
+      )}
+
+      {contract.status === 'pendente_assinatura' && (
+        <button
+          onClick={() => handleCopySigningLink(contract)}
+          disabled={!contract.signingToken}
+          className="inline-flex items-center gap-1.5 rounded-[8px] px-2.5 py-2 text-[11px] font-bold transition-colors disabled:opacity-40"
+          style={{ background: 'var(--yr-050)', color: 'var(--yr-700)', border: '1px solid var(--yr-100)' }}
+          title="Copiar o link para o cliente assinar no celular"
+        >
+          {copiedLinkId === contract.id ? <CheckCircle2 className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
+          {copiedLinkId === contract.id ? 'Copiado' : 'Copiar link'}
+        </button>
+      )}
+
+      <button
+        onClick={() => {
+          setShareError(null)
+          setShareCopied(false)
+          setShareContract(contract)
+        }}
+        disabled={!contract.signingToken}
+        className="inline-flex items-center gap-1.5 rounded-[8px] px-2.5 py-2 text-[11px] font-bold transition-colors disabled:opacity-40"
+        style={{ background: 'var(--surface-sunken)', color: 'var(--ink-muted)', border: '1px solid var(--border-subtle)' }}
+        title="Abrir as opções de envio e compartilhamento"
+      >
+        <Send className="h-3.5 w-3.5" />
+        Compartilhar
+      </button>
+
+      <button
+        onClick={() => setPreviewContract(contract)}
+        className="inline-flex items-center gap-1.5 rounded-[8px] px-2.5 py-2 text-[11px] font-bold transition-colors"
+        style={{ background: 'var(--surface-sunken)', color: 'var(--ink-muted)', border: '1px solid var(--border-subtle)' }}
+        title="Ver o template preenchido do contrato"
+      >
+        <Eye className="h-3.5 w-3.5" />
+        Ver contrato
+      </button>
+
+      <button
+        onClick={() => setChecklistContract(contract)}
+        className="inline-flex items-center gap-1.5 rounded-[8px] px-2.5 py-2 text-[11px] font-bold transition-colors"
+        style={{ background: 'var(--yr-050)', color: 'var(--yr-700)', border: '1px solid var(--yr-100)' }}
+        title="Conferir o checklist de fechamento deste contrato"
+      >
+        <ClipboardList className="h-3.5 w-3.5" />
+        Checklist
+      </button>
+
+      {contract.status === 'pendente_assinatura' && (
+        <button
+          onClick={() => openSigningDialog(contract)}
+          className="inline-flex items-center gap-1.5 rounded-[8px] px-2.5 py-2 text-[11px] font-bold transition-colors"
+          style={{ background: 'var(--yr-700)', color: 'var(--ink-on-brand)' }}
+        >
+          Assinar na tela
+        </button>
+      )}
+
+      {onOpenLead && contract.leadId && (
+        <button
+          onClick={() => onOpenLead(contract.leadId)}
+          className="inline-flex items-center gap-1.5 rounded-[8px] px-2.5 py-2 text-[11px] font-bold transition-colors"
+          style={{ background: 'var(--surface-sunken)', color: 'var(--ink-muted)', border: '1px solid var(--border-subtle)' }}
+          title="Abrir a conversa deste cliente no atendimento"
+        >
+          <MessageSquare className="h-3.5 w-3.5" />
+          Conversa
+        </button>
+      )}
+
+      {(contract.nextStatuses?.length ?? 0) > 0 && (
+        <button
+          onClick={() => setStatusContract(contract)}
+          className="inline-flex items-center gap-1.5 rounded-[8px] px-2.5 py-2 text-[11px] font-bold transition-colors"
+          style={{ background: 'var(--surface-sunken)', color: 'var(--ink)', border: '1px solid var(--border-strong)' }}
+          title="Cancelar, encerrar ou reativar este contrato"
+        >
+          <Workflow className="h-3.5 w-3.5" />
+          Status
+        </button>
+      )}
+    </>
+  )
 
   return (
     <div className="pb-12">
@@ -315,192 +482,68 @@ export const ContractsView: React.FC<ContractsViewProps> = ({
 
       {linkError && <Notice tone="alert">{linkError}</Notice>}
 
-      <ResponsiveTable
-        items={contracts}
-        getKey={(contract) => contract.id}
-        caption="Contratos gerados"
-        empty={
-          <EmptyState
-            icon={<FileSignature className="h-5 w-5" />}
-            title="Nenhum contrato ainda"
-            description="Gere o primeiro termo a partir de um lead do funil. Ele nasce como rascunho e segue para assinatura."
-            action={
-              <ActionButton onClick={onOpenNewContractModal}>
-                <Plus className="h-4 w-4" />
-                Gerar contrato
-              </ActionButton>
-            }
-          />
-        }
-        columns={[
-          {
-            header: 'Contrato',
-            primary: true,
-            cell: (contract) => (
-              <span className="font-mono font-bold" style={{ color: 'var(--yr-500)' }}>
-                {contract.number}
-              </span>
-            ),
-          },
-          {
-            header: 'Cliente',
-            secondary: true,
-            cell: (contract) => (
-              <span>
-                {contract.clientName}
-                {contract.clientCpf && (
-                  <span className="tnum" style={{ color: 'var(--ink-faint)' }}>
-                    {' '}· CPF {contract.clientCpf}
-                  </span>
-                )}
-              </span>
-            ),
-          },
-          {
-            header: 'Equipamento',
-            cell: (contract) => (
-              <span className="block max-w-xs truncate" title={contract.equipmentNames}>
-                {contract.equipmentNames}
-              </span>
-            ),
-          },
-          {
-            header: 'Vigência',
-            cell: (contract) => (
-              <span className="tnum whitespace-nowrap" style={{ color: 'var(--ink-muted)' }}>
-                {formatDate(contract.startDate)} a {formatDate(contract.endDate)}
-              </span>
-            ),
-          },
-          {
-            header: 'Valor mensal',
-            align: 'right',
-            cell: (contract) => (
-              <span className="tnum font-bold" style={{ color: 'var(--ink)' }}>
-                {brl(contract.monthlyValue)}
-              </span>
-            ),
-          },
-          {
-            header: 'Status',
-            cell: (contract) => {
-              const countdown = getContractCountdown(contract, today)
-              return (
-                <span className="inline-flex flex-col items-start gap-1">
-                  <ContractStatus status={contract.status} />
-                  {countdown && <span className={`yr-contract-countdown is-${countdown.phase}`}><Clock3 aria-hidden="true" />{countdown.label}</span>}
-                  {contract.statusReason && (contract.status === 'cancelado' || contract.status === 'encerrado') && (
-                    <span className="max-w-[220px] truncate text-[10.5px]" style={{ color: 'var(--ink-faint)' }} title={contract.statusReason}>
-                      {contract.statusReason}
-                    </span>
-                  )}
-                </span>
-              )
-            },
-          },
-        ]}
-        actions={(contract) => (
-          <>
-            {contract.status === 'pendente_assinatura' && (
-              <button
-                onClick={() => handleSendLink(contract)}
-                disabled={sendingLinkId === contract.id || !contract.leadId}
-                className="inline-flex min-w-[132px] items-center justify-center gap-1.5 rounded-[8px] px-2.5 py-2 text-[11px] font-bold transition-colors disabled:opacity-50"
-                style={{ background: 'var(--ok-surface)', color: 'var(--ok)', border: '1px solid var(--ok-border)' }}
-                title={contract.leadId ? 'Manda o link de assinatura no WhatsApp do cliente deste contrato' : 'Contrato sem contato vinculado'}
-              >
-                <Send className="h-3.5 w-3.5" />
-                {sendingLinkId === contract.id ? 'Enviando' : contract.linkSentAt ? 'Reenviar ao cliente' : 'Enviar ao cliente'}
-              </button>
-            )}
+      {contracts.length === 0 ? (
+        <EmptyState
+          icon={<FileSignature className="h-5 w-5" />}
+          title="Nenhum contrato ainda"
+          description="Gere o primeiro termo a partir de um lead do funil. Ele nasce como rascunho e segue para assinatura."
+          action={(
+            <ActionButton onClick={onOpenNewContractModal}>
+              <Plus className="h-4 w-4" />
+              Gerar contrato
+            </ActionButton>
+          )}
+        />
+      ) : (
+        <section className="yr-contract-list" aria-label="Contratos gerados">
+          {contracts.map((contract) => {
+            const countdown = getContractCountdown(contract, today)
+            return (
+              <article className="yr-contract-card" key={contract.id}>
+                <header className="yr-contract-card__head">
+                  <div className="yr-contract-card__identity">
+                    <p>Contrato</p>
+                    <strong>{contract.number}</strong>
+                    <h3>{contract.clientName}</h3>
+                    {contract.clientCpf && <span>CPF {contract.clientCpf}</span>}
+                  </div>
+                  <div className="yr-contract-card__status" aria-label={`Status ${contract.status}`}>
+                    <ContractStatus status={contract.status} />
+                    {countdown && (
+                      <span className={`yr-contract-countdown is-${countdown.phase}`}>
+                        <Clock3 aria-hidden="true" />
+                        {countdown.label}
+                      </span>
+                    )}
+                    {contract.statusReason && (contract.status === 'cancelado' || contract.status === 'encerrado') && (
+                      <span className="yr-contract-card__reason" title={contract.statusReason}>{contract.statusReason}</span>
+                    )}
+                  </div>
+                </header>
 
-            {contract.status === 'pendente_assinatura' && (
-            <button
-              onClick={() => handleCopySigningLink(contract)}
-              disabled={!contract.signingToken}
-              className="inline-flex items-center gap-1.5 rounded-[8px] px-2.5 py-2 text-[11px] font-bold transition-colors disabled:opacity-40"
-              style={{ background: 'var(--yr-050)', color: 'var(--yr-700)', border: '1px solid var(--yr-100)' }}
-              title="Copiar o link para o cliente assinar no celular"
-            >
-              {copiedLinkId === contract.id ? <CheckCircle2 className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
-              {copiedLinkId === contract.id ? 'Copiado' : 'Copiar link'}
-            </button>
-            )}
+                <dl className="yr-contract-card__facts">
+                  <div className="yr-contract-card__fact yr-contract-card__fact--equipment">
+                    <dt>Equipamento</dt>
+                    <dd title={contract.equipmentNames}>{contract.equipmentNames || 'Não informado'}</dd>
+                  </div>
+                  <div className="yr-contract-card__fact">
+                    <dt>Vigência</dt>
+                    <dd className="tnum">{formatDate(contract.startDate)} a {formatDate(contract.endDate)}</dd>
+                  </div>
+                  <div className="yr-contract-card__fact yr-contract-card__fact--amount">
+                    <dt>Valor mensal</dt>
+                    <dd className="tnum">{brl(contract.monthlyValue)}</dd>
+                  </div>
+                </dl>
 
-            <button
-              onClick={() => {
-                setShareError(null)
-                setShareCopied(false)
-                setShareContract(contract)
-              }}
-              disabled={!contract.signingToken}
-              className="inline-flex items-center gap-1.5 rounded-[8px] px-2.5 py-2 text-[11px] font-bold transition-colors disabled:opacity-40"
-              style={{ background: 'var(--surface-sunken)', color: 'var(--ink-muted)', border: '1px solid var(--border-subtle)' }}
-              title="Abrir as opções de envio e compartilhamento"
-            >
-              <Send className="h-3.5 w-3.5" />
-              Compartilhar
-            </button>
-
-            <button
-              onClick={() => setPreviewContract(contract)}
-              className="inline-flex items-center gap-1.5 rounded-[8px] px-2.5 py-2 text-[11px] font-bold transition-colors"
-              style={{ background: 'var(--surface-sunken)', color: 'var(--ink-muted)', border: '1px solid var(--border-subtle)' }}
-              title="Ver o template preenchido do contrato"
-            >
-              <Eye className="h-3.5 w-3.5" />
-              Ver contrato
-            </button>
-
-            <button
-              onClick={() => setChecklistContract(contract)}
-              className="inline-flex items-center gap-1.5 rounded-[8px] px-2.5 py-2 text-[11px] font-bold transition-colors"
-              style={{ background: 'var(--yr-050)', color: 'var(--yr-700)', border: '1px solid var(--yr-100)' }}
-              title="Conferir o checklist de fechamento deste contrato"
-            >
-              <ClipboardList className="h-3.5 w-3.5" />
-              Checklist
-            </button>
-
-            {contract.status === 'pendente_assinatura' && (
-              <button
-                onClick={() => {
-                  setSigningContract(contract)
-                  setSignerName(contract.clientName)
-                }}
-                className="inline-flex items-center gap-1.5 rounded-[8px] px-2.5 py-2 text-[11px] font-bold transition-colors"
-                style={{ background: 'var(--yr-700)', color: 'var(--ink-on-brand)' }}
-              >
-                Assinar na tela
-              </button>
-            )}
-
-            {onOpenLead && contract.leadId && (
-              <button
-                onClick={() => onOpenLead(contract.leadId)}
-                className="inline-flex items-center gap-1.5 rounded-[8px] px-2.5 py-2 text-[11px] font-bold transition-colors"
-                style={{ background: 'var(--surface-sunken)', color: 'var(--ink-muted)', border: '1px solid var(--border-subtle)' }}
-                title="Abrir a conversa deste cliente no atendimento"
-              >
-                <MessageSquare className="h-3.5 w-3.5" />
-                Conversa
-              </button>
-            )}
-
-            {(contract.nextStatuses?.length ?? 0) > 0 && (
-              <button
-                onClick={() => setStatusContract(contract)}
-                className="inline-flex items-center gap-1.5 rounded-[8px] px-2.5 py-2 text-[11px] font-bold transition-colors"
-                style={{ background: 'var(--surface-sunken)', color: 'var(--ink)', border: '1px solid var(--border-strong)' }}
-                title="Cancelar, encerrar ou reativar este contrato"
-              >
-                <Workflow className="h-3.5 w-3.5" />
-                Status
-              </button>
-            )}
-          </>
-        )}
-      />
+                <footer className="yr-contract-card__footer" aria-label={`Ações do contrato ${contract.number}`}>
+                  <div className="yr-contract-card__actions">{renderContractActions(contract)}</div>
+                </footer>
+              </article>
+            )
+          })}
+        </section>
+      )}
 
       <ContractStatusModal
         contract={statusContract}
@@ -697,80 +740,22 @@ export const ContractsView: React.FC<ContractsViewProps> = ({
         </Modal>
       )}
 
-      {/* Signature Modal */}
       {signingContract && (
-        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="w-full max-w-md bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-2xl overflow-hidden p-6 space-y-4">
-            <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
-              <div>
-                <h3 className="text-sm font-bold text-slate-900 dark:text-white">
-                  Assinatura Digital do Contrato
-                </h3>
-                <p className="text-xs text-slate-500">{signingContract.number} • {signingContract.clientName}</p>
-              </div>
-              <button
-                onClick={() => setSigningContract(null)}
-                className="p-1 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-white transition-colors"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                Nome do Signatário
-              </label>
-              <input
-                type="text"
-                value={signerName}
-                onChange={(e) => setSignerName(e.target.value)}
-                className="w-full px-3 py-2 rounded-xl text-xs bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white"
-                placeholder="Nome completo de quem está assinando"
-              />
-            </div>
-
-            <div>
-              <div className="flex items-center justify-between mb-1">
-                <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">
-                  Desenhe sua assinatura no quadro abaixo (touch ou mouse):
-                </label>
-                <button
-                  type="button"
-                  onClick={clearCanvas}
-                  className="text-[10px] text-rose-500 hover:underline flex items-center gap-0.5 font-semibold"
-                >
-                  <Trash2 className="w-3 h-3" /> Limpar
-                </button>
-              </div>
-              <div className="border-2 border-dashed border-slate-300 dark:border-slate-700 rounded-2xl bg-slate-50 dark:bg-slate-950 overflow-hidden cursor-crosshair">
-                <canvas
-                  ref={canvasRef}
-                  width={380}
-                  height={150}
-                  onMouseDown={startDrawing}
-                  onMouseMove={draw}
-                  onMouseUp={stopDrawing}
-                  onMouseLeave={stopDrawing}
-                  onTouchStart={startDrawing}
-                  onTouchMove={draw}
-                  onTouchEnd={stopDrawing}
-                  className="w-full h-[150px] touch-none"
-                />
-              </div>
-            </div>
-
-            <div className="p-3 rounded-xl bg-blue-50/60 dark:bg-blue-950/30 border border-blue-100 dark:border-blue-900/40 text-[11px] text-blue-900 dark:text-blue-200 flex items-start gap-2">
-              <ShieldCheck className="w-4 h-4 text-blue-600 shrink-0 mt-0.5" />
-              <span>
-                A assinatura será vinculada a um hash criptográfico SHA-256 com registro de data/hora oficial e endereço IP para validade jurídica.
-              </span>
-            </div>
-
-            <div className="flex gap-3 pt-2">
+        <Modal
+          open
+          onClose={closeSigningDialog}
+          title={`Assinatura do contrato ${signingContract.number}`}
+          subtitle={signingContract.clientName}
+          icon={<FileSignature className="h-4 w-4" />}
+          size="md"
+          footer={(
+            <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
               <button
                 type="button"
-                onClick={() => setSigningContract(null)}
-                className="flex-1 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 text-xs font-semibold text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800"
+                onClick={closeSigningDialog}
+                disabled={submittingSign}
+                className="rounded-xl border px-4 py-2.5 text-xs font-bold disabled:opacity-50"
+                style={{ borderColor: 'var(--border-subtle)', color: 'var(--ink-muted)' }}
               >
                 Cancelar
               </button>
@@ -778,13 +763,74 @@ export const ContractsView: React.FC<ContractsViewProps> = ({
                 type="button"
                 disabled={!hasSignature || submittingSign}
                 onClick={handleSignSubmit}
-                className="flex-1 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 disabled:opacity-40 text-white text-xs font-bold shadow-md shadow-emerald-500/20"
+                className="rounded-xl px-4 py-2.5 text-xs font-extrabold disabled:cursor-not-allowed disabled:opacity-45"
+                style={{ background: 'var(--yr-700)', color: 'var(--ink-on-brand)' }}
               >
-                {submittingSign ? 'Registrando...' : 'Confirmar & Assinar'}
+                {submittingSign ? 'Registrando...' : 'Confirmar assinatura'}
               </button>
             </div>
+          )}
+        >
+          <div className="space-y-4">
+            <div>
+              <label htmlFor="contract-signer-name" className="mb-1.5 block text-[11px] font-extrabold uppercase tracking-[0.06em]" style={{ color: 'var(--ink-faint)' }}>
+                Nome de quem assina
+              </label>
+              <input
+                id="contract-signer-name"
+                type="text"
+                value={signerName}
+                onChange={(e) => setSignerName(e.target.value)}
+                className="w-full rounded-xl border px-3 py-3 text-[13px] font-semibold outline-none focus-visible:ring-2"
+                style={{ background: 'var(--surface-sunken)', borderColor: 'var(--border-subtle)', color: 'var(--ink)' }}
+                placeholder="Nome completo"
+                autoComplete="name"
+              />
+            </div>
+
+            <div>
+              <div className="mb-2 flex items-center justify-between gap-3">
+                <label id="contract-signature-label" className="text-[12px] font-bold" style={{ color: 'var(--ink)' }}>
+                  Desenhe a assinatura no quadro
+                </label>
+                <button
+                  type="button"
+                  onClick={clearCanvas}
+                  className="inline-flex min-h-9 items-center gap-1.5 rounded-lg px-2.5 text-[11px] font-bold"
+                  style={{ color: 'var(--alert)' }}
+                  aria-label="Limpar assinatura"
+                >
+                  <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
+                  Limpar
+                </button>
+              </div>
+              <div className="overflow-hidden rounded-2xl border-2 border-dashed" style={{ background: 'var(--surface-sunken)', borderColor: 'var(--border-strong)' }}>
+                <canvas
+                  ref={canvasRef}
+                  onPointerDown={startDrawing}
+                  onPointerMove={draw}
+                  onPointerUp={stopDrawing}
+                  onPointerCancel={stopDrawing}
+                  onLostPointerCapture={stopDrawing}
+                  className="block h-[150px] w-full touch-none"
+                  aria-labelledby="contract-signature-label"
+                />
+              </div>
+              <p className="mt-1.5 text-[11px] leading-relaxed" style={{ color: 'var(--ink-faint)' }}>
+                Use o dedo ou o mouse. A assinatura fica habilitada depois que um traço for desenhado.
+              </p>
+            </div>
+
+            {signError && <Notice tone="alert">{signError}</Notice>}
+
+            <div className="flex items-start gap-2.5 rounded-xl border px-3.5 py-3 text-[11px] leading-relaxed" style={{ background: 'var(--yr-050)', borderColor: 'var(--yr-100)', color: 'var(--yr-700)' }}>
+              <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+              <span>
+                A assinatura é vinculada ao registro digital do contrato com data e hora. Confira os dados antes de confirmar.
+              </span>
+            </div>
           </div>
-        </div>
+        </Modal>
       )}
     </div>
   )
