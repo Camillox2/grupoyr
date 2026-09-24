@@ -47,7 +47,7 @@ export const NotificationCenter: React.FC<NotificationCenterProps> = ({ onOpenLe
         body: notification.message,
         icon: '/yr-hospitalar-logo.jpg',
         tag: notification.id,
-        data: { leadId: notification.leadId },
+        data: { leadId: notification.leadId || null },
       }
       try {
         if ('serviceWorker' in navigator) {
@@ -91,10 +91,10 @@ export const NotificationCenter: React.FC<NotificationCenterProps> = ({ onOpenLe
     }
   }
 
-  const openLead = async (item: CrmNotification) => {
+  const openNotification = async (item: CrmNotification) => {
     await markRead(item)
     setOpen(false)
-    onOpenLead(item.leadId)
+    if (item.leadId) onOpenLead(item.leadId)
   }
 
   const markAllRead = async () => {
@@ -122,12 +122,12 @@ export const NotificationCenter: React.FC<NotificationCenterProps> = ({ onOpenLe
       {open && (
         <section className="notification-panel absolute right-0 top-[calc(100%+10px)] z-50 w-[min(360px,calc(100vw-24px))] overflow-hidden rounded-2xl border border-slate-200 bg-white text-slate-900 shadow-2xl dark:border-slate-700 dark:bg-slate-900 dark:text-white" aria-label="Central de notificações">
           <header className="flex items-center justify-between gap-3 border-b border-slate-100 px-4 py-3 dark:border-slate-800">
-            <div><h2 className="text-sm font-bold">Notificações</h2><p className="mt-0.5 text-[11px] text-slate-500">Avisos de atendimento e qualificação</p></div>
+            <div><h2 className="text-sm font-bold">Notificações</h2><p className="mt-0.5 text-[11px] text-slate-500">Avisos da operação e do atendimento</p></div>
             {unreadCount > 0 && <button type="button" onClick={() => void markAllRead()} className="inline-flex shrink-0 items-center gap-1 text-[10px] font-bold text-blue-700 dark:text-blue-300"><CheckCheck className="h-3.5 w-3.5" />Marcar lidas</button>}
           </header>
           <div className="notification-panel-list max-h-[min(65dvh,440px)] overflow-y-auto">
             {items.length === 0 ? <p className="px-4 py-8 text-center text-xs text-slate-500">Nenhum aviso por enquanto.</p> : items.map((item) => (
-              <button key={item.id} type="button" onClick={() => void openLead(item)} className={`block w-full border-b border-slate-100 px-4 py-3 text-left last:border-0 hover:bg-blue-50/70 dark:border-slate-800 dark:hover:bg-slate-800 ${item.readAt ? '' : 'bg-blue-50/50 dark:bg-blue-950/20'}`}>
+              <button key={item.id} type="button" onClick={() => void openNotification(item)} className={`block w-full border-b border-slate-100 px-4 py-3 text-left last:border-0 hover:bg-blue-50/70 dark:border-slate-800 dark:hover:bg-slate-800 ${item.readAt ? '' : 'bg-blue-50/50 dark:bg-blue-950/20'}`}>
                 <span className="flex items-start gap-2.5">
                   <span className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${item.readAt ? 'bg-slate-300 dark:bg-slate-600' : 'bg-blue-600'}`} />
                   <span className="min-w-0 flex-1"><strong className="block text-xs font-bold">{item.title}</strong><span className="mt-1 block text-[11px] leading-relaxed text-slate-600 dark:text-slate-300">{item.message}</span><time className="mt-1.5 block text-[10px] text-slate-400">{new Date(item.createdAt).toLocaleString('pt-BR')}</time></span>

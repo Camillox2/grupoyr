@@ -232,7 +232,7 @@ export interface LeadAttachment {
 export interface CrmNotification {
   id: string
   recipientId: string
-  leadId: string
+  leadId: string | null
   kind: string
   title: string
   message: string

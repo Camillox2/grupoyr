@@ -273,7 +273,7 @@ function MainContent() {
         {/* A area de rolagem NAO remonta nem anima: remontar fazia a barra de
             rolagem sumir e voltar, e o conteudo "pulava". Quem entra animado e
             o palco interno, que ganha `key` novo a cada aba. */}
-        <main ref={mainRef} className="app-main min-h-0 flex-1 overflow-y-auto p-4 sm:p-6">
+        <main ref={mainRef} className={`app-main min-h-0 flex-1 overflow-y-auto p-4 sm:p-6 ${activeTab === 'whatsapp' ? 'whatsapp-app-main' : ''}`}>
           {/* Todas as telas usam a largura toda. */}
           <div key={activeTab} className="view-stage mx-auto max-w-none">
             {dataError && (

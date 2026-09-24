@@ -7,6 +7,7 @@ import axios from 'axios'
 import pino from 'pino'
 import { db } from './db.js'
 import { phoneKey } from './phone.js'
+import { notifyBaileysDisconnect } from './whatsappNotifications.js'
 import { runGeminiWithFallback, analyzeImage, transcribeAndUnderstandAudio, generateCustomerSummary, buildQualificationSystemPrompt } from './gemini.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
@@ -74,6 +75,7 @@ class WhatsAppService {
     this.connectionAttempt = 0
     this.reconnectTimer = null
     this.manualDisconnect = false
+    this.disconnectNotificationSent = false
     this.lastError = null
     this.qrGeneratedAt = null
     this.aiBusyLeads = new Set()
@@ -233,6 +235,7 @@ class WhatsAppService {
 
         if (connection === 'open') {
           this.status = 'connected'
+          this.disconnectNotificationSent = false
           this.qrCode = null
           this.qrGeneratedAt = null
           this.pairingCode = null
@@ -244,18 +247,28 @@ class WhatsAppService {
 
         if (connection === 'close') {
           const reason = lastDisconnect?.error?.output?.statusCode
+          const wasConnected = this.activeProvider === 'baileys' && this.status === 'connected'
           console.warn(`[WhatsApp/Baileys] Conexão encerrada. Motivo: ${reason}`)
           await pendingCredsSave
           this.status = 'disconnected'
           this.socket = null
           this.connectedNumber = null
-          this.broadcastStatus()
 
           this.lastError = reason === DisconnectReason.restartRequired
             ? 'QR aceito. Finalizando a conexão com o WhatsApp...'
             : reason === DisconnectReason.loggedOut
               ? 'A sessão do WhatsApp expirou. Uma nova leitura do QR Code é necessária.'
               : 'A conexão foi interrompida. O CRM tentará reconectar automaticamente.'
+
+          if (wasConnected && !this.disconnectNotificationSent && !this.manualDisconnect) {
+            this.disconnectNotificationSent = true
+            try {
+              notifyBaileysDisconnect({ database: db, io: this.io, reasonCode: reason })
+            } catch (error) {
+              console.error('[WhatsApp/Baileys] Não foi possível registrar o aviso de desconexão:', error.message)
+            }
+          }
+          this.broadcastStatus()
 
           if (reason === DisconnectReason.loggedOut || reason === DisconnectReason.badSession) {
             // Credenciais desconectadas não voltam a gerar QR sozinhas. Arquivamos
