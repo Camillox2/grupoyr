@@ -3,6 +3,7 @@ import {
   LayoutDashboard,
   KanbanSquare,
   MessageSquare,
+  CalendarDays,
   Bed,
   FileSignature,
   DollarSign,
@@ -17,6 +18,7 @@ export type TabType =
   | 'dashboard'
   | 'kanban'
   | 'whatsapp'
+  | 'calendar'
   | 'clients'
   | 'equipments'
   | 'contracts'
@@ -79,6 +81,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
           icon: MessageSquare,
           note: metrics.conversations ? `${metrics.conversations}` : undefined,
         },
+        { id: 'calendar', label: 'Agenda', icon: CalendarDays },
         { id: 'clients', label: 'Clientes', icon: UsersRound },
         {
           id: 'equipments',

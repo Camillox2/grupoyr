@@ -13,6 +13,7 @@ import {
   Percent,
   Calculator,
   Search,
+  FileSignature,
 } from 'lucide-react'
 import { ResponsiveTable, EmptyState } from './ui/ResponsiveTable'
 import { InvoiceStatus } from './ui/Status'
@@ -27,16 +28,19 @@ import {
   Pie,
   Cell,
 } from 'recharts'
-import { Invoice, Lead } from '../types'
+import { Contract, ContractExpense, Invoice, Lead } from '../types'
 import { PageHeader, ActionButton } from './ui/PageHeader'
 import { Modal } from './ui/Modal'
 import { TextField, SelectField, FormError } from './ui/Field'
 import { SubmitButton } from './ui/Feedback'
 import { Toast, useToast } from './ui/Toast'
+import { ContractFinanceView } from './ContractFinanceView'
 
 interface FinanceViewProps {
   invoices: Invoice[]
   leads: Lead[]
+  contracts: Contract[]
+  contractExpenses: ContractExpense[]
   onRefreshInvoices: () => void
   /** Abre a conversa do lead no atendimento. */
   onOpenLead?: (leadId: string) => void
@@ -47,9 +51,10 @@ interface FinanceViewProps {
 const dueDateLabel = (value: string) =>
   new Date(value && value.length === 10 ? `${value}T00:00:00` : value).toLocaleDateString('pt-BR')
 
-export const FinanceView: React.FC<FinanceViewProps> = ({ invoices, leads, onRefreshInvoices, onOpenLead }) => {
+export const FinanceView: React.FC<FinanceViewProps> = ({ invoices, leads, contracts, contractExpenses, onRefreshInvoices, onOpenLead }) => {
   const { toast, show: showToast, dismiss: dismissToast } = useToast()
   const [periodFilter, setPeriodFilter] = useState<'all' | '7d' | 'month' | 'quarter' | 'year'>('month')
+  const [financeSection, setFinanceSection] = useState<'invoices' | 'contracts'>('invoices')
   const [statusFilter, setStatusFilter] = useState<'all' | 'paga' | 'pendente' | 'atrasada'>('all')
   const [searchTerm, setSearchTerm] = useState('')
   const [sendingReminderId, setSendingReminderId] = useState<string | null>(null)
@@ -363,6 +368,21 @@ export const FinanceView: React.FC<FinanceViewProps> = ({ invoices, leads, onRef
     }, 250)
   }
 
+  const sectionTabs = (
+    <div className="yr-finance-tabs" role="tablist" aria-label="Visão financeira">
+      <button type="button" role="tab" aria-selected={financeSection === 'invoices'} className={financeSection === 'invoices' ? 'is-active' : ''} onClick={() => setFinanceSection('invoices')}><DollarSign className="h-4 w-4" /> Cobranças</button>
+      <button type="button" role="tab" aria-selected={financeSection === 'contracts'} className={financeSection === 'contracts' ? 'is-active' : ''} onClick={() => setFinanceSection('contracts')}><FileSignature className="h-4 w-4" /> Por contrato</button>
+    </div>
+  )
+
+  if (financeSection === 'contracts') return (
+    <div className="space-y-5 pb-16">
+      <PageHeader icon={<DollarSign className="h-5 w-5" />} eyebrow="Financeiro" title="Financeiro por contrato" description="Receita recebida, valores em aberto e custos diretos associados a cada contrato." />
+      {sectionTabs}
+      <ContractFinanceView contracts={contracts} invoices={invoices} expenses={contractExpenses} leads={leads} onRefresh={onRefreshInvoices} onOpenLead={onOpenLead} />
+    </div>
+  )
+
   return (
     <div className="space-y-6 pb-16">
       <PageHeader
@@ -387,6 +407,8 @@ export const FinanceView: React.FC<FinanceViewProps> = ({ invoices, leads, onRef
           </>
         }
       />
+
+      {sectionTabs}
 
       {/* 2. Filtros de Período Personalizáveis */}
       <div className="bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm flex flex-col lg:flex-row lg:items-center justify-between gap-3">

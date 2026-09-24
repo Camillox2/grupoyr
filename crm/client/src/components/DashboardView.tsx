@@ -31,17 +31,19 @@ import {
   Pie,
   Cell,
 } from 'recharts'
-import { Lead, Equipment, Invoice } from '../types'
+import { Lead, Equipment, Invoice, Contract } from '../types'
 import { Mark } from './ui/PageHeader'
 import { CountUp, brl } from './ui/Feedback'
 import { useAuth } from '../contexts/AuthContext'
 import { useSocket } from '../contexts/SocketContext'
 import { SiteLinkActions } from './SiteLinkActions'
+import { ContractRetentionPanel } from './ContractRetentionPanel'
 
 interface DashboardViewProps {
   leads: Lead[]
   equipments: Equipment[]
   invoices: Invoice[]
+  contracts: Contract[]
   onSelectLead: (lead: Lead) => void
   onNavigateTab: (tab: any) => void
   onOpenNewLead: () => void
@@ -57,6 +59,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   leads,
   equipments,
   invoices,
+  contracts,
   onSelectLead,
   onNavigateTab,
   onOpenNewLead,
@@ -167,7 +170,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   const isConnected =
     whatsappStatus.status === 'connected' || whatsappStatus.status === 'connected_meta'
 
-  const isFirstUse = leads.length === 0 && equipments.length === 0 && invoices.length === 0
+  const isFirstUse = leads.length === 0 && equipments.length === 0 && invoices.length === 0 && contracts.length === 0
 
   if (isFirstUse) {
     return (
@@ -208,6 +211,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             </div>
           </div>
         </div>
+        <ContractRetentionPanel contracts={contracts} onOpenContracts={() => onNavigateTab('contracts')} />
       </section>
     )
   }
@@ -469,6 +473,8 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           </div>
         </div>
       </div>
+
+      <ContractRetentionPanel contracts={contracts} onOpenContracts={() => onNavigateTab('contracts')} />
 
       {/* 4.5. Métricas Personalizadas de Alto Impacto (MRR, Ticket Médio, LTV, Inadimplência) */}
       <div className="card p-5 space-y-4" style={{ background: 'var(--surface-sunken)' }}>

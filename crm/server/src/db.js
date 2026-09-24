@@ -456,6 +456,8 @@ const cleanSeedData = {
   equipments: [],
   contracts: [],
   invoices: [],
+  calendarEvents: [],
+  contractExpenses: [],
 }
 
 class Database {

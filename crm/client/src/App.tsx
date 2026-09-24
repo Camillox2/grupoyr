@@ -12,6 +12,7 @@ import { EquipmentsView } from './components/EquipmentsView'
 import { ContractsView } from './components/ContractsView'
 import { ClientsView } from './components/ClientsView'
 import { FinanceView } from './components/FinanceView'
+import { CalendarView } from './components/CalendarView'
 import { BlogManagerView } from './components/BlogManagerView'
 import { SettingsView } from './components/SettingsView'
 import { LoginView } from './components/LoginView'
@@ -20,7 +21,7 @@ import { NewLeadModal } from './components/NewLeadModal'
 import { NewContractModal } from './components/NewContractModal'
 import { NewEquipmentModal } from './components/NewEquipmentModal'
 import { PublicContractSigningView } from './components/PublicContractSigningView'
-import { Lead, Equipment, Contract, Invoice, Stage } from './types'
+import { Lead, Equipment, Contract, Invoice, CalendarEvent, ContractExpense, User, Stage } from './types'
 
 function MainContent() {
   const { user, loading } = useAuth()
@@ -30,6 +31,9 @@ function MainContent() {
   const [equipments, setEquipments] = useState<Equipment[]>([])
   const [contracts, setContracts] = useState<Contract[]>([])
   const [invoices, setInvoices] = useState<Invoice[]>([])
+  const [calendarEvents, setCalendarEvents] = useState<CalendarEvent[]>([])
+  const [contractExpenses, setContractExpenses] = useState<ContractExpense[]>([])
+  const [team, setTeam] = useState<User[]>([])
   const [dataLoading, setDataLoading] = useState(false)
   const [dataError, setDataError] = useState<string | null>(null)
 
@@ -61,6 +65,9 @@ function MainContent() {
         readCollection('/api/equipments'),
         readCollection('/api/contracts'),
         readCollection('/api/finance/invoices'),
+        readCollection('/api/calendar/events'),
+        readCollection('/api/finance/contract-expenses'),
+        readCollection('/api/team'),
       ])
 
       const failedCollections: string[] = []
@@ -70,16 +77,22 @@ function MainContent() {
         return fallback
       }
 
-      const [leadsResult, equipmentsResult, contractsResult, invoicesResult] = results
+      const [leadsResult, equipmentsResult, contractsResult, invoicesResult, eventsResult, expensesResult, teamResult] = results
       const nextLeads = readResult(leadsResult, leads, 'leads') as Lead[]
       const nextEquipments = readResult(equipmentsResult, equipments, 'equipamentos') as Equipment[]
       const nextContracts = readResult(contractsResult, contracts, 'contratos') as Contract[]
       const nextInvoices = readResult(invoicesResult, invoices, 'financeiro') as Invoice[]
+      const nextEvents = readResult(eventsResult, calendarEvents, 'agenda') as CalendarEvent[]
+      const nextExpenses = readResult(expensesResult, contractExpenses, 'custos por contrato') as ContractExpense[]
+      const nextTeam = readResult(teamResult, team, 'equipe') as User[]
 
       setLeads(nextLeads)
       setEquipments(nextEquipments)
       setContracts(nextContracts)
       setInvoices(nextInvoices)
+      setCalendarEvents(nextEvents)
+      setContractExpenses(nextExpenses)
+      setTeam(nextTeam)
       setSelectedLead((current) => current || nextLeads[0] || null)
       if (failedCollections.length > 0) {
         setDataError(`Não foi possível atualizar: ${failedCollections.join(', ')}. Tente novamente.`)
@@ -113,6 +126,20 @@ function MainContent() {
     return () => {
       socket.off('lead:updated', updateLeadInMemory)
     }
+  }, [socket])
+
+  useEffect(() => {
+    if (!socket) return
+    const updateSignedContract = (contract: Contract) => {
+      setContracts((current) => {
+        const exists = current.some((item) => item.id === contract.id)
+        return exists
+          ? current.map((item) => (item.id === contract.id ? { ...item, ...contract } : item))
+          : [contract, ...current]
+      })
+    }
+    socket.on('contract:signed', updateSignedContract)
+    return () => { socket.off('contract:signed', updateSignedContract) }
   }, [socket])
 
   // Contratos e financeiro levam direto para a conversa do cliente.
@@ -268,6 +295,7 @@ function MainContent() {
                 leads={leads}
                 equipments={equipments}
                 invoices={invoices}
+                contracts={contracts}
                 onSelectLead={(lead) => {
                   setSelectedLead(lead)
                   setActiveTab('whatsapp')
@@ -337,8 +365,22 @@ function MainContent() {
               />
             )}
 
+            {activeTab === 'calendar' && (
+              <CalendarView
+                customEvents={calendarEvents}
+                contracts={contracts}
+                leads={leads}
+                equipments={equipments}
+                invoices={invoices}
+                team={team}
+                currentUserId={user.id}
+                onRefresh={fetchAllData}
+                onOpenLead={openLeadConversation}
+              />
+            )}
+
             {activeTab === 'finance' && (
-              <FinanceView invoices={invoices} leads={leads} onRefreshInvoices={fetchAllData} onOpenLead={openLeadConversation} />
+              <FinanceView invoices={invoices} leads={leads} contracts={contracts} contractExpenses={contractExpenses} onRefreshInvoices={fetchAllData} onOpenLead={openLeadConversation} />
             )}
 
             {activeTab === 'blog' && <BlogManagerView />}

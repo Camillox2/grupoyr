@@ -166,6 +166,52 @@ export interface Invoice {
   paidAt: string | null
 }
 
+export type CalendarEventType =
+  | 'compromisso'
+  | 'entrega'
+  | 'retirada'
+  | 'visita'
+  | 'ligacao'
+  | 'cobranca'
+  | 'manutencao'
+
+export type CalendarEventStatus = 'scheduled' | 'done' | 'cancelled'
+
+export interface CalendarEvent {
+  id: string
+  title: string
+  type: CalendarEventType
+  date: string
+  endDate?: string | null
+  startTime?: string | null
+  endTime?: string | null
+  leadId: string | null
+  contractId: string | null
+  equipmentId: string | null
+  invoiceId?: string | null
+  assignedTo?: string | null
+  notes?: string
+  status: CalendarEventStatus
+  createdAt?: string
+  updatedAt?: string
+}
+
+export type ContractExpenseCategory = 'entrega' | 'retirada' | 'manutencao' | 'outro'
+
+export interface ContractExpense {
+  id: string
+  contractId: string
+  contractNumber: string
+  clientName: string
+  leadId: string
+  category: ContractExpenseCategory
+  description: string
+  amount: number
+  date: string
+  createdAt?: string
+  updatedAt?: string
+}
+
 export interface User {
   id: string
   name: string

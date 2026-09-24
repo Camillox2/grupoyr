@@ -14,6 +14,7 @@ import {
   Send,
   Workflow,
   MessageSquare,
+  Clock3,
 } from 'lucide-react'
 import { Contract, Lead } from '../types'
 import { celebrateSignature } from './ui/celebrate'
@@ -25,6 +26,7 @@ import { Toast, useToast } from './ui/Toast'
 import { authHeaders } from '../lib/conversation'
 import { ContractStatusModal } from './ContractStatusModal'
 import { Modal } from './ui/Modal'
+import { getContractCountdown, useLocalDateKey } from '../lib/contractCountdown'
 
 /** dd/mm sem o ano, que ocupa espaco e raramente muda dentro da lista. */
 const formatDate = (value: string) => {
@@ -113,6 +115,7 @@ export const ContractsView: React.FC<ContractsViewProps> = ({
   const [shareContract, setShareContract] = useState<Contract | null>(null)
   const [previewContract, setPreviewContract] = useState<Contract | null>(null)
   const [checklistContract, setChecklistContract] = useState<Contract | null>(null)
+  const today = useLocalDateKey()
   const [shareCopied, setShareCopied] = useState(false)
   const [shareError, setShareError] = useState<string | null>(null)
 
@@ -380,16 +383,20 @@ export const ContractsView: React.FC<ContractsViewProps> = ({
           },
           {
             header: 'Status',
-            cell: (contract) => (
-              <span className="inline-flex flex-col items-start gap-1">
-                <ContractStatus status={contract.status} />
-                {contract.statusReason && (contract.status === 'cancelado' || contract.status === 'encerrado') && (
-                  <span className="max-w-[220px] truncate text-[10.5px]" style={{ color: 'var(--ink-faint)' }} title={contract.statusReason}>
-                    {contract.statusReason}
-                  </span>
-                )}
-              </span>
-            ),
+            cell: (contract) => {
+              const countdown = getContractCountdown(contract, today)
+              return (
+                <span className="inline-flex flex-col items-start gap-1">
+                  <ContractStatus status={contract.status} />
+                  {countdown && <span className={`yr-contract-countdown is-${countdown.phase}`}><Clock3 aria-hidden="true" />{countdown.label}</span>}
+                  {contract.statusReason && (contract.status === 'cancelado' || contract.status === 'encerrado') && (
+                    <span className="max-w-[220px] truncate text-[10.5px]" style={{ color: 'var(--ink-faint)' }} title={contract.statusReason}>
+                      {contract.statusReason}
+                    </span>
+                  )}
+                </span>
+              )
+            },
           },
         ]}
         actions={(contract) => (

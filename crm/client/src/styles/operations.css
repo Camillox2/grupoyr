@@ -1,0 +1,458 @@
+.yr-calendar-shell,
+.yr-finance-contract-shell,
+.yr-equipment-schedule-shell {
+  overflow: hidden;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--r-xl);
+  background: var(--surface-raised);
+  box-shadow: var(--shadow-sm);
+}
+
+.yr-operations-tabs,
+.yr-finance-tabs { display: inline-flex; width: fit-content; max-width: 100%; align-items: center; gap: 4px; padding: 4px; border: 1px solid var(--border-subtle); border-radius: 14px; background: var(--surface-raised); box-shadow: var(--shadow-sm); }
+.yr-operations-tabs button,
+.yr-finance-tabs button { display: inline-flex; min-height: 38px; align-items: center; justify-content: center; gap: 7px; padding: 0 14px; border-radius: 10px; color: var(--ink-muted); font-size: 11.5px; font-weight: 850; transition: background-color var(--dur-fast) ease, color var(--dur-fast) ease, box-shadow var(--dur-fast) ease; }
+.yr-operations-tabs button.is-active,
+.yr-finance-tabs button.is-active { background: var(--yr-500); color: var(--ink-on-brand); box-shadow: var(--shadow-sm); }
+.yr-operations-tabs button:focus-visible,
+.yr-finance-tabs button:focus-visible,
+.yr-calendar-shell button:focus-visible,
+.yr-equipment-schedule-shell button:focus-visible,
+.yr-finance-contract-view button:focus-visible { outline: 3px solid color-mix(in srgb, var(--yr-500) 45%, transparent); outline-offset: 2px; }
+
+.yr-calendar-toolbar {
+  display: grid;
+  gap: 14px;
+  padding: 18px 20px;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.yr-calendar-toolbar__top,
+.yr-calendar-modes,
+.yr-calendar-period,
+.yr-calendar-filters {
+  display: flex;
+  align-items: center;
+}
+
+.yr-calendar-toolbar__top { justify-content: space-between; gap: 16px; }
+.yr-calendar-modes { gap: 3px; padding: 4px; border: 1px solid var(--border-subtle); border-radius: 13px; background: var(--surface-sunken); }
+.yr-calendar-modes button,
+.yr-calendar-today,
+.yr-calendar-filters button {
+  border-radius: 9px;
+  color: var(--ink-muted);
+  font-size: 11.5px;
+  font-weight: 800;
+  transition: color var(--dur-fast) ease, background-color var(--dur-fast) ease, box-shadow var(--dur-fast) ease;
+}
+.yr-calendar-modes button { min-height: 34px; padding: 0 13px; }
+.yr-calendar-modes button.is-active { background: var(--surface-raised); color: var(--yr-700); box-shadow: var(--shadow-sm); }
+.yr-calendar-period { gap: 9px; color: var(--ink); font-size: 14px; font-weight: 800; text-transform: capitalize; }
+.yr-calendar-icon-button,
+.yr-calendar-selected-day__heading button {
+  display: grid;
+  width: 34px;
+  height: 34px;
+  flex: none;
+  place-items: center;
+  border: 1px solid var(--border-subtle);
+  border-radius: 10px;
+  background: var(--surface-raised);
+  color: var(--ink-muted);
+  transition: border-color var(--dur-fast) ease, color var(--dur-fast) ease, transform var(--dur-fast) ease;
+}
+.yr-calendar-icon-button:hover,
+.yr-calendar-selected-day__heading button:hover { border-color: var(--yr-300); color: var(--yr-700); transform: translateY(-1px); }
+.yr-calendar-today { min-height: 34px; padding: 0 12px; border: 1px solid var(--border-subtle); background: var(--surface-raised); }
+.yr-calendar-today:hover { border-color: var(--yr-300); color: var(--yr-700); }
+.yr-calendar-filters { flex-wrap: wrap; gap: 7px; }
+.yr-calendar-filters button { min-height: 30px; padding: 0 11px; border: 1px solid transparent; background: var(--surface-sunken); }
+.yr-calendar-filters button:hover { border-color: var(--border-strong); color: var(--ink); }
+.yr-calendar-filters button.is-active { border-color: var(--yr-100); background: var(--yr-050); color: var(--yr-700); }
+.yr-calendar-filter-select select,
+.yr-calendar-search { display: flex; min-height: 32px; align-items: center; gap: 7px; padding: 0 10px; border: 1px solid var(--border-subtle); border-radius: 9px; background: var(--surface-raised); color: var(--ink-muted); font-size: 10.5px; font-weight: 750; }
+.yr-calendar-filter-select select { min-height: 32px; padding: 0 28px 0 10px; outline: none; }
+.yr-calendar-search input { width: 190px; min-width: 0; border: 0; outline: none; background: transparent; color: var(--ink); font: 700 10.5px/1.3 Manrope, sans-serif; }
+.yr-calendar-search input::placeholder { color: var(--ink-faint); }
+.yr-calendar-filter-select select:focus-visible,
+.yr-calendar-search:focus-within { border-color: var(--yr-500); box-shadow: 0 0 0 3px color-mix(in srgb, var(--yr-500) 15%, transparent); }
+
+.yr-calendar-layout { display: grid; grid-template-columns: minmax(0, 1.72fr) minmax(280px, .78fr); }
+.yr-calendar-main { min-width: 0; padding: 16px 18px 18px; }
+.yr-calendar-weekdays { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); color: var(--ink-muted); font-size: 10px; font-weight: 900; letter-spacing: .08em; text-align: center; text-transform: uppercase; }
+.yr-calendar-weekdays > span { padding: 3px 0 11px; }
+.yr-calendar-month-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); overflow: hidden; border-top: 1px solid var(--border-subtle); border-left: 1px solid var(--border-subtle); border-radius: 12px; animation: yr-calendar-in 260ms var(--ease-out) both; }
+.yr-calendar-cell { position: relative; display: flex; min-width: 0; min-height: 106px; flex-direction: column; align-items: stretch; gap: 5px; padding: 8px 7px 6px; border-right: 1px solid var(--border-subtle); border-bottom: 1px solid var(--border-subtle); background: var(--surface-raised); text-align: left; transition: background-color var(--dur-fast) ease, box-shadow var(--dur-fast) ease; }
+.yr-calendar-cell:hover { z-index: 1; background: var(--surface-tint); box-shadow: inset 0 0 0 1px var(--yr-300); }
+.yr-calendar-cell.is-outside { background: var(--surface-sunken); }
+.yr-calendar-cell.is-outside .yr-calendar-cell__date { color: var(--ink-faint); }
+.yr-calendar-cell.is-selected { z-index: 1; background: var(--yr-050); box-shadow: inset 0 0 0 1.5px var(--yr-500); }
+.yr-calendar-cell__date { display: grid; width: 25px; height: 25px; flex: none; place-items: center; padding: 0; border: 0; border-radius: 50%; outline: none; background: transparent; color: var(--ink); cursor: pointer; font: 800 11px/1 Manrope, sans-serif; font-variant-numeric: tabular-nums; }
+.yr-calendar-cell__date:focus-visible { outline: 3px solid color-mix(in srgb, var(--yr-500) 48%, transparent); outline-offset: 2px; }
+.yr-calendar-cell.is-today .yr-calendar-cell__date { background: var(--yr-500); color: #fff; }
+.yr-calendar-day-events { display: grid; min-width: 0; gap: 3px; }
+.yr-calendar-event { display: flex; min-width: 0; align-items: center; gap: 5px; padding: 5px 6px; overflow: hidden; border: 1px solid transparent; border-radius: 8px; font-size: 10.5px; font-weight: 800; line-height: 1.25; text-align: left; transition: transform var(--dur-fast) ease, box-shadow var(--dur-fast) ease; animation: yr-calendar-in 220ms var(--ease-out) both; }
+.yr-calendar-event:hover { z-index: 2; transform: translateY(-1px); box-shadow: var(--shadow-sm); }
+.yr-calendar-event--blue { border-color: var(--busy-border); background: var(--busy-surface); color: var(--yr-700); }
+.yr-calendar-event--green { border-color: var(--ok-border); background: var(--ok-surface); color: var(--ok); }
+.yr-calendar-event--amber { border-color: var(--wait-border); background: var(--wait-surface); color: var(--wait); }
+.yr-calendar-event--neutral { border-color: var(--border-subtle); background: var(--surface-sunken); color: var(--ink-muted); }
+.yr-calendar-event.is-done { opacity: .62; text-decoration: line-through; }
+.yr-calendar-event.is-cancelled { opacity: .45; text-decoration: line-through; }
+.yr-calendar-event.is-compact { gap: 4px; min-height: 23px; padding: 3px 5px; font-size: 9.5px; }
+.yr-calendar-event__time { flex: none; font-size: 9.5px; font-variant-numeric: tabular-nums; }
+.yr-calendar-more { width: fit-content; padding: 1px 4px; color: var(--yr-700); font-size: 9.5px; font-weight: 800; }
+.yr-calendar-more:hover { text-decoration: underline; }
+
+.yr-calendar-side { min-width: 0; padding: 20px 18px; border-left: 1px solid var(--border-subtle); background: var(--surface-tint); }
+.yr-calendar-side__head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; padding-bottom: 15px; border-bottom: 1px solid var(--border-subtle); }
+.yr-calendar-side__head h3 { color: var(--ink); font-size: 13px; font-weight: 900; }
+.yr-calendar-side__head p { margin-top: 3px; color: var(--ink-muted); font-size: 10.5px; }
+.yr-calendar-side__count { display: grid; min-width: 27px; height: 27px; place-items: center; border: 1px solid var(--yr-100); border-radius: 50%; background: var(--yr-050); color: var(--yr-700); font-size: 10px; font-weight: 900; }
+.yr-agenda-upcoming { display: grid; gap: 3px; padding: 9px 0 16px; }
+.yr-agenda-upcoming__item { display: flex; min-width: 0; align-items: center; gap: 10px; padding: 10px 7px; border-radius: 12px; text-align: left; transition: background-color var(--dur-fast) ease, transform var(--dur-fast) ease; }
+.yr-agenda-upcoming__item:hover { background: var(--surface-raised); transform: translateX(2px); }
+.yr-agenda-upcoming__item strong { color: var(--ink); font-size: 11.5px; }
+.yr-calendar-side__empty { padding: 17px 4px; color: var(--ink-muted); font-size: 11px; }
+.yr-calendar-selected-day { padding-top: 15px; border-top: 1px solid var(--border-subtle); }
+.yr-calendar-selected-day__heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 10px; }
+.yr-calendar-selected-day__heading > div { display: grid; gap: 2px; }
+.yr-calendar-selected-day__heading span { color: var(--ink-faint); font-size: 9px; font-weight: 900; letter-spacing: .09em; text-transform: uppercase; }
+.yr-calendar-selected-day__heading strong { color: var(--ink); font-size: 13px; text-transform: capitalize; }
+.yr-agenda-list { display: grid; }
+.yr-agenda-list__row { display: flex; min-width: 0; align-items: center; gap: 10px; padding: 10px 2px; border-bottom: 1px solid var(--border-subtle); transition: opacity var(--dur-fast) ease, background-color var(--dur-fast) ease; }
+.yr-agenda-list__row:hover { background: color-mix(in srgb, var(--yr-050) 55%, transparent); }
+.yr-agenda-list__row.is-muted { opacity: .62; }
+.yr-agenda-list__icon { display: grid; width: 32px; height: 32px; flex: none; place-items: center; border: 1px solid var(--border-subtle); border-radius: 10px; background: var(--surface-raised); color: var(--ink-muted); }
+.yr-agenda-list__icon--blue { border-color: var(--busy-border); background: var(--busy-surface); color: var(--yr-700); }
+.yr-agenda-list__icon--green { border-color: var(--ok-border); background: var(--ok-surface); color: var(--ok); }
+.yr-agenda-list__icon--amber { border-color: var(--wait-border); background: var(--wait-surface); color: var(--wait); }
+.yr-agenda-status { flex: none; border-radius: 99px; padding: 3px 7px; font-size: 9px; font-weight: 900; }
+.yr-agenda-status--overdue { background: var(--alert-surface); color: var(--alert); }
+.yr-calendar-list-view { padding: 14px 20px 20px; }
+.yr-calendar-list-day + .yr-calendar-list-day { margin-top: 17px; }
+.yr-calendar-list-day__heading { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 7px 2px; color: var(--ink); font-size: 12px; font-weight: 900; text-transform: capitalize; }
+.yr-calendar-list-day__heading > span:last-child { color: var(--ink-faint); font-size: 10px; font-weight: 700; text-transform: none; }
+.yr-calendar-list-day__heading button { display: inline-flex; align-items: center; gap: 5px; color: var(--yr-700); font-size: 11px; font-weight: 800; }
+.yr-calendar-list-empty { padding: 38px 16px; color: var(--ink-muted); font-size: 12px; text-align: center; }
+.yr-agenda-empty { display: grid; justify-items: center; padding: 18px 8px; text-align: center; }
+.yr-agenda-empty .yr-agenda-art { width: 112px; height: 79px; margin-bottom: 7px; }
+.yr-agenda-empty__action { display: inline-flex; align-items: center; gap: 6px; margin-top: 12px; color: var(--yr-700); font-size: 11px; font-weight: 900; }
+.yr-calendar-first-empty { display: flex; min-height: 210px; align-items: center; justify-content: center; gap: 24px; padding: 28px; }
+.yr-calendar-first-empty .yr-agenda-art { width: 140px; height: auto; }
+.yr-calendar-first-empty h3 { color: var(--ink); font-family: Georgia, 'Times New Roman', serif; font-size: 22px; }
+.yr-calendar-first-empty p { max-width: 42ch; margin-top: 6px; color: var(--ink-muted); font-size: 12px; line-height: 1.6; }
+.yr-calendar-week-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); min-height: 450px; overflow: hidden; border: 1px solid var(--border-subtle); border-radius: 12px; animation: yr-calendar-in 240ms var(--ease-out) both; }
+.yr-calendar-week-column { min-width: 0; border-right: 1px solid var(--border-subtle); }
+.yr-calendar-week-column:last-child { border-right: 0; }
+.yr-calendar-week-column.is-selected { background: var(--yr-050); }
+.yr-calendar-week-heading { display: grid; width: 100%; justify-items: center; gap: 4px; padding: 13px 4px; border-bottom: 1px solid var(--border-subtle); color: var(--ink-muted); font-size: 10px; font-weight: 800; }
+.yr-calendar-week-heading strong { display: grid; width: 28px; height: 28px; place-items: center; border-radius: 50%; color: var(--ink); font-size: 12px; }
+.yr-calendar-week-column.is-selected .yr-calendar-week-heading strong { background: var(--yr-500); color: #fff; }
+.yr-calendar-week-events { display: grid; gap: 6px; padding: 7px; }
+.yr-calendar-no-event { padding: 8px 2px; color: var(--ink-faint); font-size: 10px; text-align: center; }
+.yr-calendar-mobile-strip,
+.yr-calendar-mobile-day { display: none; }
+
+.yr-vector-float { display: grid; place-items: center; animation: yr-vector-float 3.5s ease-in-out infinite; }
+.yr-agenda-art { display: block; width: 150px; height: auto; }
+.yr-agenda-art__route { animation: yr-route-draw 2.4s ease-in-out infinite alternate; }
+@keyframes yr-calendar-in { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes yr-vector-float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-4px); } }
+@keyframes yr-route-draw { from { stroke-dashoffset: 20; } to { stroke-dashoffset: 0; } }
+
+.yr-calendar-form { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 13px; }
+.yr-calendar-field { display: grid; min-width: 0; gap: 6px; color: var(--ink); font-size: 11px; font-weight: 800; }
+.yr-calendar-field--wide { grid-column: 1 / -1; }
+.yr-calendar-field small { color: var(--ink-faint); font-size: 10px; font-weight: 600; }
+.yr-calendar-field input,
+.yr-calendar-field select,
+.yr-calendar-field textarea { width: 100%; min-width: 0; min-height: 42px; padding: 9px 11px; border: 1px solid var(--border-strong); border-radius: 10px; outline: none; background: var(--surface-raised); color: var(--ink); font: 600 12px/1.4 Manrope, sans-serif; }
+.yr-calendar-field textarea { resize: vertical; }
+.yr-calendar-field input:focus,
+.yr-calendar-field select:focus,
+.yr-calendar-field textarea:focus { border-color: var(--yr-500); box-shadow: 0 0 0 3px color-mix(in srgb, var(--yr-500) 15%, transparent); }
+.yr-calendar-form__error { grid-column: 1 / -1; padding: 10px 12px; border: 1px solid var(--alert-border); border-radius: 10px; background: var(--alert-surface); color: var(--alert); font-size: 11px; font-weight: 700; }
+.yr-dialog-secondary,
+.yr-dialog-primary,
+.yr-dialog-delete { display: inline-flex; min-height: 40px; align-items: center; justify-content: center; gap: 7px; padding: 0 14px; border: 1px solid var(--border-strong); border-radius: 999px; background: var(--surface-raised); color: var(--ink); font: 800 11.5px/1 Manrope, sans-serif; transition: transform var(--dur-fast) ease, background-color var(--dur-fast) ease; }
+.yr-dialog-secondary:hover,
+.yr-dialog-primary:hover { transform: translateY(-1px); }
+.yr-dialog-primary { border-color: var(--yr-500); background: var(--yr-500); color: #fff; }
+.yr-dialog-primary:disabled { opacity: .58; }
+.yr-dialog-delete { border-color: var(--alert-border); color: var(--alert); }
+.yr-event-detail-row { display: flex; align-items: center; gap: 9px; color: var(--ink-muted); font-size: 12px; }
+.yr-event-detail-notes,
+.yr-event-detail-label { padding: 11px 12px; border: 1px solid var(--border-subtle); border-radius: 11px; background: var(--surface-sunken); color: var(--ink-muted); font-size: 11.5px; line-height: 1.5; }
+.yr-event-detail-label { background: var(--yr-050); color: var(--yr-700); }
+
+.yr-equipment-schedule__intro { display: flex; min-width: 0; align-items: center; gap: 13px; padding: 20px 22px 17px; border-bottom: 1px solid var(--border-subtle); }
+.yr-equipment-schedule__intro-icon { display: grid; width: 42px; height: 42px; flex: none; place-items: center; border: 1px solid var(--yr-100); border-radius: 13px; background: var(--yr-050); color: var(--yr-700); }
+.yr-equipment-schedule__intro h2 { color: var(--ink); font-size: 14px; font-weight: 900; }
+.yr-equipment-schedule__intro p { margin-top: 3px; color: var(--ink-muted); font-size: 10.5px; }
+.yr-equipment-horizon { margin-left: auto; flex: none; border: 1px solid var(--border-subtle); border-radius: 999px; background: var(--surface-sunken); padding: 7px 10px; color: var(--ink-muted); font-size: 10px; font-weight: 800; }
+.yr-equipment-scale { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); padding: 15px 22px 5px; color: var(--ink-faint); font-size: 9px; font-weight: 800; font-variant-numeric: tabular-nums; }
+.yr-equipment-scale span:nth-child(1) { text-align: left; }
+.yr-equipment-scale span:nth-child(n+2) { text-align: center; }
+.yr-equipment-scale span:last-child { text-align: right; }
+.yr-equipment-list { display: grid; padding: 0 18px 12px; }
+.yr-equipment-card { min-width: 0; padding: 14px 5px 15px; border-bottom: 1px solid var(--border-subtle); }
+.yr-equipment-card:last-child { border-bottom: 0; }
+.yr-equipment-card__head { display: flex; min-width: 0; align-items: center; gap: 10px; }
+.yr-equipment-card__icon { display: grid; width: 34px; height: 34px; flex: none; place-items: center; border: 1px solid var(--border-subtle); border-radius: 11px; background: var(--surface-sunken); color: var(--yr-700); }
+.yr-equipment-card__head h3 { color: var(--ink); font-size: 12px; font-weight: 900; }
+.yr-equipment-card__head p { margin-top: 2px; color: var(--ink-faint); font-size: 10px; }
+.yr-equipment-status { flex: none; border-radius: 999px; padding: 5px 8px; background: var(--surface-sunken); color: var(--ink-muted); font-size: 9px; font-weight: 850; }
+.yr-equipment-status--disponivel { background: var(--ok-surface); color: var(--ok); }
+.yr-equipment-status--alugado { background: var(--busy-surface); color: var(--yr-700); }
+.yr-equipment-status--higienizacao,
+.yr-equipment-status--manutencao { background: var(--wait-surface); color: var(--wait); }
+.yr-equipment-lanes { display: grid; gap: 11px; margin: 12px 0 0 44px; }
+.yr-equipment-lane { min-width: 0; }
+.yr-equipment-period-heading { display: flex; align-items: center; justify-content: space-between; gap: 10px; color: var(--ink-muted); font-size: 9.5px; font-weight: 750; }
+.yr-equipment-kind { display: inline-flex; min-width: 0; align-items: center; gap: 5px; font-size: 9.5px; font-weight: 850; }
+.yr-equipment-kind--confirmed { color: var(--ok); }
+.yr-equipment-kind--reservation { color: var(--wait); }
+.yr-equipment-kind--maintenance,
+.yr-equipment-kind--hygiene { color: var(--alert); }
+.yr-equipment-track { position: relative; height: 13px; margin-top: 5px; overflow: hidden; border: 1px solid var(--border-subtle); border-radius: 999px; background: var(--surface-sunken); }
+.yr-equipment-track > i { position: absolute; z-index: 1; top: 0; bottom: 0; width: 1px; background: var(--border-strong); opacity: .55; }
+.yr-equipment-track__bar { position: absolute; z-index: 2; top: 1px; bottom: 1px; min-width: 4px; border-radius: 999px; }
+.yr-equipment-track__bar--confirmed { background: var(--ok); }
+.yr-equipment-track__bar--reservation { border: 1px dashed #a96711; background: repeating-linear-gradient(135deg, #f3c97d, #f3c97d 4px, #fff0cc 4px, #fff0cc 8px); }
+.yr-equipment-track__bar--maintenance,
+.yr-equipment-track__bar--hygiene { background: var(--alert); }
+.yr-equipment-track__bar.is-conflict { outline: 2px solid var(--alert); outline-offset: -1px; }
+.yr-equipment-period-meta { display: flex; min-width: 0; align-items: center; justify-content: space-between; gap: 8px; margin-top: 4px; color: var(--ink-muted); font-size: 9.5px; }
+.yr-equipment-period-meta span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.yr-equipment-period-meta button { flex: none; color: var(--yr-700); font-size: 9.5px; font-weight: 850; }
+.yr-equipment-undated { display: flex; align-items: center; gap: 8px; border: 1px solid var(--wait-border); border-radius: 11px; background: var(--wait-surface); padding: 9px 10px; color: var(--wait); font-size: 10px; font-weight: 750; }
+.yr-equipment-undated strong { margin-left: auto; }
+.yr-equipment-no-period { padding: 10px; border: 1px dashed var(--border-strong); border-radius: 10px; color: var(--ink-faint); font-size: 10px; }
+.yr-equipment-schedule__foot { padding: 11px 20px; border-top: 1px solid var(--border-subtle); background: var(--surface-tint); color: var(--ink-faint); font-size: 9.5px; line-height: 1.5; }
+.yr-equipment-empty { display: flex; min-height: 180px; align-items: center; justify-content: center; gap: 20px; padding: 28px; }
+.yr-equipment-empty__art { width: 130px; color: var(--yr-700); }
+.yr-equipment-empty h3 { color: var(--ink); font-size: 14px; font-weight: 900; }
+.yr-equipment-empty p { max-width: 46ch; margin-top: 5px; color: var(--ink-muted); font-size: 11px; line-height: 1.55; }
+
+.yr-finance-contract-intro { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 18px 20px; border: 1px solid var(--border-subtle); border-radius: var(--r-xl); background: var(--surface-raised); box-shadow: var(--shadow-sm); }
+.yr-finance-kicker { color: var(--yr-700); font-size: 9px; font-weight: 900; letter-spacing: .12em; text-transform: uppercase; }
+.yr-finance-contract-intro h2 { margin-top: 4px; color: var(--ink); font-size: 15px; font-weight: 900; }
+.yr-finance-contract-intro p { margin-top: 4px; color: var(--ink-muted); font-size: 10.5px; }
+.yr-finance-contract-metrics { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 9px; }
+.yr-finance-contract-metrics article { display: grid; min-width: 0; gap: 5px; padding: 13px 14px; border: 1px solid var(--border-subtle); border-radius: 14px; background: var(--surface-raised); }
+.yr-finance-contract-metrics article > span { color: var(--ink-muted); font-size: 9px; font-weight: 850; }
+.yr-finance-contract-metrics strong { overflow: hidden; color: var(--ink); font-size: clamp(13px, 1.3vw, 18px); font-weight: 900; text-overflow: ellipsis; }
+.yr-finance-contract-metrics small { color: var(--ink-faint); font-size: 8.5px; line-height: 1.35; }
+.yr-finance-contract-metrics strong.is-positive,
+.yr-finance-contract-facts strong.is-positive { color: var(--ok); }
+.yr-finance-contract-metrics strong.is-alert,
+.yr-finance-contract-facts strong.is-alert { color: var(--alert); }
+.yr-finance-calculation { display: flex; align-items: flex-start; gap: 9px; padding: 11px 13px; border: 1px solid var(--yr-100); border-radius: 12px; background: var(--yr-050); color: var(--yr-700); font-size: 10px; line-height: 1.55; }
+.yr-finance-calculation svg { flex: none; margin-top: 1px; }
+.yr-finance-pending-note { display: flex; align-items: center; gap: 7px; color: var(--wait); font-size: 10px; font-weight: 800; }
+.yr-finance-contract-list { display: grid; gap: 13px; }
+.yr-finance-contract-card { min-width: 0; overflow: hidden; border: 1px solid var(--border-subtle); border-radius: var(--r-xl); background: var(--surface-raised); box-shadow: var(--shadow-sm); }
+.yr-finance-contract-card__head { display: flex; min-width: 0; align-items: center; justify-content: space-between; gap: 12px; padding: 16px 18px; border-bottom: 1px solid var(--border-subtle); }
+.yr-finance-contract-card__head h3 { margin-top: 5px; color: var(--ink); font-size: 13px; font-weight: 900; }
+.yr-finance-contract-card__head h3 span { color: var(--ink-muted); font-size: 10.5px; font-weight: 750; }
+.yr-finance-contract-card__head p { margin-top: 3px; overflow: hidden; color: var(--ink-muted); font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
+.yr-finance-contract-state { display: inline-flex; align-items: center; border-radius: 999px; padding: 4px 8px; font-size: 8.5px; font-weight: 900; }
+.yr-finance-contract-state.is-confirmed { background: var(--ok-surface); color: var(--ok); }
+.yr-finance-contract-state.is-pending { background: var(--wait-surface); color: var(--wait); }
+.yr-finance-client-link { display: inline-flex; flex: none; align-items: center; gap: 4px; color: var(--yr-700); font-size: 9.5px; font-weight: 850; }
+.yr-finance-contract-facts { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 7px; padding: 13px 18px; border-bottom: 1px solid var(--border-subtle); }
+.yr-finance-contract-facts > div { display: grid; min-width: 0; gap: 4px; }
+.yr-finance-contract-facts span { color: var(--ink-faint); font-size: 8.5px; font-weight: 850; }
+.yr-finance-contract-facts strong { overflow: hidden; color: var(--ink); font-size: 10.5px; font-weight: 900; text-overflow: ellipsis; white-space: nowrap; }
+.yr-finance-uninvoiced { display: flex; align-items: center; gap: 5px; padding: 8px 18px 0; color: var(--ink-muted); font-size: 9.5px; }
+.yr-finance-costs { padding: 12px 18px 13px; }
+.yr-finance-costs > header { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 4px; }
+.yr-finance-costs h4 { color: var(--ink); font-size: 10.5px; font-weight: 900; }
+.yr-finance-costs h4 span { margin-left: 4px; border-radius: 999px; background: var(--surface-sunken); padding: 2px 6px; color: var(--ink-muted); font-size: 8px; }
+.yr-finance-costs > header button { color: var(--yr-700); font-size: 9.5px; font-weight: 900; }
+.yr-finance-cost-row { display: flex; min-width: 0; align-items: center; gap: 10px; padding: 8px 0; border-top: 1px solid var(--border-subtle); }
+.yr-finance-cost-date { width: 76px; flex: none; color: var(--ink-muted); font-size: 9px; font-variant-numeric: tabular-nums; }
+.yr-finance-cost-description { display: grid; min-width: 0; flex: 1; gap: 2px; }
+.yr-finance-cost-description strong { overflow: hidden; color: var(--ink); font-size: 9.5px; text-overflow: ellipsis; white-space: nowrap; }
+.yr-finance-cost-description small { color: var(--ink-faint); font-size: 8.5px; }
+.yr-finance-cost-amount { flex: none; color: var(--ink); font-size: 10px; font-weight: 900; }
+.yr-finance-cost-row > button { display: grid; width: 28px; height: 28px; flex: none; place-items: center; border-radius: 8px; color: var(--ink-muted); }
+.yr-finance-cost-row > button:hover { background: var(--surface-sunken); color: var(--yr-700); }
+.yr-finance-cost-row > button:last-child:hover { color: var(--alert); }
+.yr-finance-cost-empty { padding: 9px 0; color: var(--ink-faint); font-size: 9.5px; }
+.yr-finance-invoice-foot { display: flex; align-items: center; gap: 5px; margin-top: 7px; color: var(--ink-faint); font-size: 8.5px; }
+.yr-finance-contract-empty { display: grid; justify-items: center; gap: 8px; padding: 48px 20px; border: 1px dashed var(--border-strong); border-radius: var(--r-xl); color: var(--ink-faint); text-align: center; }
+.yr-finance-contract-empty strong { color: var(--ink); font-size: 12px; }
+.yr-finance-contract-empty span { font-size: 10px; }
+
+.yr-contract-countdown { display: inline-flex; align-items: center; gap: 4px; padding: 3px 7px; border: 1px solid var(--yr-100); border-radius: 999px; background: var(--yr-050); color: var(--yr-700); font-size: 9px; font-weight: 850; line-height: 1.2; white-space: nowrap; }
+.yr-contract-countdown svg { width: 11px; height: 11px; }
+.yr-contract-countdown.is-ending { border-color: var(--wait-border); background: var(--wait-surface); color: var(--wait); }
+.yr-contract-countdown.is-ended { border-color: var(--alert-border); background: var(--alert-surface); color: var(--alert); }
+.yr-retention-panel { overflow: hidden; border: 1px solid var(--border-subtle); border-radius: var(--r-xl); background: var(--surface-raised); box-shadow: var(--shadow-sm); }
+.yr-retention-panel__head { display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 18px 20px; border-bottom: 1px solid var(--border-subtle); background: linear-gradient(110deg, var(--surface-raised), var(--yr-050)); }
+.yr-retention-panel__title { display: flex; min-width: 0; align-items: center; gap: 12px; }
+.yr-retention-panel__icon { display: grid; width: 40px; height: 40px; flex: none; place-items: center; border: 1px solid var(--yr-100); border-radius: 13px; background: var(--surface-raised); color: var(--yr-600); }
+.yr-retention-panel__icon svg { width: 19px; height: 19px; }
+.yr-retention-panel__title p { margin: 0 0 3px; color: var(--yr-700); font-size: 9px; font-weight: 900; letter-spacing: .12em; text-transform: uppercase; }
+.yr-retention-panel__title h3 { margin: 0; color: var(--ink); font-family: var(--font-display, Georgia, serif); font-size: clamp(16px, 2vw, 21px); font-weight: 700; line-height: 1.2; }
+.yr-retention-panel__actions { display: flex; flex: none; align-items: center; gap: 8px; }
+.yr-retention-panel__actions > button { display: inline-flex; min-height: 35px; align-items: center; gap: 6px; padding: 0 11px; border: 1px solid var(--border-strong); border-radius: 999px; background: var(--surface-raised); color: var(--ink-muted); font-size: 10px; font-weight: 800; }
+.yr-retention-panel__actions > button:hover:not(:disabled) { border-color: var(--yr-300); color: var(--yr-700); }
+.yr-retention-panel__actions > button:focus-visible,.yr-retention-subhead button:focus-visible { outline: 3px solid color-mix(in srgb, var(--yr-500) 35%, transparent); outline-offset: 2px; }
+.yr-retention-panel__actions > button:disabled { cursor: wait; opacity: .6; }
+.yr-retention-panel__actions > button svg { width: 13px; height: 13px; }
+.yr-retention-source { padding: 5px 8px; border: 1px solid var(--border-subtle); border-radius: 999px; background: var(--surface-raised); color: var(--ink-faint); font-size: 8px; font-weight: 850; white-space: nowrap; }
+.yr-retention-source.is-ai { border-color: var(--yr-100); color: var(--yr-700); }
+.yr-retention-panel__body { display: grid; grid-template-columns: minmax(245px, .86fr) minmax(0, 1.35fr); }
+.yr-renewal-timers { min-width: 0; padding: 17px 19px; border-right: 1px solid var(--border-subtle); }
+.yr-retention-insights { min-width: 0; padding: 17px 19px; }
+.yr-retention-subhead { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 11px; }
+.yr-retention-subhead > div { display: flex; min-width: 0; align-items: center; gap: 7px; }
+.yr-retention-subhead > div > svg { width: 15px; height: 15px; flex: none; color: var(--yr-600); }
+.yr-retention-subhead h4 { margin: 0; color: var(--ink); font-size: 11px; font-weight: 900; }
+.yr-retention-subhead button { display: inline-flex; flex: none; align-items: center; gap: 4px; color: var(--yr-700); font-size: 9px; font-weight: 850; }
+.yr-retention-subhead button svg { width: 12px; height: 12px; }
+.yr-renewal-timers__list { display: grid; gap: 7px; }
+.yr-renewal-timer { display: flex; min-width: 0; align-items: center; gap: 11px; padding: 9px 10px; border: 1px solid var(--border-subtle); border-radius: 12px; background: var(--surface-sunken); }
+.yr-renewal-timer--ending { border-color: var(--wait-border); background: color-mix(in srgb, var(--wait-surface) 54%, var(--surface-raised)); }
+.yr-renewal-timer--ended { border-color: var(--alert-border); background: var(--alert-surface); }
+.yr-renewal-timer__clock { display: grid; min-width: 76px; justify-items: start; gap: 2px; color: var(--yr-700); }
+.yr-renewal-timer--ending .yr-renewal-timer__clock { color: var(--wait); }
+.yr-renewal-timer--ended .yr-renewal-timer__clock { color: var(--alert); }
+.yr-renewal-timer__clock svg { width: 13px; height: 13px; }
+.yr-renewal-timer__clock strong { font-size: 10.5px; font-weight: 900; line-height: 1.2; }
+.yr-renewal-timer__clock span { color: var(--ink-faint); font-size: 9px; }
+.yr-renewal-timer__contract { display: grid; min-width: 0; gap: 3px; }
+.yr-renewal-timer__contract strong { overflow: hidden; color: var(--ink); font-size: 10.5px; font-weight: 850; text-overflow: ellipsis; white-space: nowrap; }
+.yr-renewal-timer__contract span { overflow: hidden; color: var(--ink-faint); font-size: 9px; text-overflow: ellipsis; white-space: nowrap; }
+.yr-retention-empty,.yr-retention-loading { margin: 0; padding: 12px; border: 1px dashed var(--border-strong); border-radius: 11px; color: var(--ink-faint); font-size: 9px; line-height: 1.55; }
+.yr-retention-loading { background: var(--surface-sunken); }
+.yr-retention-insight { padding: 11px 0; border-top: 1px solid var(--border-subtle); }
+.yr-retention-insight:first-of-type { padding-top: 2px; border-top: 0; }
+.yr-retention-insight__copy { display: grid; grid-template-columns: 25px minmax(0, 1fr); gap: 9px; }
+.yr-retention-insight__number { display: grid; width: 23px; height: 23px; place-items: center; border-radius: 8px; background: var(--yr-050); color: var(--yr-700); font-size: 9px; font-weight: 900; }
+.yr-retention-insight h5 { margin: 1px 0 4px; color: var(--ink); font-size: 10.5px; font-weight: 900; line-height: 1.35; }
+.yr-retention-insight p { margin: 0; color: var(--ink-muted); font-size: 10px; line-height: 1.55; }
+.yr-retention-insight .yr-retention-insight__observation { margin-bottom: 4px; color: var(--ink-faint); font-size: 9px; }
+.yr-retention-insight__meta { display: grid; gap: 3px; margin-top: 6px; color: var(--ink-faint); font-size: 9px; line-height: 1.45; }
+.yr-retention-insight__meta span { display: flex; align-items: flex-start; gap: 3px; }
+.yr-retention-insight__meta strong { color: var(--ink-muted); }
+.yr-retention-insight__meta svg { width: 11px; height: 11px; flex: none; margin-top: 1px; color: var(--ok); }
+.yr-retention-disclosure { margin: 7px 0 0; color: var(--ink-faint); font-size: 9px; line-height: 1.45; }
+.yr-retention-error { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 9px; border: 1px solid var(--alert-border); border-radius: 10px; color: var(--alert); font-size: 9px; }
+.yr-retention-error button { flex: none; font-weight: 850; text-decoration: underline; text-underline-offset: 2px; }
+.yr-retention-playbook { display: flex; align-items: flex-start; gap: 9px; padding: 12px 19px; border-top: 1px solid var(--border-subtle); background: var(--surface-sunken); }
+.yr-retention-playbook > div { display: flex; min-width: 158px; align-items: center; gap: 6px; color: var(--yr-700); font-size: 9px; }
+.yr-retention-playbook svg { width: 14px; height: 14px; flex: none; }
+.yr-retention-playbook p { margin: 0; color: var(--ink-muted); font-size: 9.5px; line-height: 1.5; }
+
+@media (max-width: 1020px) {
+  .yr-calendar-layout { grid-template-columns: minmax(0, 1fr); }
+  .yr-calendar-side { border-top: 1px solid var(--border-subtle); border-left: 0; }
+  .yr-calendar-side .yr-calendar-selected-day { display: none; }
+  .yr-calendar-cell { min-height: 94px; padding: 6px 5px; }
+  .yr-finance-contract-metrics { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .yr-finance-contract-facts { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .yr-retention-panel__body { grid-template-columns: minmax(220px, .8fr) minmax(0, 1.2fr); }
+}
+
+@media (max-width: 720px) {
+  .yr-calendar-toolbar { padding: 14px; }
+  .yr-calendar-toolbar__top { align-items: flex-start; flex-direction: column; }
+  .yr-calendar-period { width: 100%; justify-content: space-between; font-size: 13px; }
+  .yr-calendar-filters { flex-wrap: wrap; overflow: visible; padding-bottom: 2px; }
+  .yr-calendar-filters button { flex: none; }
+  .yr-calendar-search { flex: 1 1 100%; min-height: 36px; }
+  .yr-calendar-search input { width: auto; flex: 1; }
+  .yr-calendar-filter-select { flex: 1 1 auto; }
+  .yr-calendar-filter-select select { width: 100%; }
+  .yr-calendar-main { padding: 12px; }
+  .yr-calendar-weekdays,
+  .yr-calendar-month-grid,
+  .yr-calendar-week-grid,
+  .yr-calendar-side { display: none; }
+  .yr-calendar-mobile-strip { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 4px; padding: 6px 0 13px; }
+  .yr-calendar-mobile-strip button { position: relative; display: grid; min-height: 60px; justify-items: center; align-content: center; gap: 4px; border: 1px solid transparent; border-radius: 12px; color: var(--ink-muted); }
+  .yr-calendar-mobile-strip button span { font-size: 9px; font-weight: 800; text-transform: uppercase; }
+  .yr-calendar-mobile-strip button strong { display: grid; width: 27px; height: 27px; place-items: center; border-radius: 50%; color: var(--ink); font-size: 12px; }
+  .yr-calendar-mobile-strip button.is-active { border-color: var(--yr-100); background: var(--yr-050); color: var(--yr-700); }
+  .yr-calendar-mobile-strip button.is-active strong { background: var(--yr-500); color: #fff; }
+  .yr-calendar-mobile-strip button i { position: absolute; bottom: 4px; width: 4px; height: 4px; border-radius: 50%; background: var(--yr-500); }
+  .yr-calendar-mobile-day { display: block; }
+  .yr-calendar-mobile-day .yr-calendar-list-day__heading { margin-bottom: 2px; border-bottom: 1px solid var(--border-subtle); }
+  .yr-calendar-side__head { padding-bottom: 10px; }
+  .yr-agenda-list__row { gap: 8px; padding: 11px 1px; }
+  .yr-agenda-list__icon { width: 30px; height: 30px; }
+  .yr-calendar-list-view { padding: 12px; }
+  .yr-calendar-first-empty { min-height: 0; flex-direction: column; gap: 12px; padding: 28px 18px; text-align: center; }
+  .yr-calendar-first-empty .yr-agenda-art { width: 125px; }
+  .yr-calendar-first-empty p { margin-inline: auto; }
+  .yr-calendar-form { grid-template-columns: minmax(0, 1fr); }
+  .yr-calendar-field--wide { grid-column: auto; }
+  .yr-operations-tabs,
+  .yr-finance-tabs { width: 100%; }
+  .yr-operations-tabs button,
+  .yr-finance-tabs button { flex: 1; padding-inline: 8px; }
+  .yr-equipment-schedule__intro { align-items: flex-start; flex-wrap: wrap; padding: 15px; }
+  .yr-equipment-schedule__intro-icon { width: 36px; height: 36px; }
+  .yr-equipment-schedule__intro h2 { font-size: 12.5px; }
+  .yr-equipment-schedule__intro p { max-width: 32ch; font-size: 9.5px; }
+  .yr-equipment-horizon { margin-left: 46px; }
+  .yr-equipment-scale { padding: 12px 13px 4px; font-size: 8px; }
+  .yr-equipment-list { padding: 0 12px 8px; }
+  .yr-equipment-card { padding: 12px 1px; }
+  .yr-equipment-lanes { margin-left: 0; }
+  .yr-equipment-period-heading { align-items: flex-start; font-size: 8.5px; }
+  .yr-equipment-kind { font-size: 8.5px; }
+  .yr-equipment-undated { align-items: flex-start; flex-wrap: wrap; font-size: 9px; }
+  .yr-equipment-undated strong { margin-left: 22px; }
+  .yr-equipment-empty { min-height: 0; flex-direction: column; gap: 12px; padding: 24px 18px; text-align: center; }
+  .yr-equipment-empty__art { width: 100px; }
+  .yr-finance-contract-intro { align-items: flex-start; flex-direction: column; padding: 15px; }
+  .yr-finance-contract-intro h2 { font-size: 13px; }
+  .yr-finance-contract-intro p { max-width: 43ch; line-height: 1.5; }
+  .yr-finance-contract-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 7px; }
+  .yr-finance-contract-metrics article { padding: 11px; }
+  .yr-finance-contract-metrics strong { font-size: 14px; }
+  .yr-finance-contract-card__head { align-items: flex-start; padding: 13px; }
+  .yr-finance-contract-facts { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px 8px; padding: 12px 13px; }
+  .yr-finance-costs { padding: 11px 13px 12px; }
+  .yr-finance-cost-row { gap: 7px; }
+  .yr-finance-cost-date { width: 59px; font-size: 8px; }
+  .yr-finance-cost-description strong { font-size: 9px; }
+  .yr-finance-cost-amount { font-size: 9px; }
+  .yr-finance-client-link { font-size: 0; }
+  .yr-finance-client-link svg { width: 17px; height: 17px; }
+  .yr-retention-panel__head { align-items: flex-start; flex-direction: column; padding: 15px; }
+  .yr-retention-panel__actions { width: 100%; justify-content: space-between; }
+  .yr-retention-panel__body { grid-template-columns: minmax(0, 1fr); }
+  .yr-renewal-timers { padding: 14px 15px; border-right: 0; border-bottom: 1px solid var(--border-subtle); }
+  .yr-retention-insights { padding: 14px 15px; }
+  .yr-retention-playbook { flex-direction: column; padding: 12px 15px; }
+  .yr-retention-playbook > div { min-width: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .yr-calendar-page,
+  .yr-calendar-page *,
+  .yr-equipment-schedule-shell,
+  .yr-equipment-schedule-shell *,
+  .yr-finance-contract-view,
+  .yr-finance-contract-view *,
+  .yr-retention-panel,
+  .yr-retention-panel *,
+  .yr-operations-tabs,
+  .yr-operations-tabs *,
+  .yr-finance-tabs,
+  .yr-finance-tabs *,
+  .yr-dialog-primary,
+  .yr-dialog-secondary,
+  .yr-dialog-delete {
+    animation: none !important;
+    scroll-behavior: auto !important;
+    transition: none !important;
+  }
+}

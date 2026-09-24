@@ -25,6 +25,8 @@ import { sanitizeLeadDetails } from './leadDetails.js'
 import { listTemplates, sendTemplate, windowState, backfillLastInbound, MetaError } from './metaTemplates.js'
 import { normalizePhone, phoneKey } from './phone.js'
 import * as siteBlog from './blog.js'
+import { registerOperationsRoutes } from './operations.js'
+import { generateGeminiRetentionInsights, registerRetentionInsightRoute } from './retentionInsights.js'
 
 const app = express()
 const server = http.createServer(app)
@@ -176,6 +178,13 @@ app.post('/api/auth/login', async (req, res) => {
 
 app.get('/api/auth/me', requireAuth(), (req, res) => {
   res.json({ user: req.user })
+})
+
+registerOperationsRoutes(app, { db, requireAuth })
+registerRetentionInsightRoute(app, {
+  db,
+  requireAuth,
+  generateInsights: (snapshot) => generateGeminiRetentionInsights(snapshot, runGeminiWithFallback),
 })
 
 /* ==========================================================================

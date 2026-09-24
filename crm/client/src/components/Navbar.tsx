@@ -152,7 +152,7 @@ export const Navbar: React.FC<NavbarProps> = ({ onOpenQr, onOpenLead, onToggleMo
           href="https://dcfoundrydigital.com/admin"
           target="_blank"
           rel="noreferrer"
-          className="inline-flex items-center gap-1.5 rounded-[12px] px-3 py-2 text-[11.5px] font-extrabold"
+          className="hidden items-center gap-1.5 rounded-[12px] px-3 py-2 text-[11.5px] font-extrabold sm:inline-flex"
           style={ghost}
           title="Abrir o painel administrativo da DC Foundry Digital"
         >
@@ -160,7 +160,9 @@ export const Navbar: React.FC<NavbarProps> = ({ onOpenQr, onOpenLead, onToggleMo
           <span className="hidden lg:inline">Painel DC</span>
         </a>
 
-        <SiteLinkActions compact />
+        <div className="hidden sm:block">
+          <SiteLinkActions compact />
+        </div>
 
         {user && (
           <div className="flex items-center gap-2 pl-1">
