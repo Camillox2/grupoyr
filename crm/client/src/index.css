@@ -2111,3 +2111,23 @@
     gap: 5px;
   }
 }
+
+@media (max-width: 820px) {
+  .notification-panel {
+    position: fixed;
+    top: calc(env(safe-area-inset-top, 0px) + 72px);
+    right: max(12px, env(safe-area-inset-right, 0px));
+    left: auto;
+    width: min(360px, calc(100vw - max(12px, env(safe-area-inset-left, 0px)) - max(12px, env(safe-area-inset-right, 0px))));
+    max-height: calc(100dvh - env(safe-area-inset-top, 0px) - 88px);
+    display: flex;
+    flex-direction: column;
+  }
+  .notification-panel-list {
+    flex: 1 1 auto;
+    min-height: 0;
+    max-height: none;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+  }
+}

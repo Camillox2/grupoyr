@@ -120,12 +120,12 @@ export const NotificationCenter: React.FC<NotificationCenterProps> = ({ onOpenLe
       </button>
 
       {open && (
-        <section className="absolute right-0 top-[calc(100%+10px)] z-50 w-[min(360px,calc(100vw-24px))] overflow-hidden rounded-2xl border border-slate-200 bg-white text-slate-900 shadow-2xl dark:border-slate-700 dark:bg-slate-900 dark:text-white" aria-label="Central de notificações">
+        <section className="notification-panel absolute right-0 top-[calc(100%+10px)] z-50 w-[min(360px,calc(100vw-24px))] overflow-hidden rounded-2xl border border-slate-200 bg-white text-slate-900 shadow-2xl dark:border-slate-700 dark:bg-slate-900 dark:text-white" aria-label="Central de notificações">
           <header className="flex items-center justify-between gap-3 border-b border-slate-100 px-4 py-3 dark:border-slate-800">
             <div><h2 className="text-sm font-bold">Notificações</h2><p className="mt-0.5 text-[11px] text-slate-500">Avisos de atendimento e qualificação</p></div>
             {unreadCount > 0 && <button type="button" onClick={() => void markAllRead()} className="inline-flex shrink-0 items-center gap-1 text-[10px] font-bold text-blue-700 dark:text-blue-300"><CheckCheck className="h-3.5 w-3.5" />Marcar lidas</button>}
           </header>
-          <div className="max-h-[min(65dvh,440px)] overflow-y-auto">
+          <div className="notification-panel-list max-h-[min(65dvh,440px)] overflow-y-auto">
             {items.length === 0 ? <p className="px-4 py-8 text-center text-xs text-slate-500">Nenhum aviso por enquanto.</p> : items.map((item) => (
               <button key={item.id} type="button" onClick={() => void openLead(item)} className={`block w-full border-b border-slate-100 px-4 py-3 text-left last:border-0 hover:bg-blue-50/70 dark:border-slate-800 dark:hover:bg-slate-800 ${item.readAt ? '' : 'bg-blue-50/50 dark:bg-blue-950/20'}`}>
                 <span className="flex items-start gap-2.5">
