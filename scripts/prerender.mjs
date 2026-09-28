@@ -24,14 +24,14 @@ try {
     <meta property="og:title" content="${escape(meta.title)}" />
     <meta property="og:description" content="${escape(meta.description)}" />
     <meta property="og:url" content="${url}" />
-    <meta property="og:image" content="${siteConfig.url}/social-card.jpg" />
-    <meta property="og:image:width" content="1200" />
-    <meta property="og:image:height" content="630" />
-    <meta property="og:image:alt" content="Grupo YR Hospitalar — compra e locação de equipamentos hospitalares" />
+    <meta property="og:image" content="${siteConfig.url}/products/cama-eletrica-luxo.webp" />
+    <meta property="og:image:width" content="1024" />
+    <meta property="og:image:height" content="1024" />
+    <meta property="og:image:alt" content="Cama hospitalar elétrica Grupo YR Hospitalar" />
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:title" content="${escape(meta.title)}" />
     <meta name="twitter:description" content="${escape(meta.description)}" />
-    <meta name="twitter:image" content="${siteConfig.url}/social-card.jpg" />
+    <meta name="twitter:image" content="${siteConfig.url}/products/cama-eletrica-luxo.webp" />
     <script type="application/ld+json">${JSON.stringify(structuredData(path)).replace(/</g,'\\u003c')}</script>`
     const html = template.replace('<!--seo-->',tags).replace('<div id="root"></div>',`<div id="root">${renderPage(path)}</div>`)
     const output = resolve('dist', path === '/' ? 'index.html' : path.slice(1) + '.html')
