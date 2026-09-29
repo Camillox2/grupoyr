@@ -15,7 +15,7 @@ import pg from 'pg'
 // SANITIZA e o site, na hora de exibir (server/blog-content.js): a defesa contra
 // XSS continua num lugar so.
 
-const SITE_ORIGIN = 'https://site.grupoyrhospitalar.com.br'
+const SITE_ORIGIN = 'https://grupoyrhospitalar.com.br'
 const CONNECTION = process.env.BLOG_DATABASE_URL || process.env.DATABASE_URL || ''
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 const SLUG = /^[a-z0-9]+(?:-[a-z0-9]+)*$/
