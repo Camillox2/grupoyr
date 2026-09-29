@@ -5,5 +5,5 @@ export const siteConfig = {
   whatsapp: '5541997714985',
   whatsappLink: 'https://wa.link/7iz93j',
   whatsappLabel: '(41) 99771-4985',
-  url: 'https://site.grupoyrhospitalar.com.br',
+  url: 'https://grupoyrhospitalar.com.br',
 }
