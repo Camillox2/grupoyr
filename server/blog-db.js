@@ -3,7 +3,7 @@ export function db() {
   if (!process.env.DATABASE_URL) throw new Error('Blog database unavailable')
   return neon(process.env.DATABASE_URL)
 }
-export const ORIGIN = 'https://site.grupoyrhospitalar.com.br'
+export const ORIGIN = 'https://grupoyrhospitalar.com.br'
 export const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 export function fail(status, message) { throw Object.assign(new Error(message), { status }) }
 export function json(res, status, value) { res.statusCode = status; res.setHeader('Content-Type', 'application/json; charset=utf-8'); res.end(JSON.stringify(value)) }
