@@ -179,7 +179,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           <div className="grid lg:grid-cols-[1.1fr_.9fr]">
             <div className="p-8 sm:p-10">
               <img
-                src="https://site.grupoyrhospitalar.com.br/yr-hospitalar-logo.jpg"
+                src="https://grupoyrhospitalar.com.br/yr-hospitalar-logo.jpg"
                 alt="Grupo YR Hospitalar"
                 className="w-20 h-20 object-contain rounded-lg border border-slate-100 bg-white"
               />
