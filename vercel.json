@@ -70,7 +70,7 @@
           "value": "grupo-yr-hospitalar.vercel.app"
         }
       ],
-      "destination": "https://site.grupoyrhospitalar.com.br/:path*",
+      "destination": "https://grupoyrhospitalar.com.br/:path*",
       "permanent": true
     }
   ],
