@@ -1106,7 +1106,7 @@ const sendBlogError = (res, error, fallback) => {
 }
 
 app.get('/api/blog/status', requireAuth(), async (_req, res) => {
-  res.json({ linked: await siteBlog.isLinked(), siteUrl: 'https://site.grupoyrhospitalar.com.br/blog' })
+  res.json({ linked: await siteBlog.isLinked(), siteUrl: 'https://grupoyrhospitalar.com.br/blog' })
 })
 
 app.get('/api/blog/posts', requireAuth(), async (_req, res) => {
