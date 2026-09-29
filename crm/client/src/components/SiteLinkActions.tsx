@@ -1,7 +1,7 @@
 import React, { useState } from 'react'
 import { Check, Copy, ExternalLink } from 'lucide-react'
 
-export const GROUP_YR_SITE_URL = 'https://site.grupoyrhospitalar.com.br/'
+export const GROUP_YR_SITE_URL = 'https://grupoyrhospitalar.com.br/'
 
 const copyText = async (value: string) => {
   try {

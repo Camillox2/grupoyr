@@ -37,7 +37,7 @@ try {
   assert.equal((await request('save',draft)).response.status,409)
   await publicStatus('/blog/'+slug,404)
   result=await request('save',{...post,status:'published'});assert.equal(result.response.status,200,JSON.stringify(result.data));post=result.data.post
-  let html=await (await publicStatus('/blog/'+slug,200)).text();assert.match(html,/<h1>Verificação temporária/);assert.match(html,/'?BlogPosting/);assert.match(html,new RegExp(`rel="canonical" href="https://site.grupoyrhospitalar.com.br/blog/${slug}"`))
+  let html=await (await publicStatus('/blog/'+slug,200)).text();assert.match(html,/<h1>Verificação temporária/);assert.match(html,/'?BlogPosting/);assert.match(html,new RegExp(`rel="canonical" href="https://grupoyrhospitalar.com.br/blog/${slug}"`))
   await publicStatus('/blog/capa/'+mediaId,200)
   let sitemap=await (await publicStatus('/sitemap-blog-1.xml',200)).text();assert(sitemap.includes('/blog/'+slug));assert.match(sitemap,/<lastmod>/)
   const oldVersion=post;result=await request('save',{...post,slug:slug+'-novo'});assert.equal(result.response.status,200,JSON.stringify(result.data));post=result.data.post

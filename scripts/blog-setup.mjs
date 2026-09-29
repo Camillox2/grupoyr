@@ -19,7 +19,7 @@ if(process.argv.includes('--admin') || process.argv.includes('--reset-admin')) {
     const password=randomBytes(24).toString('base64url')+'!Yr',hash=await hashPassword(password),id=existing?.id||randomUUID()
     await sql.transaction([sql`INSERT INTO blog_admins(id,email,password_hash,must_change_password) VALUES(${id},${email},${hash},TRUE) ON CONFLICT(email) DO UPDATE SET password_hash=EXCLUDED.password_hash,must_change_password=TRUE`,sql`DELETE FROM blog_sessions WHERE admin_id=${id}`])
     await mkdir(dirname(output),{recursive:true})
-    await writeFile(output,`ACESSO ADMINISTRATIVO — BLOG YR\n\nPainel: https://site.grupoyrhospitalar.com.br/admin\nE-mail: ${email}\nSenha temporária: ${password}\n\nO primeiro acesso exige uma senha nova de pelo menos 14 caracteres.\nNão há cadastro público. Todas as sessões são encerradas ao trocar a senha.\nGuarde a nova senha no seu gerenciador de senhas.\n`,{mode:0o600})
+    await writeFile(output,`ACESSO ADMINISTRATIVO — BLOG YR\n\nPainel: https://grupoyrhospitalar.com.br/admin\nE-mail: ${email}\nSenha temporária: ${password}\n\nO primeiro acesso exige uma senha nova de pelo menos 14 caracteres.\nNão há cadastro público. Todas as sessões são encerradas ao trocar a senha.\nGuarde a nova senha no seu gerenciador de senhas.\n`,{mode:0o600})
     console.log('Temporary administrator credentials saved to the private handoff file.')
   }
 }

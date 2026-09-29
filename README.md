@@ -53,6 +53,7 @@ A logo oficial enviada pelo responsável está em `public/yr-hospitalar-logo.jpg
 
 ## Domínio de produção
 
-`https://site.grupoyrhospitalar.com.br` aponta para o projeto Vercel `grupo-yr-hospitalar`. A Cloudflare mantém o CNAME `site` para `1c937794c9e3afc3.vercel-dns-017.com` com DNS only. O domínio principal, `www`, `crm`, `api` e os registros de e-mail permanecem independentes.
+`https://grupoyrhospitalar.com.br` é o domínio canônico de produção do projeto Vercel `grupo-yr-hospitalar`. Os endereços `www` e o antigo subdomínio `site` redirecionam permanentemente para o domínio principal. O CRM, a API e os registros de e-mail mantêm seus próprios endereços na Cloudflare.
 
 O repositório GitHub é `Camillox2/grupoyr`, branch `main`. A função `/api/chat` usa `GEMINI_API_KEY` somente no servidor; configure a variável na Vercel. Não grave credenciais no código.
+

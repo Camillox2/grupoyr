@@ -2,4 +2,4 @@ User-agent: *
 Allow: /
 Disallow: /api/
 Disallow: /admin
-Sitemap: https://site.grupoyrhospitalar.com.br/sitemap.xml
+Sitemap: https://grupoyrhospitalar.com.br/sitemap.xml

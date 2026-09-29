@@ -1,8 +1,8 @@
 # Blog YR
 
-Public: https://site.grupoyrhospitalar.com.br/blog
+Public: https://grupoyrhospitalar.com.br/blog
 
-Admin: https://site.grupoyrhospitalar.com.br/admin
+Admin: https://grupoyrhospitalar.com.br/admin
 
 ## Infrastructure
 
