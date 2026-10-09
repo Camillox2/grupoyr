@@ -1,144 +1,38 @@
-const MODELS = [
-  'gemini-3.8-flash',
-  'gemini-3.7-flash',
-  'gemini-3.6-flash',
-  'gemini-3.5-flash',
-  'gemini-3.5-flash-lite',
-  'gemini-3.1-flash-lite',
-]
+// Same-origin bridge: the CRM owns the YRIA prompt, persona, catalog and key.
+// Neither browser history nor client-supplied qualification/config is trusted.
+const CRM_CHAT = 'https://crm-grupoyr.dcfoundrydigital.com/api/website-chat'
+const ORIGINS = new Set(['https://grupoyrhospitalar.com.br', 'https://www.grupoyrhospitalar.com.br', 'https://site.grupoyrhospitalar.com.br'])
 
-const SYSTEM_PROMPT = `Você é o Assistente YR, atendente comercial do Grupo YR Hospitalar.
-Seu objetivo é ajudar clientes a entender qual equipamento hospitalar pode fazer sentido e se compra ou locação parece mais adequada.
-
-Catálogo atual:
-- Cama hospitalar articulada: venda e locação. Indicada para recuperação, home care, idosos e pessoas com mobilidade reduzida.
-- Cama manual 3 movimentos: venda e locação. Ajustes essenciais, uso domiciliar ou institucional.
-- Maca hidráulica: venda e locação. Clínicas, hospitais e transporte interno.
-- Carrinho de emergência: venda. Uso profissional para organização de insumos e atendimento.
-- Biombo hospitalar: venda. Privacidade em clínicas, consultórios, hospitais e home care.
-- Mesa de refeição hospitalar: venda e locação. Apoio para pacientes acamados ou com mobilidade reduzida.
-
-Regras de atendimento:
-1. Seja acolhedor, objetivo e comercial, sem soar agressivo.
-2. Faça no máximo uma ou duas perguntas por resposta.
-3. Pergunte sobre contexto de uso, tempo estimado, ambiente (casa, clínica, hospital) e necessidade funcional. Evite perguntar diagnóstico, doença, exames ou dados de saúde sensíveis.
-4. Nunca faça diagnóstico, prescrição ou orientação médica. Se houver pergunta clínica, diga que isso deve ser validado com profissional de saúde e volte para características do equipamento.
-5. Não invente preço, estoque, prazo, região de entrega, garantia ou disponibilidade. Diga que esses pontos são confirmados na cotação.
-6. Para uso temporário, sugira avaliar locação. Para uso prolongado/recorrente, sugira comparar compra. Não imponha a escolha.
-7. Quando houver dados suficientes, dê uma recomendação curta com: produto sugerido, motivo, compra x locação e próximo passo.
-8. Se o cliente quiser fechar, peça apenas nome e contato, sem solicitar informações médicas.
-9. Sempre deixe claro que a recomendação é comercial sobre equipamento, não médica.
-10. Responda em português do Brasil, com linguagem simples e humana.
-`
-
-function sanitizeMessages(messages = []) {
-  const cleaned = messages
-    .filter((item) => item && ['user', 'model'].includes(item.role) && typeof item.text === 'string' && item.text.trim())
-    .slice(-12)
-    .map((item) => ({ role: item.role, text: item.text.trim().slice(0, 2500) }))
-
-  // A mensagem inicial do Assistente YR existe apenas na interface. Gemini 3
-  // não deve receber uma conversa começando com um turno predefinido do modelo.
-  while (cleaned[0]?.role === 'model') cleaned.shift()
-
-  // Junta turnos consecutivos do mesmo papel para manter um histórico válido.
-  const normalized = []
-  for (const item of cleaned) {
-    const previous = normalized[normalized.length - 1]
-    if (previous?.role === item.role) {
-      previous.text = `${previous.text}\n${item.text}`.slice(0, 4000)
-    } else {
-      normalized.push({ ...item })
+export function createChatHandler(fetcher = fetch) {
+  return async function handler(req, res) {
+    res.setHeader('Cache-Control', 'private, no-store')
+    if (req.method !== 'POST') {
+      res.setHeader('Allow', 'POST')
+      return res.status(405).json({ error: 'Método não permitido.' })
     }
-  }
-
-  return normalized.map((item) => ({
-    role: item.role,
-    parts: [{ text: item.text }],
-  }))
-}
-
-function extractText(data) {
-  const parts = data?.candidates?.[0]?.content?.parts || []
-  return parts.map((part) => part?.text || '').join('\n').trim()
-}
-
-async function callModel(model, apiKey, contents) {
-  const controller = new AbortController()
-  const timeout = setTimeout(() => controller.abort(), 18000)
-
-  try {
-    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-goog-api-key': apiKey,
-      },
-      body: JSON.stringify({
-        system_instruction: { parts: [{ text: SYSTEM_PROMPT }] },
-        contents,
-        generationConfig: {
-          maxOutputTokens: 650,
-          thinkingConfig: { thinkingLevel: 'low' },
-        },
-      }),
-      signal: controller.signal,
-    })
-
-    const data = await response.json().catch(() => ({}))
-    return { response, data }
-  } finally {
-    clearTimeout(timeout)
-  }
-}
-
-export default async function handler(req, res) {
-  if (req.method !== 'POST') {
-    res.setHeader('Allow', 'POST')
-    return res.status(405).json({ error: 'Método não permitido.' })
-  }
-
-  const apiKey = process.env.GEMINI_API_KEY
-  if (!apiKey) {
-    console.error('GEMINI_API_KEY missing at runtime')
-    return res.status(503).json({ error: 'Assistente ainda não configurado.' })
-  }
-
-  const contents = sanitizeMessages(req.body?.messages)
-  if (!contents.length || contents[contents.length - 1]?.role !== 'user') {
-    return res.status(400).json({ error: 'Mensagem inválida.' })
-  }
-
-  const failures = []
-
-  for (const model of MODELS) {
+    if (req.headers?.origin && !ORIGINS.has(req.headers.origin)) return res.status(403).json({ error: 'Origem não permitida.' })
+    const body = req.body || {}
+    // Support an old cached website bundle during the deployment transition.
+    const message = body.message ?? (Array.isArray(body.messages) ? body.messages.filter(item => item?.role === 'user' && typeof item.text === 'string').at(-1)?.text : undefined)
+    if (typeof message !== 'string' || !message.trim() || message.length > 1800) return res.status(400).json({ error: 'Mensagem inválida.' })
     try {
-      const { response, data } = await callModel(model, apiKey, contents)
-
-      if (response.ok) {
-        const reply = extractText(data)
-        if (reply) {
-          console.log(`Assistente YR respondeu com ${model}`)
-          return res.status(200).json({ reply, model })
-        }
-        failures.push(`${model}: resposta vazia`)
-        continue
+      const response = await fetcher(CRM_CHAT, {
+        method: 'POST', headers: { 'Content-Type': 'application/json', Origin: 'https://grupoyrhospitalar.com.br' },
+        body: JSON.stringify({ message, sessionId: body.sessionId, requestId: body.requestId }),
+        signal: AbortSignal.timeout(35000), redirect: 'error',
+      })
+      const data = await response.json().catch(() => null)
+      if (response.ok && typeof data?.reply === 'string' && typeof data?.sessionId === 'string') {
+        const contactUrl = typeof data.contactUrl === 'string' && data.contactUrl.startsWith('https://wa.me/5541997714985?text=') ? data.contactUrl : ''
+        return res.json({ reply: data.reply, sessionId: data.sessionId, handoff: data.handoff === true, mode: data.mode === 'ai' ? 'ai' : 'guided', contactUrl })
       }
-
-      const detail = data?.error?.message || data?.message || `HTTP ${response.status}`
-      console.warn(`Gemini ${model} falhou: ${response.status} ${String(detail).slice(0, 240)}`)
-
-      if (response.status === 401 || response.status === 403) {
-        return res.status(502).json({ error: 'Falha de autenticação do assistente.' })
+      if ([400, 409, 410, 429].includes(response.status)) {
+        if (response.status === 429) res.setHeader('Retry-After', '60')
+        return res.status(response.status).json({ error: typeof data?.error === 'string' ? data.error : 'Tente novamente em instantes.', ...(data?.code === 'session_expired' ? { code: data.code } : {}) })
       }
-
-      failures.push(`${model}: ${response.status}`)
-    } catch (error) {
-      console.warn(`Gemini ${model} exception: ${error?.name || 'erro'} ${error?.message || ''}`)
-      failures.push(`${model}: ${error?.name || 'erro'}`)
-    }
+    } catch { /* Provider/internal details never reach the public website. */ }
+    return res.status(503).json({ error: 'O atendimento está temporariamente indisponível. Tente novamente ou fale com a equipe pelo WhatsApp.' })
   }
-
-  console.error('Gemini fallback exhausted', failures.join(' | '))
-  return res.status(502).json({ error: 'Assistente temporariamente indisponível.' })
 }
+
+export default createChatHandler()
