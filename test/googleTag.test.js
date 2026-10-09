@@ -33,13 +33,27 @@ function run({ saved = null, privacy = false, dnt = null, storageFails = false }
   }
 }
 
-test('no choice and saved refusal load no Google library', () => {
+test('no choice and saved refusal load one tag with denied consent before configuration', () => {
   for (const saved of [null, 'denied']) {
     const f = run({ saved })
-    assert.equal(f.scripts().length, 0)
-    assert.deepEqual(f.commands(), [])
+    assert.equal(f.scripts().length, 1)
+    const commands = f.commands()
+    assert.deepEqual(commands[0].slice(0, 2), ['consent', 'default'])
+    for (const consent of commands.filter(command => command[0] === 'consent')) {
+      for (const type of ['ad_storage', 'analytics_storage', 'ad_user_data', 'ad_personalization']) {
+        assert.equal(consent[2][type], 'denied')
+      }
+    }
+    const configIndex = commands.findIndex(command => command[0] === 'config')
+    for (const setting of ['ads_data_redaction', 'url_passthrough']) {
+      const index = commands.findIndex(command => command[0] === 'set' && command[1] === setting)
+      assert.ok(index > 0 && index < configIndex)
+      assert.equal(commands[index][2], true)
+    }
+    assert.equal(commands.some(command => command[0] === 'event'), false)
     f.choose('denied')
-    assert.equal(f.scripts().length, 0)
+    assert.equal(f.scripts().length, 1)
+    assert.equal(f.commands().at(-1)[2].ad_storage, 'denied')
   }
 })
 
@@ -57,17 +71,24 @@ test('only outbound contact clicks queue the exact conversion without personal f
   }
 })
 
-test('refusal, no choice, revocation and browser privacy signals suppress conversions', () => {
-  for (const settings of [{}, { saved: 'denied' }, { saved: 'granted', privacy: true }, { saved: 'granted', dnt: '1' }]) {
+test('contact conversions remain available without choice, after refusal and after revocation', () => {
+  for (const settings of [{}, { saved: 'denied' }]) {
     const f = run(settings)
     f.click('https://wa.link/7iz93j')
     f.contact('https://wa.me/5541997714985')
-    assert.equal(f.commands().filter(command => command[0] === 'event').length, 0)
+    assert.equal(f.commands().filter(command => command[0] === 'event').length, 2)
+    assert.equal(f.commands().filter(command => command[0] === 'consent').at(-1)[2].ad_storage, 'denied')
+    f.choose('denied')
+    f.click('https://wa.link/7iz93j')
+    assert.equal(f.commands().filter(command => command[0] === 'event').length, 3)
   }
   const f = run({ saved: 'granted' })
   f.choose('denied')
   f.contact('https://wa.me/5541997714985')
-  assert.equal(f.commands().filter(command => command[0] === 'event').length, 0)
+  assert.equal(f.commands().filter(command => command[0] === 'event').length, 1)
+  assert.equal(f.commands().at(-2)[2].ad_storage, 'denied')
+  assert.equal(f.commands().at(-2)[2].ad_user_data, 'denied')
+  assert.equal(f.reloads(), 0)
 })
 
 test('article sharing, unrelated links, domain spoofing and cancelled clicks are not contacts', () => {
@@ -85,7 +106,7 @@ test('one conversion per accepted click even with a duplicated head loader', () 
   f.click('https://wa.link/7iz93j', { type: 'auxclick' })
   assert.equal(f.commands().filter(command => command[0] === 'event').length, 2)
 })
-test('permission queues the real YR config and loads only one async tag', () => {
+test('permission changes consent without reloading the tag or generating a conversion', () => {
   const f = run()
   f.choose('granted')
   f.choose('granted')
@@ -94,6 +115,11 @@ test('permission queues the real YR config and loads only one async tag', () => 
   assert.equal(f.scripts()[0].async, true)
   assert.equal(f.commands()[0][0], 'consent')
   assert.equal(f.commands().find(command => command[0] === 'config')[1], 'AW-18481732690')
+  const consent = f.commands().at(-1)[2]
+  assert.equal(consent.ad_storage, 'granted')
+  assert.equal(consent.ad_user_data, 'granted')
+  assert.equal(consent.analytics_storage, 'denied')
+  assert.equal(consent.ad_personalization, 'denied')
   assert.equal(f.commands().some(command => command[0] === 'event'), false, 'no fake conversion')
 })
 test('saved permission, revocation and duplicate loader behave correctly', () => {
@@ -101,22 +127,39 @@ test('saved permission, revocation and duplicate loader behave correctly', () =>
   vm.runInContext(source, f.context)
   assert.equal(f.scripts().length, 1)
   assert.equal(f.body.length, 2)
+  const commands = f.commands()
+  assert.equal(commands[0][2].ad_storage, 'denied')
+  const updateIndex = commands.findIndex(command => command[0] === 'consent' && command[1] === 'update')
+  assert.ok(updateIndex < commands.findIndex(command => command[0] === 'config'))
+  assert.equal(commands[updateIndex][2].ad_storage, 'granted')
   f.choose('denied')
   assert.equal(f.commands().at(-1)[2].ad_storage, 'denied')
-  assert.equal(f.reloads(), 1)
+  assert.equal(f.reloads(), 0)
 })
 test('GPC and Do Not Track prevent the tag and do not offer an override', () => {
   for (const settings of [{ privacy: true }, { dnt: '1' }]) {
     const f = run({ ...settings, saved: 'granted' })
     assert.equal(f.scripts().length, 0)
     assert.equal(f.body.length, 0)
+    f.click('https://wa.link/7iz93j')
+    f.contact('https://wa.me/5541997714985')
+    assert.equal(f.commands().filter(command => command[0] === 'event').length, 0)
   }
 })
 test('storage refusal does not break consent controls or the page', () => {
   const f = run({ storageFails: true })
-  assert.equal(f.scripts().length, 0)
+  assert.equal(f.scripts().length, 1)
   assert.doesNotThrow(() => f.choose('granted'))
   assert.equal(f.scripts().length, 1)
+})
+
+test('banner and privacy policy explain the cookieless measurement after refusal', () => {
+  const f = run()
+  assert.match(f.body[0].innerHTML, /sem cookies de publicidade/)
+  assert.match(f.body[0].innerHTML, /Permitir cookies/)
+  const app = readFileSync(new URL('../src/App.jsx', import.meta.url), 'utf8')
+  assert.match(app, /após recusa/)
+  assert.match(app, /não garante identificar a origem de cada contato/)
 })
 test('public static pages and every blog layout have one loader first in head', () => {
   const assertTag = html => {
