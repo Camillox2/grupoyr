@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { siteConfig } from './config.js'
+import { openWhatsAppContact } from './whatsappContact.js'
 import { products, faqs, productPath } from './catalog.js'
 import HomeExperience from './HomeExperience.jsx'
 import { useSelection, placeLabels } from './SelectionContext.jsx'
@@ -185,7 +186,7 @@ function App() {
     })
 
     if (hasWhatsApp) {
-      window.open(url, '_blank', 'noopener,noreferrer')
+      openWhatsAppContact(url)
     } else {
       window.location.href = url
     }
@@ -303,7 +304,7 @@ function App() {
                 <h3>6. Contato</h3>
                 <p>Para assuntos de privacidade, entre em contato pelo e-mail <a href={`mailto:${siteConfig.email}`}>{siteConfig.email}</a>.</p>
                 <h3>7. Medição de anúncios</h3>
-                <p>A tag do Google Ads só é carregada com sua permissão para medir a interação com anúncios da YR. Ela pode usar cookies e identificadores de anúncios. A personalização de anúncios permanece desativada. Você pode recusar ou mudar sua escolha em “Preferências de medição”, sem impedir o atendimento. As configurações de privacidade do navegador e os bloqueadores são respeitados.</p>
+                <p>A tag do Google Ads só é carregada com sua permissão para medir a interação com anúncios da YR. Ela pode usar cookies e identificadores de anúncios. A personalização de anúncios permanece desativada. Você pode recusar ou mudar sua escolha em “Preferências de medição”, sem impedir o atendimento. O evento de conversão registra o clique para abrir o WhatsApp, sem enviar o conteúdo do formulário ou da conversa nesse evento. As configurações de privacidade do navegador e os bloqueadores são respeitados.</p>
               </div>
             ) : (
               <div className="legal-content">

@@ -10,23 +10,25 @@ function run({ saved = null, privacy = false, dnt = null, storageFails = false }
   let reloads = 0
   const element = tagName => ({ tagName, hidden: false, dataset: {}, setAttribute() {}, addEventListener(type, fn) { this[type] = fn } })
   const document = {
-    currentScript: { dataset: { googleAdsId: 'AW-18481732690' } }, readyState: 'complete',
+    currentScript: { dataset: { googleAdsId: 'AW-18481732690', googleAdsConversion: '6RmoCIn7lpcdENK44-xE' } }, readyState: 'complete',
     createElement: element,
     head: { firstChild: {}, insertBefore(el) { head.push(el) }, appendChild(el) { head.push(el) } },
     body: { appendChild(el) { body.push(el) } },
     addEventListener(type, fn) { handlers.set(type, fn) },
   }
-  const window = { location: { reload() { reloads++ } } }
+  const window = { location: { href: 'https://grupoyrhospitalar.com.br/', reload() { reloads++ } } }
   const context = vm.createContext({ window, document, navigator: { globalPrivacyControl: privacy, doNotTrack: dnt }, localStorage: {
     getItem() { if (storageFails) throw new Error('blocked'); return saved },
     setItem(key, value) { if (storageFails) throw new Error('blocked'); saved = value },
-  }, Date, encodeURIComponent })
+  }, Date, URL, encodeURIComponent })
   vm.runInContext(source, context)
   return {
     context, head, body, window,
     scripts: () => head.filter(el => el.tagName === 'script'),
     commands: () => (window.dataLayer || []).map(args => Array.from(args)),
     choose(value) { body[0].click({ target: { closest: () => ({ dataset: { choice: value } }) } }) },
+    click(href, options = {}) { const type = options.type || 'click'; handlers.get(type)?.({ type, button: type === 'click' ? 0 : 1, target: { closest: () => href ? { href } : null }, ...options }) },
+    contact(href) { handlers.get('yr:whatsapp-contact')?.({ detail: { url: href } }) },
     reloads: () => reloads,
   }
 }
@@ -39,6 +41,49 @@ test('no choice and saved refusal load no Google library', () => {
     f.choose('denied')
     assert.equal(f.scripts().length, 0)
   }
+})
+
+test('only outbound contact clicks queue the exact conversion without personal fields', () => {
+  const f = run({ saved: 'granted' })
+  const targets = ['https://wa.me/5541997714985?text=private-message', 'https://wa.link/7iz93j', 'https://api.whatsapp.com/send?phone=5541997714985&text=private-message', 'https://web.whatsapp.com/send?phone=5541997714985', 'whatsapp://send?phone=5541997714985', 'https://wa.me/message/BUSINESSCODE']
+  for (const href of targets) f.click(href)
+  f.contact('https://wa.me/5541997714985')
+  const conversions = f.commands().filter(command => command[0] === 'event')
+  assert.equal(conversions.length, targets.length + 1)
+  for (const command of conversions) {
+    assert.equal(command[1], 'conversion')
+    assert.equal(command[2].send_to, 'AW-18481732690/6RmoCIn7lpcdENK44-xE')
+    assert.deepEqual(Object.keys(command[2]), ['send_to'])
+  }
+})
+
+test('refusal, no choice, revocation and browser privacy signals suppress conversions', () => {
+  for (const settings of [{}, { saved: 'denied' }, { saved: 'granted', privacy: true }, { saved: 'granted', dnt: '1' }]) {
+    const f = run(settings)
+    f.click('https://wa.link/7iz93j')
+    f.contact('https://wa.me/5541997714985')
+    assert.equal(f.commands().filter(command => command[0] === 'event').length, 0)
+  }
+  const f = run({ saved: 'granted' })
+  f.choose('denied')
+  f.contact('https://wa.me/5541997714985')
+  assert.equal(f.commands().filter(command => command[0] === 'event').length, 0)
+})
+
+test('article sharing, unrelated links, domain spoofing and cancelled clicks are not contacts', () => {
+  const f = run({ saved: 'granted' })
+  for (const href of [null, '/#contato', 'mailto:rodrigo@grupoyrhospitalar.com.br', 'https://wa.me/?text=share-article', 'https://api.whatsapp.com/send?text=share-article', 'https://wa.me.attacker.example/5541997714985', 'https://example.com/?next=https://wa.me/5541997714985', 'javascript:alert(1)', 'whatsapp://send?text=share-article']) f.click(href)
+  f.click('https://wa.link/7iz93j', { defaultPrevented: true })
+  f.click('https://wa.link/7iz93j', { button: 2 })
+  assert.equal(f.commands().filter(command => command[0] === 'event').length, 0)
+})
+
+test('one conversion per accepted click even with a duplicated head loader', () => {
+  const f = run({ saved: 'granted' })
+  vm.runInContext(source, f.context)
+  f.click('https://wa.link/7iz93j')
+  f.click('https://wa.link/7iz93j', { type: 'auxclick' })
+  assert.equal(f.commands().filter(command => command[0] === 'event').length, 2)
 })
 test('permission queues the real YR config and loads only one async tag', () => {
   const f = run()
@@ -75,7 +120,7 @@ test('storage refusal does not break consent controls or the page', () => {
 })
 test('public static pages and every blog layout have one loader first in head', () => {
   const assertTag = html => {
-    assert.match(html, /<head>\s*<!-- Google tag \(gtag\.js\): Grupo YR Hospitalar -->\s*<script src="\/google-tag.js" data-google-ads-id="AW-18481732690" defer><\/script>/)
+    assert.match(html, /<head>\s*<!-- Google tag \(gtag\.js\): Grupo YR Hospitalar -->\s*<script src="\/google-tag.js" data-google-ads-id="AW-18481732690" data-google-ads-conversion="6RmoCIn7lpcdENK44-xE" defer><\/script>/)
     assert.equal((html.match(/src="\/google-tag.js"/g) || []).length, 1)
   }
   for (const path of ['index', 'comprar-ou-alugar', '404', 'equipamentos/cama-eletrica-luxo', 'equipamentos/cama-manual-3-movimentos', 'equipamentos/colchao-pneumatico', 'equipamentos/cadeira-de-banho']) {

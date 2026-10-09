@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { siteConfig } from './config.js'
+import { openWhatsAppContact } from './whatsappContact.js'
 
 function MessageIcon() {
   return (
@@ -66,7 +67,7 @@ export default function Enhancements() {
     ].filter(Boolean).join('\n')
 
     if (hasWhatsapp) {
-      window.open(`https://wa.me/${siteConfig.whatsapp}?text=${encodeURIComponent(text)}`, '_blank', 'noopener,noreferrer')
+      openWhatsAppContact(`https://wa.me/${siteConfig.whatsapp}?text=${encodeURIComponent(text)}`)
       return
     }
 

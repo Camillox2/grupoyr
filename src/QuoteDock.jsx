@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useSelection, placeLabels, fitsPlace } from './SelectionContext.jsx'
 import { siteConfig } from './config.js'
+import { openWhatsAppContact } from './whatsappContact.js'
 
 export default function QuoteDock() {
   const { selection, product, update, setPlace, clear } = useSelection()
@@ -42,7 +43,7 @@ export default function QuoteDock() {
       <button className="quote-dock-clear" onClick={() => { setOpen(false); clear() }} aria-label="Remover seleção">×</button>
     </aside>
     <dialog ref={dialog} className="quote-sheet" aria-labelledby="quote-sheet-title" onCancel={() => setOpen(false)} onClick={event => { if (event.target === dialog.current) setOpen(false) }}>
-      <form method="dialog" onSubmit={event => { event.preventDefault(); window.open(whatsapp, '_blank', 'noopener,noreferrer') }}>
+      <form method="dialog" onSubmit={event => { event.preventDefault(); openWhatsAppContact(whatsapp) }}>
         <div className="quote-sheet-heading"><div><p>SUA COTAÇÃO</p><h2 id="quote-sheet-title">Sua escolha,<br/>do seu jeito.</h2></div><button type="button" className="quote-sheet-close" onClick={() => setOpen(false)} aria-label="Fechar cotação">×</button></div>
         <div className="quote-sheet-product"><img src={product.image} alt="" width="72" height="72"/><div><strong>{product.name}</strong><span>Modelo e disponibilidade sob consulta</span></div></div>
         <fieldset className="quote-mode"><legend>Como você prefere?</legend>{['Comprar', ...(product.rent ? ['Alugar'] : [])].map(mode => <label key={mode} className={selection.mode === mode ? 'is-active' : ''}><input type="radio" name="quote-mode" value={mode} checked={selection.mode === mode} onChange={() => update({ mode })}/>{mode}</label>)}</fieldset>

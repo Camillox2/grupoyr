@@ -1,6 +1,8 @@
-/* Official Google tag, basic consent mode. No conversion event without its label. */
+/* Official Google tag and WhatsApp click conversion, with basic consent mode. */
 (() => {
   const id = document.currentScript?.dataset.googleAdsId
+  const label = document.currentScript?.dataset.googleAdsConversion
+  const conversionTarget = /^[A-Za-z0-9_-]+$/.test(label || '') ? `${id}/${label}` : null
   const preferenceKey = 'yr-google-ads-consent-v1'
   if (!/^AW-\d+$/.test(id || '') || window.__yrGoogleTagInstalled) return
   window.__yrGoogleTagInstalled = true
@@ -34,6 +36,36 @@
     document.head.insertBefore(script, document.head.firstChild)
     loaded = true
   }
+
+  function isWhatsAppContact(href) {
+    try {
+      const url = new URL(href, window.location.href)
+      const hasPhone = /^\+?\d{7,15}$/.test(url.searchParams.get('phone') || '')
+      if (url.protocol === 'whatsapp:') return url.hostname === 'send' && hasPhone
+      if (url.protocol !== 'https:' && url.protocol !== 'http:') return false
+      if (url.hostname === 'wa.link') return /^\/[A-Za-z0-9_-]+\/?$/.test(url.pathname)
+      if (url.hostname === 'wa.me') return /^\/(?:\+?\d{7,15}|message\/[A-Za-z0-9]+)\/?$/.test(url.pathname)
+      return ['api.whatsapp.com', 'web.whatsapp.com'].includes(url.hostname) && /^\/send\/?$/.test(url.pathname) && hasPhone
+    } catch { return false }
+  }
+
+  function recordWhatsAppClick(href) {
+    if (!loaded || choice !== 'granted' || !conversionTarget || !isWhatsAppContact(href)) return
+    try {
+      // Only the action ID is sent; never include form fields, message text or the destination URL.
+      window.gtag('event', 'conversion', { send_to: conversionTarget })
+    } catch { /* Measurement failure must never prevent contact. */ }
+  }
+
+  function onContactLink(event) {
+    if (event.defaultPrevented || (event.type === 'click' ? event.button !== 0 : event.button !== 1)) return
+    const anchor = event.target?.closest?.('a[href]')
+    if (anchor) recordWhatsAppClick(anchor.href)
+  }
+  document.addEventListener('click', onContactLink, true)
+  document.addEventListener('auxclick', onContactLink, true)
+  // React forms and floating buttons use the same contact opener instead of anchor links.
+  document.addEventListener('yr:whatsapp-contact', event => recordWhatsAppClick(event.detail?.url))
 
   function renderControls() {
     const css = document.createElement('link')

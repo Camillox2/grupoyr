@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { siteConfig } from './config.js'
+import { openWhatsAppContact } from './whatsappContact.js'
 
 const starterMessages = [
   {
@@ -86,13 +87,13 @@ export default function AssistantYR() {
 
   const openWhatsAppLead = () => {
     const text = 'Olá! Vim pelo site do Grupo YR Hospitalar e gostaria de receber orientação sobre compra ou locação de equipamentos hospitalares.'
-    window.open(whatsappUrl(text), '_blank', 'noopener,noreferrer')
+    openWhatsAppContact(whatsappUrl(text))
   }
 
   const humanContact = () => {
     const text = 'Olá! Vim pelo atendimento YRIA do site e gostaria de falar com a equipe sobre equipamentos hospitalares.'
     if (siteConfig.whatsapp?.trim()) {
-      window.open(contactUrl || whatsappUrl(text), '_blank', 'noopener,noreferrer')
+      openWhatsAppContact(contactUrl || whatsappUrl(text))
       return
     }
     window.location.href = `mailto:${siteConfig.email}?subject=${encodeURIComponent('Atendimento humano - Grupo YR Hospitalar')}&body=${encodeURIComponent(text)}`
