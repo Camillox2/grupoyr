@@ -101,12 +101,9 @@
   }
 }
 
-/* WhatsApp e YRIA permanecem acessíveis juntos, sem depender da rolagem. */
+/* Posição única para o botão que alterna entre IA e WhatsApp. */
 .yr-floating-action {
   position: fixed;
-  display: flex;
-  align-items: center;
-  gap: 12px;
   z-index: 72;
   right: 18px;
   bottom: calc(18px + env(safe-area-inset-bottom));
