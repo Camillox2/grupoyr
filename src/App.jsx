@@ -289,7 +289,7 @@ function App() {
               <div className="legal-content">
                 <span className="eyeline">Privacidade e LGPD</span>
                 <h2>Política de Privacidade</h2>
-                <p className="legal-updated">Última atualização: setembro de 2026</p>
+                <p className="legal-updated">Última atualização: outubro de 2026</p>
                 <h3>1. Quais dados podemos receber</h3>
                 <p>Quando você solicita atendimento, podemos receber dados informados por você, como nome, telefone, e-mail, produto de interesse e o conteúdo da mensagem enviada.</p>
                 <h3>2. Para que usamos esses dados</h3>
@@ -302,7 +302,8 @@ function App() {
                 <p>Nos termos da LGPD, você pode solicitar informações sobre seus dados, correção, exclusão quando aplicável e outras providências previstas em lei.</p>
                 <h3>6. Contato</h3>
                 <p>Para assuntos de privacidade, entre em contato pelo e-mail <a href={`mailto:${siteConfig.email}`}>{siteConfig.email}</a>.</p>
-                <div className="legal-note"><Icon name="info" size={18} /><span>Este texto deve ser revisado quando novos recursos forem adicionados, como checkout, cookies de marketing, analytics avançado ou integrações que alterem o tratamento de dados.</span></div>
+                <h3>7. Medição de anúncios</h3>
+                <p>A tag do Google Ads só é carregada com sua permissão para medir a interação com anúncios da YR. Ela pode usar cookies e identificadores de anúncios. A personalização de anúncios permanece desativada. Você pode recusar ou mudar sua escolha em “Preferências de medição”, sem impedir o atendimento. As configurações de privacidade do navegador e os bloqueadores são respeitados.</p>
               </div>
             ) : (
               <div className="legal-content">
