@@ -168,6 +168,7 @@ body,
 }
 .yr3-nav .dc-credit--menu img {
   flex: 0 0 auto;
+  transform: scale(1.4);
 }
 .yr3-nav.is-open .dc-credit--menu {
   display: block;
