@@ -56,25 +56,9 @@ export default function AssistantYR() {
   const requestRef = useRef('')
   const busyRef = useRef(false)
   const controllerRef = useRef(null)
-  const [showWhatsApp, setShowWhatsApp] = useState(false)
   const scrollRef = useRef(null)
 
   useEffect(() => () => controllerRef.current?.abort(), [])
-
-  useEffect(() => {
-    const updateFloatingAction = () => {
-      const threshold = Math.max(260, window.innerHeight * 0.38)
-      setShowWhatsApp(window.scrollY > threshold)
-    }
-
-    updateFloatingAction()
-    window.addEventListener('scroll', updateFloatingAction, { passive: true })
-    window.addEventListener('resize', updateFloatingAction)
-    return () => {
-      window.removeEventListener('scroll', updateFloatingAction)
-      window.removeEventListener('resize', updateFloatingAction)
-    }
-  }, [])
 
   useEffect(() => {
     if (!open) return
@@ -165,20 +149,17 @@ export default function AssistantYR() {
 
   return (
     <>
-      <div className={`yr-floating-action ${showWhatsApp ? 'yr-floating-action--whatsapp' : 'yr-floating-action--ai'}`}>
-        {showWhatsApp ? (
-          <button className="yr-whatsapp-launcher" type="button" onClick={openWhatsAppLead} aria-label="Falar com a YR no WhatsApp">
-            <span><WhatsAppIcon /></span>
-            <strong>WhatsApp</strong>
-            <small>ATENDIMENTO</small>
-          </button>
-        ) : (
-          <button className="yr-ai-launcher" type="button" onClick={() => setOpen(true)} aria-label="Abrir atendimento YRIA">
-            <span><SparkIcon /></span>
-            <strong>YRIA</strong>
-            <small>IA</small>
-          </button>
-        )}
+      <div className="yr-floating-action">
+        <button className="yr-whatsapp-launcher" type="button" onClick={openWhatsAppLead} aria-label="Falar com a YR no WhatsApp">
+          <span><WhatsAppIcon /></span>
+          <strong>WhatsApp</strong>
+          <small>ATENDIMENTO</small>
+        </button>
+        <button className="yr-ai-launcher" type="button" onClick={() => setOpen(true)} aria-label="Abrir atendimento YRIA">
+          <span><SparkIcon /></span>
+          <strong>YRIA</strong>
+          <small>IA</small>
+        </button>
       </div>
 
       {open ? (

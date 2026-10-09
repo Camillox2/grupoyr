@@ -1575,3 +1575,8 @@ p {
     display: none;
   }
 }
+/* Contato direto disponível desde a abertura de qualquer página do blog. */
+.blog-whatsapp-float { position:fixed; right:18px; bottom:calc(18px + env(safe-area-inset-bottom,0px)); z-index:72; display:flex; align-items:center; gap:10px; min-height:56px; padding:0 18px; border-radius:999px; background:#128c7e; color:#fff; font-weight:800; font-size:13px; text-decoration:none; box-shadow:0 12px 32px #128c7e40; }
+.blog-whatsapp-float:hover { background:#0e756a; }
+.blog-whatsapp-float:focus-visible { outline:3px solid #174b7b; outline-offset:4px; }
+@media(max-width:640px) { .blog-whatsapp-float { right:14px; bottom:calc(14px + env(safe-area-inset-bottom,0px)); width:56px; padding:0; justify-content:center; border-radius:18px; } .blog-whatsapp-float span { display:none; } }
