@@ -13,7 +13,35 @@ import ProductInspector from './ProductInspector.jsx'
 export default function HomeExperience({onContact,onLegal,onGuide}) {
   const [menu,setMenu]=useState(false)
   return <div className="yr3">
-    <header className="yr3-header"><div className="yr3-width yr3-header-inner"><BrandLogo/><nav className={menu?'yr3-nav is-open':'yr3-nav'} id="yr3-menu" aria-label="Navegação principal">{[['#produtos','Equipamentos'],['#conheca-de-perto','Conheça de perto'],['#comprar-alugar','Compra ou locação'],['/blog','Blog YR'],['#faq','Dúvidas']].map(([href,label])=><a key={href} href={href} onClick={()=>setMenu(false)}>{label}</a>)}</nav><button className="yr3-button yr3-header-contact" onClick={()=>onContact('Orientação')}>Vamos conversar <span aria-hidden="true">↗</span></button><button className="yr3-menu-toggle" onClick={()=>setMenu(value=>!value)} aria-label={menu?'Fechar menu':'Abrir menu'} aria-controls="yr3-menu" aria-expanded={menu}>{menu?'×':<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg>}</button></div></header>
+    <header className="yr3-header">
+      <div className="yr3-width yr3-header-inner">
+        <BrandLogo />
+        <nav className={menu ? 'yr3-nav is-open' : 'yr3-nav'} id="yr3-menu" aria-label="Navegação principal">
+          {[
+            ['#produtos', 'Equipamentos'],
+            ['#conheca-de-perto', 'Conheça de perto'],
+            ['#comprar-alugar', 'Compra ou locação'],
+            ['/blog', 'Blog YR'],
+            ['#faq', 'Dúvidas'],
+          ].map(([href, label]) => (
+            <a key={href} href={href} onClick={() => setMenu(false)}>{label}</a>
+          ))}
+          <DeveloperCredit menu />
+        </nav>
+        <button className="yr3-button yr3-header-contact" onClick={() => onContact('Orientação')}>
+          Vamos conversar <span aria-hidden="true">↗</span>
+        </button>
+        <button
+          className="yr3-menu-toggle"
+          onClick={() => setMenu(value => !value)}
+          aria-label={menu ? 'Fechar menu' : 'Abrir menu'}
+          aria-controls="yr3-menu"
+          aria-expanded={menu}
+        >
+          {menu ? '×' : <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16" /></svg>}
+        </button>
+      </div>
+    </header>
     <main id="conteudo">
       <HeroBed onContact={onContact} />
       <TheRoom onContact={onContact} />

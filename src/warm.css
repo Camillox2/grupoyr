@@ -155,6 +155,23 @@ body,
   background: var(--creme);
   border-bottom: 1px solid var(--areia);
 }
+.yr3-nav .dc-credit--menu {
+  display: none;
+  margin-top: 6px;
+  padding: 14px 15px 8px;
+  border-top: 1px solid var(--areia);
+}
+.yr3-nav .dc-credit--menu a {
+  padding: 0;
+  border-radius: 0;
+  background: transparent;
+}
+.yr3-nav .dc-credit--menu img {
+  flex: 0 0 auto;
+}
+.yr3-nav.is-open .dc-credit--menu {
+  display: block;
+}
 
 /* ------------------------------------------------------------------ botoes */
 .yr3-button,

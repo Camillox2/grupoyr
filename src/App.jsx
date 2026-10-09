@@ -74,9 +74,9 @@ export function BrandLogo({ compact = false }) {
   )
 }
 
-export function DeveloperCredit() {
+export function DeveloperCredit({ menu = false } = {}) {
   return (
-    <div className="dc-credit">
+    <div className={`dc-credit${menu ? ' dc-credit--menu' : ''}`}>
       <a href="https://dcfoundrydigital.com" target="_blank" rel="noreferrer noopener" aria-label="Desenvolvido e Mantido por DC Foundry Digital">
         <img src={dcFoundryLogo} width="42" height="42" alt="DC Foundry Digital" />
         <span className="dc-credit__label">Desenvolvido e Mantido por <strong className="dc-credit__name">DC Foundry Digital</strong></span>
