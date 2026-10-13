@@ -76,16 +76,18 @@
   document.addEventListener('yr:whatsapp-contact', event => recordWhatsAppClick(event.detail?.url))
 
   function renderControls() {
-    const css = document.createElement('link')
-    css.rel = 'stylesheet'
-    css.href = '/google-tag-consent.css'
-    document.head.appendChild(css)
-    const controls = document.createElement('aside')
+    if (!document.querySelector?.('style[data-yr-consent-css]')) {
+      const css = document.createElement('link')
+      css.rel = 'stylesheet'
+      css.href = '/google-tag-consent.css'
+      document.head.appendChild(css)
+    }
+    const controls = document.querySelector?.('.yr-tag-consent') || document.createElement('aside')
     controls.className = 'yr-tag-consent'
     controls.setAttribute('aria-labelledby', 'yr-tag-consent-title')
-    controls.innerHTML = '<h2 id="yr-tag-consent-title">Medição de anúncios</h2><p>Usamos o Google Ads para medir cliques no WhatsApp. Sem sua permissão, enviamos sinais de medição sem cookies de publicidade. Você permite o uso desses cookies para melhorar a identificação da origem dos contatos? Recusar não impede o atendimento.</p><a href="https://policies.google.com/technologies/partner-sites?hl=pt-BR" target="_blank" rel="noopener noreferrer">Como o Google usa os dados</a><div><button type="button" data-choice="denied">Recusar</button><button type="button" data-choice="granted">Permitir cookies</button></div>'
+    if (!controls.parentNode) controls.innerHTML = '<h2 id="yr-tag-consent-title">Medição de anúncios</h2><p>Usamos o Google Ads para medir cliques no WhatsApp. Sem sua permissão, enviamos sinais de medição sem cookies de publicidade. Você permite o uso desses cookies para melhorar a identificação da origem dos contatos? Recusar não impede o atendimento.</p><a href="https://policies.google.com/technologies/partner-sites?hl=pt-BR" target="_blank" rel="noopener noreferrer">Como o Google usa os dados</a><div><button type="button" data-choice="denied">Recusar</button><button type="button" data-choice="granted">Permitir cookies</button></div>'
     controls.hidden = choice !== null
-    const manage = document.createElement('button')
+    const manage = document.querySelector?.('.yr-tag-manage') || document.createElement('button')
     manage.type = 'button'
     manage.className = 'yr-tag-manage'
     manage.textContent = 'Preferências de medição'
@@ -101,8 +103,9 @@
       if (loaded) updateConsent()
       else enableTag()
     })
-    document.body.appendChild(controls)
-    document.body.appendChild(manage)
+    if (!controls.parentNode) document.body.appendChild(controls)
+    if (!manage.parentNode) document.body.appendChild(manage)
+    document.documentElement?.removeAttribute('data-yr-consent-hidden')
   }
 
   try { enableTag() } catch { /* A failed tag must never break the site. */ }

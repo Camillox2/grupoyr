@@ -5,15 +5,19 @@ import vm from 'node:vm'
 import { layout, indexPage, articlePage } from '../server/blog-render.js'
 
 const source = readFileSync(new URL('../public/google-tag.js', import.meta.url), 'utf8')
-function run({ saved = null, privacy = false, dnt = null, storageFails = false } = {}) {
+function run({ saved = null, privacy = false, dnt = null, storageFails = false, prerendered = false } = {}) {
   const head = [], body = [], handlers = new Map()
   let reloads = 0
   const element = tagName => ({ tagName, hidden: false, dataset: {}, setAttribute() {}, addEventListener(type, fn) { this[type] = fn } })
+  const initialControls = prerendered ? { ...element('aside'), parentNode: {}, innerHTML: 'Prepared notice' } : null
+  const initialManage = prerendered ? { ...element('button'), parentNode: {} } : null
+  if (prerendered) body.push(initialControls, initialManage)
   const document = {
     currentScript: { dataset: { googleAdsId: 'AW-18481732690', googleAdsConversion: '6RmoCIn7lpcdENK44-xE' } }, readyState: 'complete',
     createElement: element,
     head: { firstChild: {}, insertBefore(el) { head.push(el) }, appendChild(el) { head.push(el) } },
     body: { appendChild(el) { body.push(el) } },
+    querySelector(selector) { return prerendered ? selector === '.yr-tag-consent' ? initialControls : selector === '.yr-tag-manage' ? initialManage : selector === 'style[data-yr-consent-css]' ? {} : null : null },
     addEventListener(type, fn) { handlers.set(type, fn) },
   }
   const window = { location: { href: 'https://grupoyrhospitalar.com.br/', reload() { reloads++ } } }
@@ -151,6 +155,21 @@ test('storage refusal does not break consent controls or the page', () => {
   assert.equal(f.scripts().length, 1)
   assert.doesNotThrow(() => f.choose('granted'))
   assert.equal(f.scripts().length, 1)
+})
+
+test('uses the prerendered notice without replacing its content or duplicating the controls', () => {
+  const f = run({ prerendered: true })
+  assert.equal(f.body.length, 2)
+  assert.equal(f.body[0].innerHTML, 'Prepared notice')
+  assert.equal(f.head.filter(element => element.tagName === 'link').length, 0)
+  f.choose('denied')
+  assert.equal(f.body[0].hidden, true)
+  assert.equal(f.body[1].hidden, false)
+  f.body[1].click()
+  assert.equal(f.body[0].hidden, false)
+  assert.equal(f.body[1].hidden, true)
+  assert.equal(f.commands().at(-1)[2].ad_storage, 'denied')
+  assert.equal(f.body.length, 2)
 })
 
 test('banner and privacy policy explain the cookieless measurement after refusal', () => {

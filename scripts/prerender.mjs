@@ -4,13 +4,14 @@ import { dirname, resolve } from 'node:path'
 import { paths, pageMetadata, structuredData } from '../src/seo.js'
 import { siteConfig } from '../src/config.js'
 import { inlineHomeStyles } from './critical-css.mjs'
+import { renderConsentShell } from './consent-shell.mjs'
 
 // Public content is real HTML; browsers hydrate the identical React tree.
 const server = await createServer({ server: { middlewareMode: true }, appType: 'custom' })
 const escape = value => String(value).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))
 try {
   const { renderPage } = await server.ssrLoadModule('/src/entry-server.jsx')
-  const template = await readFile('dist/index.html', 'utf8')
+  const template = await renderConsentShell(await readFile('dist/index.html', 'utf8'))
   const homeMarkup = renderPage('/')
   const homeTemplate = await inlineHomeStyles(template, homeMarkup)
   for (const path of [...paths, '/404']) {
