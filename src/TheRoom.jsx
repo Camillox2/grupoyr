@@ -91,7 +91,8 @@ export default function TheRoom({ onContact }) {
 
     const reduced = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
     let frame = 0
-    let lastStep = -1
+    let lastStep = 0
+    let active = !('IntersectionObserver' in window)
 
     const update = () => {
       frame = 0
@@ -142,15 +143,22 @@ export default function TheRoom({ onContact }) {
     }
 
     const schedule = () => {
-      if (!frame) frame = requestAnimationFrame(update)
+      if (active && !frame) frame = requestAnimationFrame(update)
     }
 
-    update()
+    const observer = 'IntersectionObserver' in window ? new IntersectionObserver(([entry]) => {
+      active = entry.isIntersecting
+      if (active) schedule()
+      else { cancelAnimationFrame(frame); frame = 0 }
+    }) : null
+    if (observer) observer.observe(section)
+    else schedule()
     window.addEventListener('scroll', schedule, { passive: true })
     window.addEventListener('resize', schedule)
     return () => {
       window.removeEventListener('scroll', schedule)
       window.removeEventListener('resize', schedule)
+      observer?.disconnect()
       if (frame) cancelAnimationFrame(frame)
     }
   }, [])

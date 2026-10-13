@@ -3,6 +3,7 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { dirname, resolve } from 'node:path'
 import { paths, pageMetadata, structuredData } from '../src/seo.js'
 import { siteConfig } from '../src/config.js'
+import { inlineHomeStyles } from './critical-css.mjs'
 
 // Public content is real HTML; browsers hydrate the identical React tree.
 const server = await createServer({ server: { middlewareMode: true }, appType: 'custom' })
@@ -10,6 +11,8 @@ const escape = value => String(value).replace(/[&<>"']/g, c => ({'&':'&amp;','<'
 try {
   const { renderPage } = await server.ssrLoadModule('/src/entry-server.jsx')
   const template = await readFile('dist/index.html', 'utf8')
+  const homeMarkup = renderPage('/')
+  const homeTemplate = await inlineHomeStyles(template, homeMarkup)
   for (const path of [...paths, '/404']) {
     const meta = pageMetadata(path)
     const url = siteConfig.url + (path === '/' ? '/' : path)
@@ -33,7 +36,7 @@ try {
     <meta name="twitter:description" content="${escape(meta.description)}" />
     <meta name="twitter:image" content="${siteConfig.url}/products/cama-eletrica-luxo.webp" />
     <script type="application/ld+json">${JSON.stringify(structuredData(path)).replace(/</g,'\\u003c')}</script>`
-    const html = template.replace('<!--seo-->',tags).replace('<div id="root"></div>',`<div id="root">${renderPage(path)}</div>`)
+    const html = (path === '/' ? homeTemplate : template).replace('<!--seo-->',tags).replace('<div id="root"></div>',`<div id="root">${path === '/' ? homeMarkup : renderPage(path)}</div>`)
     const output = resolve('dist', path === '/' ? 'index.html' : path.slice(1) + '.html')
     await mkdir(dirname(output), {recursive:true})
     await writeFile(output, html)
