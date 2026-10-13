@@ -136,7 +136,7 @@ const ICONS = {
   ),
 }
 
-export default function HeroBed({ onContact }) {
+function BedControls() {
   const [pose, setPose] = useState(REST)
   const [auto, setAuto] = useState(true)
   const rootRef = useRef(null)
@@ -147,26 +147,39 @@ export default function HeroBed({ onContact }) {
     if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) return undefined
 
     let frame = 0
-    let visible = true
+    let visible = !('IntersectionObserver' in window)
+    let lastFrame = 0
     const started = performance.now()
 
     const tick = (now) => {
-      if (visible) setPose(demoPose(((now - started) % DEMO_MS) / DEMO_MS))
+      frame = 0
+      if (!visible || document.hidden) return
+      if (now - lastFrame >= 1000 / 30) {
+        setPose(demoPose(((now - started) % DEMO_MS) / DEMO_MS))
+        lastFrame = now
+      }
       frame = requestAnimationFrame(tick)
     }
+    const stop = () => { cancelAnimationFrame(frame); frame = 0 }
+    const start = () => { if (visible && !document.hidden && !frame) frame = requestAnimationFrame(tick) }
+    const visibilityChanged = () => document.hidden ? stop() : start()
 
     const observer =
       'IntersectionObserver' in window
         ? new IntersectionObserver(([entry]) => {
             visible = entry.isIntersecting
+            if (visible) start()
+            else stop()
           })
         : null
     if (observer && rootRef.current) observer.observe(rootRef.current)
 
-    frame = requestAnimationFrame(tick)
+    document.addEventListener('visibilitychange', visibilityChanged)
+    start()
     return () => {
-      cancelAnimationFrame(frame)
+      stop()
       observer?.disconnect()
+      document.removeEventListener('visibilitychange', visibilityChanged)
     }
   }, [auto])
 
@@ -176,46 +189,7 @@ export default function HeroBed({ onContact }) {
   }
 
   return (
-    <section className="herobed" id="inicio" ref={rootRef}>
-      <div className="herobed-inner">
-        <div className="herobed-copy">
-          <p className="herobed-eyebrow">
-            <span className="herobed-dot" aria-hidden="true" />
-            Locação e venda · Curitiba e região
-          </p>
-
-          <h1>
-            Cama hospitalar em casa,{' '}
-            <span className="herobed-mark">
-              entregue e montada.
-              <svg viewBox="0 0 300 14" preserveAspectRatio="none" aria-hidden="true">
-                <path d="M3 9 C 60 2, 120 13, 180 6 S 270 4, 297 8" />
-              </svg>
-            </span>
-          </h1>
-
-          <p className="herobed-lede">
-            Alugue ou compre cama hospitalar, colchão pneumático e cadeira de banho. A equipe leva,
-            monta no quarto e explica o uso. A cotação é feita pelo WhatsApp.
-          </p>
-
-          <div className="herobed-actions">
-            <button className="yr3-button herobed-cta" onClick={() => onContact?.('Orientação')}>
-              Pedir cotação <span aria-hidden="true">→</span>
-            </button>
-            <a className="yr3-button yr3-button--soft" href="#produtos">
-              Ver equipamentos
-            </a>
-          </div>
-
-          <ul className="herobed-proof">
-            <li>Entrega e montagem</li>
-            <li>Compra ou locação</li>
-            <li>Retirada no fim do uso</li>
-          </ul>
-        </div>
-
-        <div className="herobed-play">
+        <div className="herobed-play" ref={rootRef}>
           <div className="herobed-scene">
             <span className="herobed-plus herobed-plus--a" aria-hidden="true" />
             <span className="herobed-plus herobed-plus--b" aria-hidden="true" />
@@ -236,6 +210,44 @@ export default function HeroBed({ onContact }) {
             <p className="herobed-note">Ilustração. Os movimentos variam conforme o modelo cotado.</p>
           </div>
         </div>
+  )
+}
+
+export default function HeroBed({ onContact }) {
+  return (
+    <section className="herobed" id="inicio">
+      <div className="herobed-inner">
+        <div className="herobed-copy">
+          <p className="herobed-eyebrow">
+            <span className="herobed-dot" aria-hidden="true" />
+            Locação e venda · Curitiba e região
+          </p>
+          <h1>
+            Cama hospitalar em casa,{' '}
+            <span className="herobed-mark">
+              entregue e montada.
+              <svg viewBox="0 0 300 14" preserveAspectRatio="none" aria-hidden="true">
+                <path d="M3 9 C 60 2, 120 13, 180 6 S 270 4, 297 8" />
+              </svg>
+            </span>
+          </h1>
+          <p className="herobed-lede">
+            Alugue ou compre cama hospitalar, colchão pneumático e cadeira de banho. A equipe leva,
+            monta no quarto e explica o uso. A cotação é feita pelo WhatsApp.
+          </p>
+          <div className="herobed-actions">
+            <button className="yr3-button herobed-cta" onClick={() => onContact?.('Orientação')}>
+              Pedir cotação <span aria-hidden="true">→</span>
+            </button>
+            <a className="yr3-button yr3-button--soft" href="#produtos">Ver equipamentos</a>
+          </div>
+          <ul className="herobed-proof">
+            <li>Entrega e montagem</li>
+            <li>Compra ou locação</li>
+            <li>Retirada no fim do uso</li>
+          </ul>
+        </div>
+        <BedControls />
       </div>
     </section>
   )

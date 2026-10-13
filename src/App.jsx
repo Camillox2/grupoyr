@@ -3,6 +3,7 @@ import { siteConfig } from './config.js'
 import { openWhatsAppContact } from './whatsappContact.js'
 import { products, faqs, productPath } from './catalog.js'
 import HomeExperience from './HomeExperience.jsx'
+import { imageSources } from './responsiveImages.js'
 import { useSelection, placeLabels } from './SelectionContext.jsx'
 
 const heroBed = '/products/cama-yr-01.jpg'
@@ -69,7 +70,7 @@ function Icon({ name, size = 20 }) {
 export function BrandLogo({ compact = false }) {
   return (
     <a className={`brand-logo ${compact ? 'brand-logo--compact' : ''}`} href="/#inicio" aria-label="Grupo YR Hospitalar - início">
-      <span className="brand-original"><img src={logoImage} width="1280" height="1280" alt="Grupo YR Hospitalar — Soluções que transformam saúde" /></span>
+      <span className="brand-original"><img src={logoImage} {...imageSources(logoImage, '(max-width: 900px) 96px, 138px')} width="1280" height="1280" alt="Grupo YR Hospitalar — Soluções que transformam saúde" /></span>
     </a>
   )
 }
@@ -78,7 +79,7 @@ export function DeveloperCredit({ menu = false } = {}) {
   return (
     <div className={`dc-credit${menu ? ' dc-credit--menu' : ''}`}>
       <a href="https://dcfoundrydigital.com" target="_blank" rel="noreferrer noopener" aria-label="Desenvolvido e Mantido por DC Foundry Digital">
-        <img src={dcFoundryLogo} width="42" height="42" alt="DC Foundry Digital" />
+        <img src={dcFoundryLogo} {...imageSources(dcFoundryLogo, menu ? '80px' : '42px')} width="42" height="42" alt="DC Foundry Digital" />
         <span className="dc-credit__label">Desenvolvido e Mantido por <strong className="dc-credit__name">DC Foundry Digital</strong></span>
       </a>
     </div>

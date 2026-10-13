@@ -5,6 +5,8 @@ dist
 .env.*
 .DS_Store
 server/sanitizer.generated.mjs
+public/images/optimized/
+src/responsive-images.generated.json
 
 # CRM local runtime, build artifacts, credentials and session data
 crm/.runtime/

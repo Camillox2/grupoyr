@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { products, modalityLabel, productPath } from './catalog.js'
 import { useSelection } from './SelectionContext.jsx'
+import { imageSources } from './responsiveImages.js'
 
 /**
  * "O quarto se monta"
@@ -170,10 +171,12 @@ export default function TheRoom({ onContact }) {
           <div className="room-layer room-layer--base">
             <img
               src={bedElectric.scene}
+              {...imageSources(bedElectric.scene)}
               alt={bedElectric.name}
               width="1264"
               height="842"
-              fetchPriority="high"
+              loading="lazy"
+              decoding="async"
               style={{ objectPosition: bedElectric.focus }}
             />
           </div>
@@ -182,6 +185,7 @@ export default function TheRoom({ onContact }) {
           <div className="room-layer room-layer--rise" style={{ '--r': 'var(--r1)' }}>
             <img
               src={mattress.scene}
+              {...imageSources(mattress.scene)}
               alt={mattress.name}
               width="842"
               height="1264"
@@ -192,6 +196,7 @@ export default function TheRoom({ onContact }) {
           <div className="room-layer room-layer--rise" style={{ '--r': 'var(--r2)' }}>
             <img
               src={chair.scene}
+              {...imageSources(chair.scene)}
               alt={chair.name}
               width="1600"
               height="1600"
@@ -207,6 +212,7 @@ export default function TheRoom({ onContact }) {
               <a key={product.slug} href={productPath(product)} tabIndex={step === LAST ? 0 : -1}>
                 <img
                   src={product.image}
+                  {...imageSources(product.image, '(max-width: 900px) calc((100vw - 48px) / 2), 310px')}
                   alt={product.name}
                   width="1200"
                   height="1200"
@@ -255,7 +261,7 @@ export default function TheRoom({ onContact }) {
             tabIndex={step === 1 ? 0 : -1}
             aria-hidden={step !== 1}
           >
-            <img src={bedManual.image} alt="" width="300" height="300" loading="lazy" />
+            <img src={bedManual.image} {...imageSources(bedManual.image, '100px')} alt="" width="300" height="300" loading="lazy" />
             <span>
               <small>ou, sem tomada</small>
               <strong>{bedManual.short}</strong>
@@ -311,7 +317,7 @@ export default function TheRoom({ onContact }) {
                 {item.items.map((product) => (
                   <li key={product.slug}>
                     <a href={productPath(product)}>
-                      <img src={product.image} alt="" width="200" height="200" loading="lazy" />
+                      <img src={product.image} {...imageSources(product.image, "64px")} alt="" width="200" height="200" loading="lazy" />
                       <div>
                         <strong>{product.short}</strong>
                         <span>{modalityLabel(product)}</span>

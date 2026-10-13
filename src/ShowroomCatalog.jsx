@@ -1,3 +1,4 @@
+import { imageSources } from './responsiveImages.js'
 import { useMemo, useState } from 'react'
 import { products, productPath } from './catalog.js'
 import { useSelection } from './SelectionContext.jsx'
@@ -23,7 +24,7 @@ export default function ShowroomCatalog({ onContact }) {
     <div className="showroom-catalog-grid">{orderedProducts.map((product, index) => {
       const selected = selection.slug === product.slug
       return <article key={product.id} data-product-id={product.id} hidden={!visibleIds.has(product.id)} className={`showroom-product ${[0, 3].includes(index) ? 'showroom-product--feature' : 'showroom-product--compact'} ${index === 3 ? 'showroom-product--reverse' : ''} ${selected ? 'is-selected' : ''}`}>
-        <a className="showroom-product-photo" href={productPath(product)} aria-label={`Conhecer ${product.name}`}><img src={product.image} alt={product.name} width="1000" height="1000" loading="lazy" decoding="async"/></a>
+        <a className="showroom-product-photo" href={productPath(product)} aria-label={`Conhecer ${product.name}`}><img src={product.image} {...imageSources(product.image, "(max-width: 700px) calc(100vw - 48px), 620px")} alt={product.name} width="1000" height="1000" loading="lazy" decoding="async"/></a>
         <div className="showroom-product-copy"><span className="showroom-category">{product.category} · {modalityLabel(product)}</span><h3><a href={productPath(product)}>{product.name}</a></h3><p>{product.description}</p><div className="showroom-product-actions"><button className="yr3-button" aria-label={`Selecionar ${product.name}`} aria-pressed={selected} onClick={() => choose(product, mode === 'alugar' ? 'Alugar' : mode === 'comprar' ? 'Comprar' : undefined)}>{selected ? 'Na sua seleção' : 'Escolher equipamento'}<span aria-hidden="true">{selected ? '✓' : '+'}</span></button><a className="yr3-button yr3-button--soft" href={productPath(product)}>Ver detalhes <span aria-hidden="true">↗</span></a></div></div>
       </article>
     })}</div>

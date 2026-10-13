@@ -4,7 +4,9 @@
   "version": "1.0.0",
   "type": "module",
   "scripts": {
+    "predev": "node scripts/optimize-images.mjs",
     "dev": "vite",
+    "prebuild": "node scripts/optimize-images.mjs",
     "build": "node scripts/build-blog-sanitizer.mjs && vite build && node scripts/prerender.mjs",
     "preview": "vite preview"
   },

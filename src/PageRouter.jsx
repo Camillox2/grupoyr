@@ -1,3 +1,4 @@
+import { imageSources } from './responsiveImages.js'
 import { useState } from 'react'
 import App, { BrandLogo, DeveloperCredit } from './App.jsx'
 import { SelectionProvider, useSelection } from './SelectionContext.jsx'
@@ -21,9 +22,9 @@ function ProductGallery({ product }) {
   const activeImage = images[activeIndex]
 
   return <div className="equipment-gallery">
-    <div className="equipment-image"><img src={activeImage} alt={`${product.name} — imagem ${activeIndex + 1} de ${images.length}`} width="1400" height="1100" fetchPriority="high" style={{ objectPosition: product.focus }} /><span>{product.gallery?.length ? 'Fotos reais do produto. Confirme modelo, acessórios e disponibilidade na cotação.' : 'Imagem de referência. Confirme o modelo na cotação.'}</span></div>
+    <div className="equipment-image"><img src={activeImage} {...imageSources(activeImage)} alt={`${product.name} — imagem ${activeIndex + 1} de ${images.length}`} width="1400" height="1100" fetchPriority="high" style={{ objectPosition: product.focus }} /><span>{product.gallery?.length ? 'Fotos reais do produto. Confirme modelo, acessórios e disponibilidade na cotação.' : 'Imagem de referência. Confirme o modelo na cotação.'}</span></div>
     {images.length > 1 && <div className="equipment-thumbs" aria-label={`Fotos de ${product.name}`}>
-      {images.map((image, index) => <button className={index === activeIndex ? 'equipment-thumb is-active' : 'equipment-thumb'} key={image} type="button" onClick={() => setActiveIndex(index)} aria-label={`Ver imagem ${index + 1} de ${images.length}`} aria-pressed={index === activeIndex}><img src={image} alt="" width="96" height="96" /></button>)}
+      {images.map((image, index) => <button className={index === activeIndex ? 'equipment-thumb is-active' : 'equipment-thumb'} key={image} type="button" onClick={() => setActiveIndex(index)} aria-label={`Ver imagem ${index + 1} de ${images.length}`} aria-pressed={index === activeIndex}><img src={image} {...imageSources(image, "96px")} alt="" width="96" height="96" /></button>)}
     </div>}
   </div>
 }
@@ -41,7 +42,7 @@ function ProductPage({ product }) {
     </section>
     <section className="equipment-info"><div className="container equipment-info__grid"><div><h2>Um equipamento que acompanha sua rotina.</h2><p>{product.idealFor}</p><p>Compartilhe o local de uso e a necessidade com a equipe. A orientação do profissional de saúde responsável ajuda a definir os recursos e ajustes necessários.</p></div><div><h2>O que confirmar na cotação</h2><ul className="checklist"><li>Modelo, dimensões e recursos disponíveis.</li><li>Capacidade e compatibilidade com o ambiente de uso.</li><li>Condições de entrega, acesso e montagem, quando aplicável.</li><li>{product.rent ? 'Período de locação, manutenção, retirada e condições de compra.' : 'Condições de compra, garantia e manutenção.'}</li></ul></div></div></section>
     <section className="container equipment-faq"><h2>Dúvidas sobre {product.name.toLowerCase()}</h2><details open><summary>Como consultar o valor?</summary><p>Selecione a modalidade acima e informe sua cidade e o uso previsto. A equipe da YR confirma o modelo disponível e prepara uma cotação para o seu cenário.</p></details><details><summary>{product.rent ? 'Posso comprar ou alugar este equipamento?' : 'Este equipamento está disponível para locação?'}</summary><p>{product.rent ? 'O catálogo da YR apresenta este equipamento para compra e locação. As duas opções dependem da disponibilidade e das condições confirmadas pela equipe.' : 'Este item está apresentado no catálogo para compra. Para outra necessidade, consulte a equipe e conheça as alternativas disponíveis.'}</p></details><details><summary>O produto entregue será igual à fotografia?</summary><p>A fotografia é uma referência. Modelo, acabamento, acessórios e especificações finais são confirmados na cotação antes da contratação.</p></details></section>
-    <section className="container related-products"><div className="section-heading"><h2>Continue conhecendo.</h2><a className="inline-link" href="/#produtos">Voltar ao catálogo <span aria-hidden="true">→</span></a></div><div className="related-grid">{related.map(item => <a href={productPath(item)} key={item.id}><img src={item.image} alt={item.name} width="400" height="400" loading="lazy" /><h3>{item.name}</h3><span>Conhecer equipamento <span aria-hidden="true">↗</span></span></a>)}</div></section>
+    <section className="container related-products"><div className="section-heading"><h2>Continue conhecendo.</h2><a className="inline-link" href="/#produtos">Voltar ao catálogo <span aria-hidden="true">→</span></a></div><div className="related-grid">{related.map(item => <a href={productPath(item)} key={item.id}><img src={item.image} {...imageSources(item.image, "(max-width: 700px) calc(100vw - 48px), 360px")} alt={item.name} width="400" height="400" loading="lazy" /><h3>{item.name}</h3><span>Conhecer equipamento <span aria-hidden="true">↗</span></span></a>)}</div></section>
   </PageFrame>
 }
 

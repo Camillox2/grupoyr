@@ -1,5 +1,5 @@
 /* Editorial YR: white space, real equipment photography and a clear next step. */
-@font-face { font-family: Manrope; src: url('/fonts/manrope-latin.woff2') format('woff2'); font-weight: 200 800; font-style: normal; font-display: swap; }
+@font-face { font-family: Manrope; src: url('/fonts/manrope-latin.woff2') format('woff2'); font-weight: 200 800; font-style: normal; font-display: optional; }
 :root { font-family: Manrope, 'Segoe UI', sans-serif; --ink:#071d35; --navy-950:#071d35; --teal-700:#1a4d85; --muted:#566779; --line:#d6dfe7; }
 .container { width:min(1280px, calc(100% - 96px)); }
 button, a, input, select, textarea, summary { -webkit-tap-highlight-color:transparent; }
