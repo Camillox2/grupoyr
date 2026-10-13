@@ -10,6 +10,7 @@ test('prerendered notice keeps the same choices and is outside the React root', 
   assert.match(html, /data-choice="granted">Permitir cookies/)
   assert.match(html, /sem cookies de publicidade/)
   assert.match(html, /style data-yr-consent-css/)
+  assert.match(html, /aria-labelledby="yr-tag-consent-title" hidden>/, 'no inactive notice if the loader is blocked')
   assert.equal((html.match(/id="yr-tag-consent-title"/g) || []).length, 1)
 })
 

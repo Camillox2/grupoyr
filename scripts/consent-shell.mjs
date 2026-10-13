@@ -10,6 +10,6 @@ export async function renderConsentShell(template) {
   if (!content) throw new Error('Consent notice markup missing')
   const bootstrap = `<script>(()=>{try{const n=navigator;if(n.globalPrivacyControl===true||n.doNotTrack==='1'){document.documentElement.setAttribute('data-yr-consent-hidden','');return}const p=localStorage.getItem('yr-google-ads-consent-v1');if(p==='granted'||p==='denied')document.documentElement.setAttribute('data-yr-consent-hidden','')}catch{}})()</script>`
   const styles = `<style data-yr-consent-css>${css}\nhtml[data-yr-consent-hidden] .yr-tag-consent{display:none}</style>`
-  const body = `<aside class="yr-tag-consent" aria-labelledby="yr-tag-consent-title">${content}</aside><button type="button" class="yr-tag-manage" hidden>Preferências de medição</button><noscript><style>.yr-tag-consent,.yr-tag-manage{display:none}</style></noscript>`
+  const body = `<aside class="yr-tag-consent" aria-labelledby="yr-tag-consent-title" hidden>${content}</aside><button type="button" class="yr-tag-manage" hidden>Preferências de medição</button><noscript><style>.yr-tag-consent,.yr-tag-manage{display:none}</style></noscript>`
   return template.replace('</head>', `${bootstrap}${styles}</head>`).replace('<body>', `<body>${body}`)
 }
