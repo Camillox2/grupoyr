@@ -1,41 +1,25 @@
-/* Official Google tag and WhatsApp click conversion, with advanced consent mode. */
+/* Official Google tag (always on) and WhatsApp click conversion, with a simple cookie controls. */
 (() => {
   const id = document.currentScript?.dataset.googleAdsId
   const label = document.currentScript?.dataset.googleAdsConversion
   const conversionTarget = /^[A-Za-z0-9_-]+$/.test(label || '') ? `${id}/${label}` : null
-  const preferenceKey = 'yr-google-ads-consent-v1'
+  const noticeKey = 'yr-cookie-controls-v2'
   if (!/^AW-\d+$/.test(id || '') || window.__yrGoogleTagInstalled) return
   window.__yrGoogleTagInstalled = true
-  // Respect explicit browser privacy signals; never bypass extension/network blocking.
-  if (navigator.globalPrivacyControl === true || navigator.doNotTrack === '1') return
 
-  let choice = null
   let loaded = false
-  try {
-    const saved = localStorage.getItem(preferenceKey)
-    if (saved === 'granted' || saved === 'denied') choice = saved
-  } catch { /* Contacts work even when browser storage is unavailable. */ }
-
-  function updateConsent() {
-    const permission = choice === 'granted' ? 'granted' : 'denied'
-    window.gtag('consent', 'update', {
-      ad_storage: permission, analytics_storage: 'denied',
-      ad_user_data: permission, ad_personalization: 'denied',
-    })
-  }
+  let dismissed = false
+  try { dismissed = localStorage.getItem(noticeKey) === 'seen' } catch { /* Storage unavailable. */ }
 
   function enableTag() {
     if (loaded) return
     window.dataLayer = window.dataLayer || []
     window.gtag = window.gtag || function () { window.dataLayer.push(arguments) }
+    // Measurement is always on; ad personalization stays off.
     window.gtag('consent', 'default', {
-      ad_storage: 'denied', analytics_storage: 'denied',
-      ad_user_data: 'denied', ad_personalization: 'denied',
+      ad_storage: 'granted', analytics_storage: 'granted',
+      ad_user_data: 'granted', ad_personalization: 'denied',
     })
-    // Denied consent allows cookieless measurements, never advertising storage.
-    window.gtag('set', 'ads_data_redaction', true)
-    window.gtag('set', 'url_passthrough', true)
-    if (choice !== null) updateConsent()
     window.gtag('js', new Date())
     window.gtag('config', id, { allow_ad_personalization_signals: false })
     const script = document.createElement('script')
@@ -75,7 +59,7 @@
   // React forms and floating buttons use the same contact opener instead of anchor links.
   document.addEventListener('yr:whatsapp-contact', event => recordWhatsAppClick(event.detail?.url))
 
-  function renderControls() {
+  function renderNotice() {
     if (!document.querySelector?.('style[data-yr-consent-css]')) {
       const css = document.createElement('link')
       css.rel = 'stylesheet'
@@ -85,30 +69,21 @@
     const controls = document.querySelector?.('.yr-tag-consent') || document.createElement('aside')
     controls.className = 'yr-tag-consent'
     controls.setAttribute('aria-labelledby', 'yr-tag-consent-title')
-    if (!controls.parentNode) controls.innerHTML = '<h2 id="yr-tag-consent-title">Medição de anúncios</h2><p>Usamos o Google Ads para medir cliques no WhatsApp. Sem sua permissão, enviamos sinais de medição sem cookies de publicidade. Você permite o uso desses cookies para melhorar a identificação da origem dos contatos? Recusar não impede o atendimento.</p><a href="https://policies.google.com/technologies/partner-sites?hl=pt-BR" target="_blank" rel="noopener noreferrer">Como o Google usa os dados</a><div><button type="button" data-choice="denied">Recusar</button><button type="button" data-choice="granted">Permitir cookies</button></div>'
-    controls.hidden = choice !== null
-    const manage = document.querySelector?.('.yr-tag-manage') || document.createElement('button')
-    manage.type = 'button'
-    manage.className = 'yr-tag-manage'
-    manage.textContent = 'Preferências de medição'
-    manage.hidden = choice === null
-    manage.addEventListener('click', () => { controls.hidden = false; manage.hidden = true })
+    if (!controls.parentNode) controls.innerHTML = '<h2 id="yr-tag-consent-title">Cookies</h2><p>Este site utiliza cookies e ferramentas do Google (Google Ads e Google Analytics) para medir visitas e cliques no WhatsApp. Saiba mais na Política de Privacidade.</p><a href="https://policies.google.com/technologies/partner-sites?hl=pt-BR" target="_blank" rel="noopener noreferrer">Como o Google usa os dados</a><div><button type="button" data-choice="dismiss">Recusar</button><button type="button" data-choice="ok">Entendi</button></div>'
+    controls.hidden = dismissed
+    // Both buttons only close the controls; measurement is unaffected.
     controls.addEventListener('click', event => {
-      const button = event.target.closest('button[data-choice]')
-      if (!button) return
-      choice = button.dataset.choice
-      try { localStorage.setItem(preferenceKey, choice) } catch { /* Keep this choice for this page. */ }
+      if (!event.target.closest('button[data-choice]')) return
+      dismissed = true
+      try { localStorage.setItem(noticeKey, 'seen') } catch { /* Close for this page only. */ }
       controls.hidden = true
-      manage.hidden = false
-      if (loaded) updateConsent()
-      else enableTag()
     })
     if (!controls.parentNode) document.body.appendChild(controls)
-    if (!manage.parentNode) document.body.appendChild(manage)
+    document.querySelector?.('.yr-tag-manage')?.remove?.()
     document.documentElement?.removeAttribute('data-yr-consent-hidden')
   }
 
   try { enableTag() } catch { /* A failed tag must never break the site. */ }
-  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', renderControls, { once: true })
-  else renderControls()
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', renderNotice, { once: true })
+  else renderNotice()
 })()

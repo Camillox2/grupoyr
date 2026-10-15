@@ -304,8 +304,8 @@ function App() {
                 <p>Nos termos da LGPD, você pode solicitar informações sobre seus dados, correção, exclusão quando aplicável e outras providências previstas em lei.</p>
                 <h3>6. Contato</h3>
                 <p>Para assuntos de privacidade, entre em contato pelo e-mail <a href={`mailto:${siteConfig.email}`}>{siteConfig.email}</a>.</p>
-                <h3>7. Medição de anúncios</h3>
-                <p>Usamos a tag do Google Ads para medir cliques que abrem o WhatsApp. Sem sua permissão ou após recusa, ela envia sinais de medição sem ler ou gravar cookies de publicidade; identificadores de cliques em anúncios são ocultados nesses sinais. Cookies de publicidade só são autorizados quando você escolhe “Permitir cookies”, para melhorar a identificação da origem dos contatos. A personalização de anúncios permanece desativada. Você pode mudar sua escolha em “Preferências de medição”, sem impedir o atendimento. O evento de conversão não inclui os campos do formulário nem o conteúdo da conversa. A medição sem cookies pode contribuir para estimativas de conversões no Google Ads e não garante identificar a origem de cada contato. As configurações de privacidade do navegador e os bloqueadores são respeitados.</p>
+                <h3>7. Cookies e medição (Google Ads e Google Analytics)</h3>
+                <p>Este site utiliza cookies e a tag do Google (Google Ads e Google Analytics) para medir visitas, a origem dos acessos e os cliques que abrem o WhatsApp, ajudando a avaliar a eficácia dos anúncios. A medição fica ativa durante a navegação; o aviso de cookies é apenas informativo. A personalização de anúncios permanece desativada. O evento de conversão não inclui os campos do formulário nem o conteúdo da conversa. Você pode limitar cookies nas configurações do seu navegador. Saiba como o Google usa os dados em <a href="https://policies.google.com/technologies/partner-sites?hl=pt-BR" target="_blank" rel="noopener noreferrer">policies.google.com</a>.</p>
               </div>
             ) : (
               <div className="legal-content">
