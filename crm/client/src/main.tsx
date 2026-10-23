@@ -1,13 +1,16 @@
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import './index.css'
-import './styles/operations.css'
 import App from './App.tsx'
 
-if (import.meta.env.PROD && 'serviceWorker' in navigator) {
+if ('serviceWorker' in navigator && window.isSecureContext) {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('/sw.js').catch((error) => {
-      console.warn('Não foi possível registrar o modo instalável do CRM:', error)
+    navigator.serviceWorker.register('/sw.js', { scope: '/', updateViaCache: 'none' }).then(registration => {
+      const offer = () => { if (registration.waiting && navigator.serviceWorker.controller) window.dispatchEvent(new CustomEvent('yr:pwa-update', { detail: registration })) }
+      offer()
+      registration.addEventListener('updatefound', () => registration.installing?.addEventListener('statechange', offer))
+    }).catch((error) => {
+      console.warn('Não foi possível registrar o service worker do CRM:', error)
     })
   }, { once: true })
 }

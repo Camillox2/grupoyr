@@ -31,6 +31,8 @@ const TONE_STYLE: Record<Tone, React.CSSProperties> = {
  */
 export const EQUIPMENT_STATUS: Record<string, { label: string; tone: Tone; Icon: typeof CircleDot }> = {
   disponivel: { label: 'Disponível', tone: 'ok', Icon: CircleCheck },
+  reservado: { label: 'Reservado · contrato', tone: 'wait', Icon: Clock },
+  vendido: { label: 'Vendido', tone: 'neutral', Icon: CircleCheck },
   alugado: { label: 'Alugado', tone: 'busy', Icon: CircleDot },
   higienizacao: { label: 'Higienização', tone: 'wait', Icon: Sparkles },
   manutencao: { label: 'Manutenção', tone: 'alert', Icon: Wrench },

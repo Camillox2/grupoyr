@@ -1,39 +1,42 @@
 import React, { useState, useEffect, useLayoutEffect, useRef } from 'react'
 import { ThemeProvider } from './contexts/ThemeContext'
+import { PwaProvider } from './components/PwaStatus'
 import { AuthProvider, useAuth } from './contexts/AuthContext'
 import { SocketProvider } from './contexts/SocketContext'
 import { useSocket } from './contexts/SocketContext'
 import { Navbar } from './components/Navbar'
 import { Sidebar, TabType } from './components/Sidebar'
-import { DashboardView } from './components/DashboardView'
-import { KanbanView } from './components/KanbanView'
-import { WhatsAppChatView } from './components/WhatsAppChatView'
-import { EquipmentsView } from './components/EquipmentsView'
-import { ContractsView } from './components/ContractsView'
-import { ClientsView } from './components/ClientsView'
-import { FinanceView } from './components/FinanceView'
-import { CalendarView } from './components/CalendarView'
-import { BlogManagerView } from './components/BlogManagerView'
-import { SettingsView } from './components/SettingsView'
+const DashboardView = React.lazy(() => import('./components/DashboardView').then(m => ({ default: m.DashboardView })))
+const KanbanView = React.lazy(() => import('./components/KanbanView').then(m => ({ default: m.KanbanView })))
+const WhatsAppChatView = React.lazy(() => import('./components/WhatsAppChatView').then(m => ({ default: m.WhatsAppChatView })))
+const EquipmentsView = React.lazy(() => import('./components/EquipmentsView').then(m => ({ default: m.EquipmentsView })))
+const ContractsView = React.lazy(() => import('./components/ContractsView').then(m => ({ default: m.ContractsView })))
+const ClientsView = React.lazy(() => import('./components/ClientsView').then(m => ({ default: m.ClientsView })))
+const FinanceView = React.lazy(() => import('./components/FinanceView').then(m => ({ default: m.FinanceView })))
+const BlogManagerView = React.lazy(() => import('./components/BlogManagerView').then(m => ({ default: m.BlogManagerView })))
+const SettingsView = React.lazy(() => import('./components/SettingsView').then(m => ({ default: m.SettingsView })))
+const YriaView = React.lazy(() => import('./components/YriaView').then(module => ({ default: module.YriaView })))
+const InsightsView = React.lazy(() => import('./components/InsightsView').then(module => ({ default: module.InsightsView })))
 import { LoginView } from './components/LoginView'
 import { QrModal } from './components/QrModal'
 import { NewLeadModal } from './components/NewLeadModal'
 import { NewContractModal } from './components/NewContractModal'
 import { NewEquipmentModal } from './components/NewEquipmentModal'
-import { PublicContractSigningView } from './components/PublicContractSigningView'
-import { Lead, Equipment, Contract, Invoice, CalendarEvent, ContractExpense, User, Stage } from './types'
+const PublicContractSigningView = React.lazy(() => import('./components/PublicContractSigningView').then(m => ({ default: m.PublicContractSigningView })))
+const PublicCustomerView = React.lazy(() => import('./components/PublicCustomerView').then(m => ({ default: m.PublicCustomerView })))
+const InspectionsView = React.lazy(() => import('./components/InspectionsView').then(m => ({ default: m.InspectionsView })))
+const ClientOperationsView = React.lazy(() => import('./components/ClientOperationsView').then(m => ({ default: m.ClientOperationsView })))
+import { Lead, Equipment, Contract, Invoice, Stage } from './types'
 
 function MainContent() {
   const { user, loading } = useAuth()
   const { socket } = useSocket()
-  const [activeTab, setActiveTab] = useState<TabType>('dashboard')
+  const [activeTab, setActiveTab] = useState<TabType>(() => new URLSearchParams(window.location.search).get('view') === 'insights' ? 'insights' : 'dashboard')
   const [leads, setLeads] = useState<Lead[]>([])
   const [equipments, setEquipments] = useState<Equipment[]>([])
   const [contracts, setContracts] = useState<Contract[]>([])
   const [invoices, setInvoices] = useState<Invoice[]>([])
-  const [calendarEvents, setCalendarEvents] = useState<CalendarEvent[]>([])
-  const [contractExpenses, setContractExpenses] = useState<ContractExpense[]>([])
-  const [team, setTeam] = useState<User[]>([])
+  const [inspectionLeadId, setInspectionLeadId] = useState('')
   const [dataLoading, setDataLoading] = useState(false)
   const [dataError, setDataError] = useState<string | null>(null)
 
@@ -65,9 +68,6 @@ function MainContent() {
         readCollection('/api/equipments'),
         readCollection('/api/contracts'),
         readCollection('/api/finance/invoices'),
-        readCollection('/api/calendar/events'),
-        readCollection('/api/finance/contract-expenses'),
-        readCollection('/api/team'),
       ])
 
       const failedCollections: string[] = []
@@ -77,22 +77,16 @@ function MainContent() {
         return fallback
       }
 
-      const [leadsResult, equipmentsResult, contractsResult, invoicesResult, eventsResult, expensesResult, teamResult] = results
+      const [leadsResult, equipmentsResult, contractsResult, invoicesResult] = results
       const nextLeads = readResult(leadsResult, leads, 'leads') as Lead[]
       const nextEquipments = readResult(equipmentsResult, equipments, 'equipamentos') as Equipment[]
       const nextContracts = readResult(contractsResult, contracts, 'contratos') as Contract[]
       const nextInvoices = readResult(invoicesResult, invoices, 'financeiro') as Invoice[]
-      const nextEvents = readResult(eventsResult, calendarEvents, 'agenda') as CalendarEvent[]
-      const nextExpenses = readResult(expensesResult, contractExpenses, 'custos por contrato') as ContractExpense[]
-      const nextTeam = readResult(teamResult, team, 'equipe') as User[]
 
       setLeads(nextLeads)
       setEquipments(nextEquipments)
       setContracts(nextContracts)
       setInvoices(nextInvoices)
-      setCalendarEvents(nextEvents)
-      setContractExpenses(nextExpenses)
-      setTeam(nextTeam)
       setSelectedLead((current) => current || nextLeads[0] || null)
       if (failedCollections.length > 0) {
         setDataError(`Não foi possível atualizar: ${failedCollections.join(', ')}. Tente novamente.`)
@@ -110,36 +104,43 @@ function MainContent() {
     }
   }, [user])
 
+  // Notificações do service worker apontam direto para a conversa que precisa
+  // de atendimento. O parâmetro só é removido depois que o lead está carregado.
+  useEffect(() => {
+    const leadId = new URLSearchParams(window.location.search).get('leadId')
+    if (!user || !leadId) return
+    const lead = leads.find((item) => item.id === leadId)
+    if (!lead) return
+    setSelectedLead(lead)
+    setActiveTab('whatsapp')
+    setMobileSidebarOpen(false)
+    const cleanUrl = new URL(window.location.href)
+    cleanUrl.searchParams.delete('leadId')
+    window.history.replaceState({}, '', `${cleanUrl.pathname}${cleanUrl.search}${cleanUrl.hash}`)
+  }, [user, leads])
+
   useEffect(() => {
     if (!socket) return
 
     const updateLeadInMemory = (lead: Lead) => {
+      if (!lead?.id) return
       setLeads((current) => {
         const exists = current.some((item) => item.id === lead.id)
         return exists
           ? current.map((item) => (item.id === lead.id ? { ...item, ...lead } : item))
           : [lead, ...current]
       })
+      setSelectedLead(current => current?.id === lead.id ? { ...current, ...lead } : current)
     }
 
     socket.on('lead:updated', updateLeadInMemory)
+    socket.on('lead:new', updateLeadInMemory)
+    socket.on('lead:stage_changed', updateLeadInMemory)
     return () => {
       socket.off('lead:updated', updateLeadInMemory)
+      socket.off('lead:new', updateLeadInMemory)
+      socket.off('lead:stage_changed', updateLeadInMemory)
     }
-  }, [socket])
-
-  useEffect(() => {
-    if (!socket) return
-    const updateSignedContract = (contract: Contract) => {
-      setContracts((current) => {
-        const exists = current.some((item) => item.id === contract.id)
-        return exists
-          ? current.map((item) => (item.id === contract.id ? { ...item, ...contract } : item))
-          : [contract, ...current]
-      })
-    }
-    socket.on('contract:signed', updateSignedContract)
-    return () => { socket.off('contract:signed', updateSignedContract) }
   }, [socket])
 
   // Contratos e financeiro levam direto para a conversa do cliente.
@@ -149,18 +150,6 @@ function MainContent() {
     setSelectedLead(lead)
     setActiveTab('whatsapp')
   }
-
-  useEffect(() => {
-    const leadId = new URLSearchParams(window.location.search).get('lead')
-    if (!user || !leadId || leads.length === 0) return
-    const lead = leads.find((item) => item.id === leadId)
-    if (!lead) return
-    setSelectedLead(lead)
-    setActiveTab('whatsapp')
-    const url = new URL(window.location.href)
-    url.searchParams.delete('lead')
-    window.history.replaceState({}, '', url)
-  }, [user, leads])
 
   const handleUpdateLeadStage = async (leadId: string, newStage: Stage) => {
     const previousStage = leads.find((lead) => lead.id === leadId)?.stage
@@ -182,12 +171,19 @@ function MainContent() {
       })
     } catch (e) {
       console.error('Erro ao atualizar estágio do lead:', e)
+      setDataError('Não foi possível mover o cartão. A etapa anterior foi mantida; atualize o funil para conferir.')
       if (previousStage) {
         setLeads((prev) =>
           prev.map((lead) => (lead.id === leadId ? { ...lead, stage: previousStage } : lead))
         )
       }
     }
+  }
+
+  const handleFunnelLeadUpdated = (lead: Lead) => {
+    const merge = (current: Lead) => current.updatedAt && lead.updatedAt && Date.parse(current.updatedAt) > Date.parse(lead.updatedAt) ? current : { ...current, ...lead }
+    setLeads(current => current.map(item => item.id === lead.id ? merge(item) : item))
+    setSelectedLead(current => current?.id === lead.id ? merge(current) : current)
   }
 
   const handleOpenNewContract = (lead: Lead) => {
@@ -225,7 +221,7 @@ function MainContent() {
     return <LoginView />
   }
 
-  if (dataLoading && leads.length === 0 && equipments.length === 0 && invoices.length === 0) {
+  if (activeTab !== 'insights' && dataLoading && leads.length === 0 && equipments.length === 0 && invoices.length === 0) {
     return (
       <div className="flex h-[100dvh] flex-col items-center justify-center gap-3" style={{ background: 'var(--surface-canvas)', color: 'var(--ink-muted)' }}>
         <div className="w-14 h-14 rounded-xl bg-white border border-slate-200 flex items-center justify-center overflow-hidden shadow-sm">
@@ -249,7 +245,6 @@ function MainContent() {
     <div className="app-shell screen" style={{ background: 'var(--surface-canvas)', color: 'var(--ink)' }}>
       <Navbar
         onOpenQr={() => setQrModalOpen(true)}
-        onOpenLead={openLeadConversation}
         onToggleMobileMenu={() => setMobileSidebarOpen((prev) => !prev)}
       />
 
@@ -258,7 +253,7 @@ function MainContent() {
           activeTab={activeTab}
           onTabChange={setActiveTab}
           metrics={{
-            funnel: leads.filter((lead) => lead.stage !== 'finalizado').length,
+            funnel: leads.filter((lead) => !lead.funnelArchive?.at && lead.stage !== 'finalizado').length,
             conversations: leads.length,
             equipmentsFree: equipments.filter((item) => item.status === 'disponivel').length,
             contractsPending: pendingContractsCount,
@@ -273,7 +268,7 @@ function MainContent() {
         {/* A area de rolagem NAO remonta nem anima: remontar fazia a barra de
             rolagem sumir e voltar, e o conteudo "pulava". Quem entra animado e
             o palco interno, que ganha `key` novo a cada aba. */}
-        <main ref={mainRef} className={`app-main min-h-0 flex-1 overflow-y-auto p-4 sm:p-6 ${activeTab === 'whatsapp' ? 'whatsapp-app-main' : ''}`}>
+        <main ref={mainRef} className={`app-main min-h-0 flex-1 overflow-y-auto p-4 sm:p-6 ${activeTab === 'whatsapp' ? 'app-main--chat' : ''}`}>
           {/* Todas as telas usam a largura toda. */}
           <div key={activeTab} className="view-stage mx-auto max-w-none">
             {dataError && (
@@ -290,12 +285,12 @@ function MainContent() {
               </div>
             )}
 
+            <React.Suspense fallback={<p role="status" className="p-6 text-sm text-slate-500">Carregando…</p>}>
             {activeTab === 'dashboard' && (
               <DashboardView
-                leads={leads}
+                leads={leads.filter(lead => !lead.funnelArchive?.at)}
                 equipments={equipments}
                 invoices={invoices}
-                contracts={contracts}
                 onSelectLead={(lead) => {
                   setSelectedLead(lead)
                   setActiveTab('whatsapp')
@@ -314,6 +309,8 @@ function MainContent() {
             {activeTab === 'kanban' && (
               <KanbanView
                 leads={leads}
+                onLeadUpdated={handleFunnelLeadUpdated}
+                onNavigate={setActiveTab}
                 onUpdateLeadStage={handleUpdateLeadStage}
                 onSelectLead={(lead) => {
                   setSelectedLead(lead)
@@ -329,10 +326,10 @@ function MainContent() {
                 leads={leads}
                 selectedLead={selectedLead}
                 onSelectLead={setSelectedLead}
+                onLeadUpdated={handleFunnelLeadUpdated}
                 onOpenNewContract={handleOpenNewContract}
                 onContractCreated={() => {
                   fetchAllData()
-                  setActiveTab('contracts')
                 }}
               />
             )}
@@ -362,32 +359,25 @@ function MainContent() {
                 leads={leads}
                 contracts={contracts}
                 onOpenConversation={openLeadConversation}
-              />
-            )}
-
-            {activeTab === 'calendar' && (
-              <CalendarView
-                customEvents={calendarEvents}
-                contracts={contracts}
-                leads={leads}
-                equipments={equipments}
-                invoices={invoices}
-                team={team}
-                currentUserId={user.id}
                 onRefresh={fetchAllData}
-                onOpenLead={openLeadConversation}
+                onOpenInspections={(id) => { setInspectionLeadId(id); setActiveTab('inspections') }}
               />
             )}
 
             {activeTab === 'finance' && (
-              <FinanceView invoices={invoices} leads={leads} contracts={contracts} contractExpenses={contractExpenses} onRefreshInvoices={fetchAllData} onOpenLead={openLeadConversation} />
+              <FinanceView invoices={invoices} leads={leads} onRefreshInvoices={fetchAllData} onOpenLead={openLeadConversation} />
             )}
+            {activeTab === 'inspections' && <React.Suspense fallback={<p role="status">Carregando vistorias…</p>}><InspectionsView leads={leads} contracts={contracts} equipments={equipments} initialLeadId={inspectionLeadId} /></React.Suspense>}
+            {activeTab === 'client-operations' && user.role !== 'tecnico' && <React.Suspense fallback={<p role="status">Carregando operação…</p>}><ClientOperationsView /></React.Suspense>}
 
             {activeTab === 'blog' && <BlogManagerView />}
+            {activeTab === 'yria' && <React.Suspense fallback={<p role="status">Carregando YRIA…</p>}><YriaView /></React.Suspense>}
+            {activeTab === 'insights' && <React.Suspense fallback={<p role="status">Carregando insights…</p>}><InsightsView onNavigate={setActiveTab} /></React.Suspense>}
 
             {activeTab === 'settings' && (
-              <SettingsView onOpenQr={() => setQrModalOpen(true)} />
+              <SettingsView onOpenQr={() => setQrModalOpen(true)} onOpenYria={() => setActiveTab('yria')} />
             )}
+            </React.Suspense>
           </div>
         </main>
       </div>
@@ -417,17 +407,27 @@ function MainContent() {
 }
 
 export default function App() {
+  const publicCustomerMatch = window.location.pathname.match(/^\/(vistoria|cliente)\/([A-Za-z0-9_-]{43})\/?$/)
+  if (publicCustomerMatch) return (
+    <ThemeProvider>
+      <React.Suspense fallback={<p role="status">Abrindo atendimento…</p>}>
+        <PublicCustomerView kind={publicCustomerMatch[1] === 'vistoria' ? 'inspection' : 'portal'} token={publicCustomerMatch[2]} />
+      </React.Suspense>
+    </ThemeProvider>
+  )
   const publicSigningMatch = window.location.pathname.match(/^\/assinar\/([^/]+)\/?$/)
   if (publicSigningMatch) {
-    return <PublicContractSigningView token={decodeURIComponent(publicSigningMatch[1])} />
+    return <React.Suspense fallback={<p role="status">Abrindo contrato…</p>}><PublicContractSigningView token={decodeURIComponent(publicSigningMatch[1])} /></React.Suspense>
   }
 
   return (
     <ThemeProvider>
       <AuthProvider>
+        <PwaProvider>
         <SocketProvider>
           <MainContent />
         </SocketProvider>
+        </PwaProvider>
       </AuthProvider>
     </ThemeProvider>
   )

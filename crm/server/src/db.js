@@ -3,6 +3,7 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import bcrypt from 'bcryptjs'
 import pg from 'pg'
+import { FALLBACK_MODELS } from './modelSequence.js'
 
 const { Pool } = pg
 
@@ -26,14 +27,7 @@ const initialData = {
       verifyToken: process.env.META_VERIFY_TOKEN || '',
     },
     geminiApiKey: process.env.GEMINI_API_KEY || '',
-    activeAiModels: [
-      'gemini-3.8-flash',
-      'gemini-3.7-flash',
-      'gemini-3.6-flash',
-      'gemini-3.5-flash',
-      'gemini-3.5-flash-lite',
-      'gemini-3.1-flash-lite',
-    ],
+    activeAiModels: [...FALLBACK_MODELS],
     company: {
       name: 'Grupo YR Hospitalar',
       cnpj: '45.123.890/0001-23',
@@ -443,6 +437,8 @@ const initialData = {
       paidAt: null,
     }
   ],
+  calendarEvents: [],
+  contractExpenses: [],
 }
 
 // O CRM inicia limpo. Mantemos somente o acesso administrativo necessário
@@ -491,6 +487,17 @@ class Database {
         data JSONB NOT NULL,
         updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
       );
+      CREATE TABLE IF NOT EXISTS crm_binary_files (
+        id TEXT PRIMARY KEY,
+        owner_id TEXT NOT NULL,
+        kind TEXT NOT NULL,
+        mime_type TEXT NOT NULL,
+        file_name TEXT NOT NULL,
+        file_size INTEGER NOT NULL,
+        data BYTEA NOT NULL,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+      );
+      CREATE INDEX IF NOT EXISTS crm_binary_files_owner_idx ON crm_binary_files (owner_id, kind);
     `)
 
     const countResult = await this.pool.query('SELECT COUNT(*)::int AS count FROM crm_records')
@@ -579,6 +586,10 @@ class Database {
     ))
   }
 
+  async flush() {
+    await this.writeQueue
+  }
+
   load() {
     // Quando há PostgreSQL, o Neon é a única fonte de dados. Não carregue o
     // antigo arquivo JSON de demonstração antes da migração inicial.
@@ -632,6 +643,7 @@ class Database {
   }
 
   insert(collection, item) {
+    if (this.commercialLocks?.has(collection + ':' + item.id)) throw new Error('Registro ocupado pela conferência comercial. Tente novamente.')
     if (!this.data[collection]) this.data[collection] = []
     this.data[collection].unshift(item)
     this.save()
@@ -640,6 +652,7 @@ class Database {
   }
 
   update(collection, id, updates) {
+    if (this.commercialLocks?.has(collection + ':' + id)) throw new Error('Registro ocupado pela conferência comercial. Tente novamente.')
     const list = this.get(collection)
     const index = list.findIndex(item => item.id === id)
     if (index === -1) return null
@@ -650,6 +663,7 @@ class Database {
   }
 
   delete(collection, id) {
+    if (this.commercialLocks?.has(collection + ':' + id)) throw new Error('Registro ocupado pela conferência comercial. Tente novamente.')
     const list = this.get(collection)
     const filtered = list.filter(item => item.id !== id)
     this.data[collection] = filtered
@@ -660,6 +674,66 @@ class Database {
 
   getSettings() {
     return this.data.settings
+  }
+
+  async putWhatsAppHistoryJob(job) {
+    await this.ready
+    const record = { ...job, id: job.leadId }
+    if (this.pool) await this.pool.query({
+      text: `INSERT INTO crm_records (collection, id, data, updated_at)
+        VALUES ('whatsappHistoryJobs', $1, $2::jsonb, now())
+        ON CONFLICT (collection, id) DO UPDATE SET data = EXCLUDED.data, updated_at = now()`,
+      values: [record.id, JSON.stringify(record)], query_timeout: 8000,
+    })
+    const current = this.get('whatsappHistoryJobs')
+    const records = [record, ...current.filter(item => item.id !== record.id)]
+    if (this.pool) this.data.whatsappHistoryJobs = records
+    else if (!this.save({ ...this.data, whatsappHistoryJobs: records })) throw new Error('Não foi possível salvar a solicitação de histórico.')
+    return record
+  }
+
+  get storageMode() {
+    return this.pool ? 'neon' : 'local'
+  }
+
+  async putBinaryFile({ id, ownerId, kind, mimeType, fileName, data }) {
+    if (!this.pool || !Buffer.isBuffer(data) || data.length === 0) return false
+    await this.ready
+    await this.pool.query(
+      `INSERT INTO crm_binary_files (id, owner_id, kind, mime_type, file_name, file_size, data)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)
+       ON CONFLICT (id) DO UPDATE SET
+         owner_id = EXCLUDED.owner_id,
+         kind = EXCLUDED.kind,
+         mime_type = EXCLUDED.mime_type,
+         file_name = EXCLUDED.file_name,
+         file_size = EXCLUDED.file_size,
+         data = EXCLUDED.data`,
+      [id, ownerId, kind, mimeType, fileName, data.length, data],
+    )
+    return true
+  }
+
+  async getBinaryFile(id, { ownerId, kind } = {}) {
+    if (!this.pool || !id) return null
+    await this.ready
+    const result = await this.pool.query(
+      `SELECT id, owner_id, kind, mime_type, file_name, file_size, data
+       FROM crm_binary_files
+       WHERE id = $1 AND ($2::text IS NULL OR owner_id = $2) AND ($3::text IS NULL OR kind = $3)
+       LIMIT 1`,
+      [id, ownerId ?? null, kind ?? null],
+    )
+    const row = result.rows[0]
+    return row ? {
+      id: row.id,
+      ownerId: row.owner_id,
+      kind: row.kind,
+      mimeType: row.mime_type,
+      fileName: row.file_name,
+      fileSize: row.file_size,
+      data: row.data,
+    } : null
   }
 
   updateSettings(updates) {

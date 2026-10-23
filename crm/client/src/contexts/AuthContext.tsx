@@ -29,20 +29,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         try {
           const res = await fetch('/api/auth/me', {
             headers: { Authorization: `Bearer ${savedToken}` },
+            cache: 'no-store', signal: AbortSignal.timeout(8000),
           })
           if (res.ok) {
             const data = await res.json()
             setUser(data.user)
             setToken(savedToken)
-          } else {
+          } else if (res.status === 401 || res.status === 403) {
             localStorage.removeItem('yr_crm_token')
             setUser(null)
             setToken(null)
           }
         } catch {
-          localStorage.removeItem('yr_crm_token')
-          setUser(null)
-          setToken(null)
+          // A temporary outage must not erase the saved session.
         }
       } else {
         setUser(null)
@@ -51,7 +50,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setLoading(false)
     }
 
-    checkAuth()
+    void checkAuth()
+    window.addEventListener('online', checkAuth)
+    return () => window.removeEventListener('online', checkAuth)
   }, [])
 
   const login = async (email: string, pass: string): Promise<boolean> => {

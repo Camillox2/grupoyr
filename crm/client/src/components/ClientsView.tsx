@@ -13,16 +13,19 @@ import {
   UserRound,
   UsersRound,
 } from 'lucide-react'
-import type { Contract, Lead } from '../types'
+import { Contract, Lead } from '../types'
 import { buildClientRecords, digitsOnly, normalizedText } from '../lib/clientRecords'
 import { PageHeader } from './ui/PageHeader'
 import { Toast, useToast } from './ui/Toast'
 import { brl } from './ui/Feedback'
+import { RegisterClient, ClientTools } from './ClientTools'
 
 interface ClientsViewProps {
   leads: Lead[]
   contracts: Contract[]
   onOpenConversation: (leadId: string) => void
+  onRefresh?: () => void
+  onOpenInspections?: (leadId: string) => void
 }
 
 interface ClientAttachment {
@@ -36,34 +39,38 @@ interface ClientAttachment {
 
 const formatDate = (value: string | null | undefined) => {
   if (!value) return 'Não informado'
-  const date = new Date(value.length === 10 ? `${value}T00:00:00` : value)
+  const date = new Date(value.length === 10 ? value + 'T00:00:00' : value)
   return Number.isNaN(date.getTime()) ? value : date.toLocaleDateString('pt-BR')
 }
 
 const formatFileSize = (value: number) => {
   if (!Number.isFinite(value) || value < 0) return ''
-  if (value < 1024) return `${value} B`
-  if (value < 1024 * 1024) return `${(value / 1024).toFixed(1)} KB`
-  return `${(value / (1024 * 1024)).toFixed(1)} MB`
+  if (value < 1024) return value + ' B'
+  if (value < 1024 * 1024) return (value / 1024).toFixed(1) + ' KB'
+  return (value / (1024 * 1024)).toFixed(1) + ' MB'
 }
 
-const statusLabels: Record<string, string> = {
-  rascunho: 'Rascunho',
-  pendente_assinatura: 'Aguardando assinatura',
-  assinado: 'Assinado',
-  cancelado: 'Cancelado',
-  encerrado: 'Encerrado',
+const contractStatus: Record<string, { label: string; style: string }> = {
+  rascunho: { label: 'Rascunho', style: 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300' },
+  pendente_assinatura: { label: 'Aguardando assinatura', style: 'bg-amber-50 text-amber-800 dark:bg-amber-950/50 dark:text-amber-200' },
+  assinado: { label: 'Assinado', style: 'bg-emerald-50 text-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-200' },
+  cancelado: { label: 'Cancelado', style: 'bg-rose-50 text-rose-800 dark:bg-rose-950/50 dark:text-rose-200' },
+  encerrado: { label: 'Encerrado', style: 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300' },
 }
 
 const authHeaders = () => ({
-  Authorization: `Bearer ${localStorage.getItem('yr_crm_token') || ''}`,
+  Authorization: 'Bearer ' + (localStorage.getItem('yr_crm_token') || ''),
 })
 
-export const ClientsView = ({ leads, contracts, onOpenConversation }: ClientsViewProps) => {
+export const ClientsView: React.FC<ClientsViewProps> = ({ leads, contracts, onOpenConversation, onRefresh, onOpenInspections }) => {
   const clients = useMemo(() => buildClientRecords(leads, contracts), [leads, contracts])
   const [search, setSearch] = useState('')
   const [selectedClientId, setSelectedClientId] = useState('')
-  const [attachmentsState, setAttachmentsState] = useState<{ key: string; items: ClientAttachment[]; error: string } | null>(null)
+  const [attachmentState, setAttachmentState] = useState<{
+    key: string
+    items: ClientAttachment[]
+    error: string
+  }>({ key: '', items: [], error: '' })
   const [attachmentRefresh, setAttachmentRefresh] = useState(0)
   const [uploading, setUploading] = useState(false)
   const [downloadingId, setDownloadingId] = useState('')
@@ -80,28 +87,31 @@ export const ClientsView = ({ leads, contracts, onOpenConversation }: ClientsVie
         client.phone,
         client.email,
         client.cpf,
-        ...client.contracts.map((contract) => `${contract.number} ${contract.equipmentNames}`),
+        ...client.contracts.map((contract) => contract.number + ' ' + contract.equipmentNames),
       ].map(normalizedText).join(' ')
-      return searchable.includes(query) || (queryDigits.length > 2
-        && (digitsOnly(client.phone).includes(queryDigits) || digitsOnly(client.cpf).includes(queryDigits)))
+      return searchable.includes(query) || (
+        queryDigits.length > 2
+        && (digitsOnly(client.phone).includes(queryDigits) || digitsOnly(client.cpf).includes(queryDigits))
+      )
     })
   }, [clients, search])
 
-  const selectedClient = filteredClients.find((client) => client.id === selectedClientId) || filteredClients[0] || null
+  const selectedClient = filteredClients.find((client) => client.id === selectedClientId)
+    || filteredClients[0]
+    || null
   const attachmentOwnerIds = selectedClient?.leadIds.join('|') || ''
-  const attachmentRequestKey = `${attachmentOwnerIds}:${attachmentRefresh}`
-  const currentAttachments = attachmentsState?.key === attachmentRequestKey ? attachmentsState : null
-  const attachments = currentAttachments?.items || []
-  const attachmentsError = currentAttachments?.error || ''
-  const attachmentsLoading = Boolean(attachmentOwnerIds) && !currentAttachments
+  const attachmentRequestKey = attachmentOwnerIds + ':' + attachmentRefresh
+  const currentAttachmentState = attachmentState.key === attachmentRequestKey ? attachmentState : null
+  const attachments = currentAttachmentState?.items || []
+  const attachmentsError = currentAttachmentState?.error || ''
+  const attachmentsLoading = Boolean(attachmentOwnerIds) && !currentAttachmentState
 
   useEffect(() => {
     const leadIds = attachmentOwnerIds.split('|').filter(Boolean)
     const controller = new AbortController()
     if (leadIds.length === 0) return () => controller.abort()
-
     Promise.all(leadIds.map(async (leadId) => {
-      const response = await fetch(`/api/leads/${encodeURIComponent(leadId)}/attachments`, {
+      const response = await fetch('/api/leads/' + encodeURIComponent(leadId) + '/attachments', {
         headers: authHeaders(),
         signal: controller.signal,
       })
@@ -112,7 +122,7 @@ export const ClientsView = ({ leads, contracts, onOpenConversation }: ClientsVie
     }))
       .then((items) => {
         if (!controller.signal.aborted) {
-          setAttachmentsState({
+          setAttachmentState({
             key: attachmentRequestKey,
             items: items.flat().sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt))),
             error: '',
@@ -121,7 +131,7 @@ export const ClientsView = ({ leads, contracts, onOpenConversation }: ClientsVie
       })
       .catch((error: unknown) => {
         if (!controller.signal.aborted) {
-          setAttachmentsState({
+          setAttachmentState({
             key: attachmentRequestKey,
             items: [],
             error: error instanceof Error ? error.message : 'Falha ao carregar anexos.',
@@ -146,7 +156,7 @@ export const ClientsView = ({ leads, contracts, onOpenConversation }: ClientsVie
     try {
       const formData = new FormData()
       formData.append('file', file)
-      const response = await fetch(`/api/leads/${encodeURIComponent(leadId)}/attachments`, {
+      const response = await fetch('/api/leads/' + encodeURIComponent(leadId) + '/attachments', {
         method: 'POST',
         headers: authHeaders(),
         body: formData,
@@ -162,28 +172,40 @@ export const ClientsView = ({ leads, contracts, onOpenConversation }: ClientsVie
     }
   }
 
-  const downloadAttachment = async (attachment: ClientAttachment) => {
+  const downloadFile = async (url: string, fileName: string, itemId: string) => {
     if (downloadingId) return
-    setDownloadingId(attachment.id)
+    setDownloadingId(itemId)
     try {
-      const response = await fetch(
-        `/api/leads/${encodeURIComponent(attachment.leadId)}/attachments/${encodeURIComponent(attachment.id)}`,
-        { headers: authHeaders() },
-      )
-      if (!response.ok) throw new Error('Não foi possível baixar este anexo.')
+      const response = await fetch(url, { headers: authHeaders() })
+      if (!response.ok) {
+        const data = await response.json().catch(() => null)
+        throw new Error(data?.error || 'Não foi possível baixar este arquivo.')
+      }
       const objectUrl = URL.createObjectURL(await response.blob())
       const link = document.createElement('a')
       link.href = objectUrl
-      link.download = attachment.fileName.replace(/[\\/\r\n"]+/g, '_')
+      link.download = fileName
       document.body.appendChild(link)
       link.click()
       link.remove()
       window.setTimeout(() => URL.revokeObjectURL(objectUrl), 1000)
     } catch (error) {
-      showToast({ tone: 'alert', message: error instanceof Error ? error.message : 'Falha ao baixar o anexo.' })
+      showToast({ tone: 'alert', message: error instanceof Error ? error.message : 'Falha ao baixar o arquivo.' })
     } finally {
       setDownloadingId('')
     }
+  }
+
+  const downloadContract = (contract: Contract) => {
+    const number = String(contract.number || 'contrato').replace(/[^a-zA-Z0-9_-]+/g, '-')
+    void downloadFile('/api/contracts/' + encodeURIComponent(contract.id) + '/pdf', number + '-grupo-yr.pdf', contract.id)
+  }
+
+  const downloadAttachment = (attachment: ClientAttachment) => {
+    const safeName = String(attachment.fileName || 'anexo').replace(/[\\/\r\n"]/g, '_')
+    const url = '/api/leads/' + encodeURIComponent(attachment.leadId)
+      + '/attachments/' + encodeURIComponent(attachment.id)
+    void downloadFile(url, safeName, attachment.id)
   }
 
   const activeContracts = clients.reduce((total, client) => (
@@ -191,14 +213,15 @@ export const ClientsView = ({ leads, contracts, onOpenConversation }: ClientsVie
   ), 0)
 
   return (
-    <div className="space-y-5 pb-10">
+    <div className="clients-view flex min-w-0 flex-col gap-5 pb-10 [&>header]:mb-0">
       <PageHeader
         icon={<UsersRound className="h-5 w-5" />}
         eyebrow="Relacionamento"
         title="Clientes"
-        description="Clientes e contratos reunidos em uma ficha, com anexos e acesso rápido ao atendimento."
+        description="Os clientes aparecem automaticamente quando um contrato é gerado. Contratos e anexos ficam reunidos na ficha."
       />
 
+      <RegisterClient leads={leads} onRefresh={onRefresh} />
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-3">
         <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900">
           <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Clientes cadastrados</p>
@@ -230,6 +253,7 @@ export const ClientsView = ({ leads, contracts, onOpenConversation }: ClientsVie
             </div>
             <p className="mt-2 text-[11px] text-slate-500">{filteredClients.length} de {clients.length} clientes</p>
           </div>
+
           <div className="max-h-[560px] divide-y divide-slate-100 overflow-y-auto dark:divide-slate-800">
             {filteredClients.map((client) => {
               const active = selectedClient?.id === client.id
@@ -239,44 +263,72 @@ export const ClientsView = ({ leads, contracts, onOpenConversation }: ClientsVie
                   type="button"
                   onClick={() => setSelectedClientId(client.id)}
                   aria-current={active ? 'true' : undefined}
-                  className={`flex w-full min-w-0 items-start gap-3 px-4 py-3.5 text-left transition-colors ${active ? 'bg-blue-50/80 dark:bg-blue-950/35' : 'hover:bg-slate-50 dark:hover:bg-slate-800/60'}`}
+                  className={'flex w-full min-w-0 items-start gap-3 px-4 py-3.5 text-left transition-colors '
+                    + (active
+                      ? 'bg-blue-50/80 dark:bg-blue-950/35'
+                      : 'hover:bg-slate-50 dark:hover:bg-slate-800/60')}
                 >
-                  <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-blue-50 text-blue-700 dark:bg-blue-950/50 dark:text-blue-300"><UserRound className="h-4 w-4" /></span>
+                  <span className={'grid h-10 w-10 shrink-0 place-items-center rounded-xl '
+                    + (active
+                      ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/60 dark:text-blue-200'
+                      : 'bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-300')}>
+                    <UserRound className="h-4 w-4" />
+                  </span>
                   <span className="min-w-0 flex-1">
                     <span className="block truncate text-sm font-bold text-slate-900 dark:text-white">{client.name}</span>
                     <span className="mt-1 block truncate text-xs text-slate-500">{client.phone || client.email || 'Sem telefone cadastrado'}</span>
-                    <span className="mt-2 inline-flex rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold text-slate-600 dark:bg-slate-800 dark:text-slate-300">{client.contracts.length} {client.contracts.length === 1 ? 'contrato' : 'contratos'}</span>
+                    <span className="mt-2 inline-flex rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold text-slate-600 dark:bg-slate-800 dark:text-slate-300">
+                      {client.contracts.length} {client.contracts.length === 1 ? 'contrato' : 'contratos'}
+                    </span>
                   </span>
                 </button>
               )
             })}
+
             {filteredClients.length === 0 && (
               <div className="px-5 py-10 text-center">
                 <UsersRound className="mx-auto h-7 w-7 text-slate-300 dark:text-slate-600" />
-                <p className="mt-3 text-sm font-semibold text-slate-700 dark:text-slate-200">{clients.length === 0 ? 'Ainda não há clientes' : 'Nenhum cliente encontrado'}</p>
-                <p className="mx-auto mt-1 max-w-xs text-xs leading-5 text-slate-500">{clients.length === 0 ? 'Ao gerar um contrato, o cliente aparecerá aqui automaticamente.' : 'Tente buscar por outro nome, telefone ou número de contrato.'}</p>
+                <p className="mt-3 text-sm font-semibold text-slate-700 dark:text-slate-200">
+                  {clients.length === 0 ? 'Ainda não há clientes' : 'Nenhum cliente encontrado'}
+                </p>
+                <p className="mx-auto mt-1 max-w-xs text-xs leading-5 text-slate-500">
+                  {clients.length === 0
+                    ? 'Quando um contrato for gerado, o cliente aparecerá aqui automaticamente.'
+                    : 'Tente buscar por outro nome, telefone ou número de contrato.'}
+                </p>
               </div>
             )}
           </div>
         </section>
 
         {selectedClient ? (
-          <section className="min-w-0 space-y-4" aria-label={`Ficha de ${selectedClient.name}`}>
+          <section className="min-w-0 space-y-4" aria-label={'Ficha de ' + selectedClient.name}>
+            {selectedClient.lead ? <ClientTools key={selectedClient.lead.id} leadId={selectedClient.lead.id} onInspection={onOpenInspections} /> : null}
             <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900 sm:p-6">
               <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                 <div className="flex min-w-0 items-start gap-3">
-                  <span className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-blue-50 text-blue-700 dark:bg-blue-950/50 dark:text-blue-300"><UserRound className="h-5 w-5" /></span>
+                  <span className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-blue-50 text-blue-700 dark:bg-blue-950/50 dark:text-blue-300">
+                    <UserRound className="h-5 w-5" />
+                  </span>
                   <div className="min-w-0">
                     <h2 className="break-words text-lg font-bold text-slate-900 dark:text-white">{selectedClient.name}</h2>
-                    <p className="mt-1 text-xs text-slate-500">Cliente desde {formatDate(selectedClient.contracts[0]?.createdAt || selectedClient.lead?.createdAt)}</p>
+                    <p className="mt-1 text-xs text-slate-500">
+                      Cliente desde {formatDate(selectedClient.contracts.at(-1)?.createdAt || selectedClient.lead?.createdAt)}
+                    </p>
                   </div>
                 </div>
                 {selectedClient.lead && (
-                  <button type="button" onClick={() => onOpenConversation(selectedClient.lead!.id)} className="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl border border-blue-200 px-3.5 py-2.5 text-xs font-bold text-blue-700 transition hover:bg-blue-50 dark:border-blue-900 dark:text-blue-300 dark:hover:bg-blue-950/40">
-                    <MessageCircle className="h-4 w-4" /> Abrir atendimento
+                  <button
+                    type="button"
+                    onClick={() => onOpenConversation(selectedClient.lead!.id)}
+                    className="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl border border-blue-200 px-3.5 py-2.5 text-xs font-bold text-blue-700 transition hover:bg-blue-50 dark:border-blue-900 dark:text-blue-300 dark:hover:bg-blue-950/40"
+                  >
+                    <MessageCircle className="h-4 w-4" />
+                    Abrir atendimento
                   </button>
                 )}
               </div>
+
               <div className="mt-5 grid gap-3 sm:grid-cols-2">
                 <div className="rounded-xl bg-slate-50 p-3.5 dark:bg-slate-800/70">
                   <p className="text-[10px] font-bold uppercase tracking-wide text-slate-500">Contato</p>
@@ -298,48 +350,122 @@ export const ClientsView = ({ leads, contracts, onOpenConversation }: ClientsVie
             </div>
 
             <div className="rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900">
-              <div className="flex items-center justify-between gap-3 border-b border-slate-100 px-5 py-4 dark:border-slate-800">
-                <div><h3 className="flex items-center gap-2 text-sm font-bold text-slate-900 dark:text-white"><FileText className="h-4 w-4 text-blue-600" />Contratos</h3><p className="mt-1 text-[11px] text-slate-500">Histórico e situação das contratações.</p></div>
-                <span className="shrink-0 text-xs font-semibold text-slate-500">{selectedClient.contracts.length} registrados</span>
+              <div className="flex flex-col gap-3 border-b border-slate-100 px-5 py-4 dark:border-slate-800 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <h3 className="flex items-center gap-2 text-sm font-bold text-slate-900 dark:text-white">
+                    <FileText className="h-4 w-4 text-blue-600" />
+                    Contratos
+                  </h3>
+                  <p className="mt-1 text-[11px] text-slate-500">Documentos e situação de cada contratação.</p>
+                </div>
+                <span className="text-xs font-semibold text-slate-500">{selectedClient.contracts.length} registrados</span>
               </div>
               <div className="divide-y divide-slate-100 dark:divide-slate-800">
-                {selectedClient.contracts.map((contract: Contract) => (
-                  <div key={contract.id} className="flex min-w-0 flex-col gap-2 px-5 py-4">
-                    <div className="flex flex-wrap items-center gap-2"><p className="text-xs font-bold text-slate-900 dark:text-white">{contract.number}</p><span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-bold text-slate-700 dark:bg-slate-800 dark:text-slate-300">{statusLabels[contract.status] || 'Em andamento'}</span></div>
-                    <p className="truncate text-xs text-slate-600 dark:text-slate-300">{contract.equipmentNames || 'Equipamento não informado'}</p>
-                    <p className="text-[11px] text-slate-500">{contract.type === 'locacao' ? 'Locação' : 'Venda'} · {formatDate(contract.startDate)} a {formatDate(contract.endDate)} · {brl(contract.monthlyValue)}</p>
-                  </div>
-                ))}
-                {selectedClient.contracts.length === 0 && <p className="px-5 py-6 text-xs text-slate-500">Cliente no funil; ainda não há contrato vinculado.</p>}
+                {selectedClient.contracts.map((contract) => {
+                  const status = contractStatus[contract.status] || contractStatus.rascunho
+                  return (
+                    <div key={contract.id} className="flex min-w-0 flex-col gap-3 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+                      <div className="min-w-0">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <p className="text-xs font-bold text-slate-900 dark:text-white">{contract.number}</p>
+                          <span className={'rounded-full px-2 py-0.5 text-[10px] font-bold ' + status.style}>{status.label}</span>
+                        </div>
+                        <p className="mt-1.5 truncate text-xs text-slate-600 dark:text-slate-300">{contract.equipmentNames || 'Equipamento não informado'}</p>
+                        <p className="mt-1 text-[11px] text-slate-500">
+                          {contract.type === 'locacao' ? 'Locação' : 'Venda'} · {formatDate(contract.startDate)} a {formatDate(contract.endDate)} · {brl(contract.monthlyValue)}
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => downloadContract(contract)}
+                        disabled={Boolean(downloadingId)}
+                        className="inline-flex shrink-0 items-center justify-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-[11px] font-bold text-slate-700 transition hover:bg-slate-50 disabled:opacity-50 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
+                      >
+                        <Download className="h-3.5 w-3.5" />
+                        {downloadingId === contract.id ? 'Gerando PDF…' : 'Baixar contrato'}
+                      </button>
+                    </div>
+                  )
+                })}
+                {selectedClient.contracts.length === 0 && (
+                  <p className="px-5 py-6 text-xs text-slate-500">Cliente registrado no funil; ainda não há contrato vinculado.</p>
+                )}
               </div>
             </div>
 
             <div className="rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900">
               <div className="flex flex-col gap-3 border-b border-slate-100 px-5 py-4 dark:border-slate-800 sm:flex-row sm:items-center sm:justify-between">
-                <div><h3 className="flex items-center gap-2 text-sm font-bold text-slate-900 dark:text-white"><Paperclip className="h-4 w-4 text-blue-600" />Anexos do cliente</h3><p className="mt-1 text-[11px] text-slate-500">Arquivos reunidos a partir dos cadastros vinculados.</p></div>
                 <div>
-                  <input ref={fileInputRef} type="file" className="sr-only" accept=".jpg,.jpeg,.png,.webp,.gif,.pdf,.txt,.doc,.docx,.xls,.xlsx" onChange={handleUpload} aria-label="Selecionar anexo para o cliente" />
-                  <button type="button" onClick={() => fileInputRef.current?.click()} disabled={uploading || selectedClient.leadIds.length === 0} className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-blue-700 px-3.5 py-2.5 text-xs font-bold text-white transition hover:bg-blue-800 disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"><Upload className="h-4 w-4" />{uploading ? 'Enviando…' : 'Adicionar anexo'}</button>
+                  <h3 className="flex items-center gap-2 text-sm font-bold text-slate-900 dark:text-white">
+                    <Paperclip className="h-4 w-4 text-blue-600" />
+                    Anexos do cliente
+                  </h3>
+                  <p className="mt-1 text-[11px] text-slate-500">Arquivos da ficha e do atendimento ficam vinculados ao cadastro.</p>
+                </div>
+                <div>
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    className="sr-only"
+                    accept=".jpg,.jpeg,.png,.webp,.gif,.pdf,.txt,.doc,.docx,.xls,.xlsx"
+                    onChange={handleUpload}
+                    aria-label="Selecionar anexo para o cliente"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={uploading || selectedClient.leadIds.length === 0}
+                    className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-blue-700 px-3.5 py-2.5 text-xs font-bold text-white transition hover:bg-blue-800 disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"
+                  >
+                    <Upload className="h-4 w-4" />
+                    {uploading ? 'Enviando…' : 'Adicionar anexo'}
+                  </button>
                 </div>
               </div>
               {attachmentsError && <p className="m-4 rounded-xl border border-rose-200 bg-rose-50 p-3 text-xs text-rose-800 dark:border-rose-900 dark:bg-rose-950/30 dark:text-rose-200" role="alert">{attachmentsError}</p>}
               <div className="divide-y divide-slate-100 dark:divide-slate-800">
-                {attachmentsLoading ? <p className="px-5 py-6 text-xs text-slate-500">Carregando anexos…</p> : attachments.map((attachment) => (
+                {attachmentsLoading ? (
+                  <p className="px-5 py-6 text-xs text-slate-500">Carregando anexos…</p>
+                ) : attachments.map((attachment) => (
                   <div key={attachment.id} className="flex min-w-0 items-center gap-3 px-5 py-3.5">
-                    <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300"><FileText className="h-4 w-4" /></span>
-                    <div className="min-w-0 flex-1"><p className="truncate text-xs font-semibold text-slate-800 dark:text-slate-100">{attachment.fileName}</p><p className="mt-1 text-[10px] text-slate-500">{formatDate(attachment.createdAt)} · {formatFileSize(attachment.size)}</p></div>
-                    <button type="button" onClick={() => void downloadAttachment(attachment)} disabled={Boolean(downloadingId)} aria-label={`Baixar ${attachment.fileName}`} className="grid h-9 w-9 shrink-0 place-items-center rounded-lg border border-slate-200 text-slate-600 transition hover:bg-slate-50 disabled:opacity-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"><Download className="h-4 w-4" /></button>
+                    <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300">
+                      <FileText className="h-4 w-4" />
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-xs font-semibold text-slate-800 dark:text-slate-100">{attachment.fileName}</p>
+                      <p className="mt-1 text-[10px] text-slate-500">{formatDate(attachment.createdAt)} · {formatFileSize(attachment.size)}</p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => downloadAttachment(attachment)}
+                      disabled={Boolean(downloadingId)}
+                      aria-label={'Baixar ' + attachment.fileName}
+                      className="grid h-9 w-9 shrink-0 place-items-center rounded-lg border border-slate-200 text-slate-600 transition hover:bg-slate-50 disabled:opacity-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
+                    >
+                      <Download className="h-4 w-4" />
+                    </button>
                   </div>
                 ))}
-                {!attachmentsLoading && !attachmentsError && attachments.length === 0 && <p className="px-5 py-6 text-xs text-slate-500">Nenhum anexo cadastrado para este cliente ainda.</p>}
-                {!attachmentsLoading && attachmentOwnerIds === '' && <p className="px-5 py-3 text-[11px] text-slate-500">Este contrato antigo não tem ficha de lead vinculada para anexos.</p>}
+                {!attachmentsLoading && !attachmentsError && attachments.length === 0 && (
+                  <p className="px-5 py-6 text-xs text-slate-500">Nenhum anexo cadastrado para este cliente ainda.</p>
+                )}
               </div>
-              <p className="border-t border-slate-100 px-5 py-3 text-[10px] leading-4 text-slate-400 dark:border-slate-800">JPG, PNG, WebP, GIF, PDF, DOC/DOCX, XLS/XLSX e TXT; até 15 MB por arquivo.</p>
+              <p className="border-t border-slate-100 px-5 py-3 text-[10px] leading-4 text-slate-400 dark:border-slate-800">
+                São aceitos JPG, PNG, WebP, GIF, PDF, DOC/DOCX, XLS/XLSX e TXT, até 15 MB por arquivo.
+              </p>
             </div>
           </section>
         ) : (
           <section className="grid min-h-72 place-items-center rounded-2xl border border-dashed border-slate-300 bg-white p-8 text-center dark:border-slate-700 dark:bg-slate-900">
-            <div><UsersRound className="mx-auto h-8 w-8 text-slate-300 dark:text-slate-600" /><p className="mt-3 text-sm font-semibold text-slate-700 dark:text-slate-200">{clients.length === 0 ? 'A ficha do primeiro cliente aparecerá aqui' : 'Nenhum cliente corresponde à busca'}</p><p className="mt-1 text-xs text-slate-500">{clients.length === 0 ? 'Gere um contrato para criar automaticamente o vínculo do cliente.' : 'Limpe a busca para voltar à lista completa.'}</p></div>
+            <div>
+              <UsersRound className="mx-auto h-8 w-8 text-slate-300 dark:text-slate-600" />
+              <p className="mt-3 text-sm font-semibold text-slate-700 dark:text-slate-200">
+                {clients.length === 0 ? 'A ficha do primeiro cliente aparecerá aqui' : 'Nenhum cliente corresponde à busca'}
+              </p>
+              <p className="mt-1 text-xs text-slate-500">
+                {clients.length === 0 ? 'Gere um contrato para criar automaticamente o vínculo do cliente.' : 'Limpe a busca para voltar à lista completa.'}
+              </p>
+            </div>
           </section>
         )}
       </div>

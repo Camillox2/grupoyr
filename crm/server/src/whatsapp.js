@@ -6,13 +6,23 @@ import QRCode from 'qrcode'
 import axios from 'axios'
 import pino from 'pino'
 import { db } from './db.js'
+import { evaluateYria } from './yriaService.js'
+import { createYriaResponder } from './yriaResponder.js'
+import { automaticContracts } from './automaticRuntime.js'
+import { deliverPushToUser } from './push.js'
 import { phoneKey } from './phone.js'
+import { createBaileysMessageIngestor, decodeWhatsAppSource, findWhatsAppLead, parseWhatsAppMessage, recordWhatsAppCall, serializeWhatsAppMessage, whatsappTimestamp } from './whatsappMessages.js'
 import { notifyBaileysDisconnect } from './whatsappNotifications.js'
-import { runGeminiWithFallback, analyzeImage, transcribeAndUnderstandAudio, generateCustomerSummary, buildQualificationSystemPrompt } from './gemini.js'
+import { createHistorySyncTracker, serializeHistoryJob } from './whatsappHistorySync.js'
+import { createWhatsAppIngress } from './whatsappIngress.js'
+import { isExternalAutomaticPacket } from './whatsappAutomation.js'
+import { createHistoryRecovery } from './whatsappRecovery.js'
+import { AI_HANDOFF_MESSAGE, buildQualificationReply, generateStructuredQualification } from './gemini.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const AUTH_DIR = path.join(__dirname, '..', 'data', 'baileys_auth')
 const DATA_DIR = path.dirname(AUTH_DIR)
+const RECOVERY_FILE = path.join(__dirname, '../../.runtime/whatsapp-history-recovery.json')
 const WHATSAPP_MEDIA_DIR = path.join(DATA_DIR, 'uploads', 'whatsapp')
 fs.mkdirSync(WHATSAPP_MEDIA_DIR, { recursive: true })
 
@@ -28,36 +38,44 @@ const mediaExtension = (mimeType, originalName = '') => {
   return /^\.[a-z0-9]{1,8}$/.test(extension) ? extension : '.bin'
 }
 
-const saveWhatsAppMedia = (buffer, leadId, mimeType, originalName) => {
+const META_SUPPORTED_MEDIA_TYPES = new Set([
+  'image/jpeg', 'image/png',
+  'audio/aac', 'audio/mp4', 'audio/mpeg', 'audio/amr', 'audio/ogg',
+  'video/mp4', 'video/3gpp',
+  'text/plain', 'application/pdf', 'application/msword',
+  'application/vnd.ms-excel', 'application/vnd.ms-powerpoint',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+])
+
+export const isMetaMediaTypeSupported = (mimeType) => META_SUPPORTED_MEDIA_TYPES.has(String(mimeType || '').split(';')[0].trim().toLowerCase())
+
+const saveWhatsAppMedia = async (buffer, leadId, mimeType, originalName) => {
   if (!Buffer.isBuffer(buffer) || !buffer.length) return null
+  const id = `wa_${randomUUID()}`
+  try {
+    const stored = await db.putBinaryFile({
+      id,
+      ownerId: leadId,
+      kind: 'whatsapp_media',
+      mimeType: mimeType || 'application/octet-stream',
+      fileName: String(originalName || 'mídia WhatsApp').slice(0, 180),
+      data: buffer,
+    })
+    if (stored) return { mediaBinaryFileId: id }
+  } catch (error) {
+    console.warn('[Files] Não foi possível guardar a mídia do WhatsApp no Neon; mantendo cópia local:', error?.message || error)
+  }
   const folder = String(leadId).replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 80)
   const targetDirectory = path.join(WHATSAPP_MEDIA_DIR, folder)
   fs.mkdirSync(targetDirectory, { recursive: true })
   const fileName = `${randomUUID()}${mediaExtension(mimeType, originalName)}`
   fs.writeFileSync(path.join(targetDirectory, fileName), buffer)
-  return path.relative(DATA_DIR, path.join(targetDirectory, fileName))
+  return { mediaStorageKey: path.relative(DATA_DIR, path.join(targetDirectory, fileName)) }
 }
 
-const toClientMessage = (message) => {
-  const { mediaStorageKey, ...safeMessage } = message
-  return mediaStorageKey
-    ? { ...safeMessage, mediaUrl: `/api/leads/${encodeURIComponent(message.leadId)}/messages/${encodeURIComponent(message.id)}/media` }
-    : safeMessage
-}
-
-const QUALIFICATION_COMPLETE_MARKER = '[[YR_QUALIFICATION_COMPLETE]]'
-const cleanAssistantReply = (value) => {
-  const raw = String(value || '')
-  const qualificationComplete = raw.includes(QUALIFICATION_COMPLETE_MARKER)
-  const text = raw
-    .replaceAll(QUALIFICATION_COMPLETE_MARKER, '')
-    .replace(/^\s*[*+-]\s+/gm, '')
-    .replace(/\*{1,3}|_{2,3}|~~|`{1,3}/g, '')
-    .replace(/^\s{0,3}#{1,6}\s+/gm, '')
-    .replace(/\n{3,}/g, '\n\n')
-    .trim()
-  return { text, qualificationComplete }
-}
+const toClientMessage = serializeWhatsAppMessage
 
 if (!fs.existsSync(AUTH_DIR)) {
   fs.mkdirSync(AUTH_DIR, { recursive: true })
@@ -78,11 +96,44 @@ class WhatsAppService {
     this.disconnectNotificationSent = false
     this.lastError = null
     this.qrGeneratedAt = null
+    this.pairingProtectionUntil = 0
     this.aiBusyLeads = new Set()
+    this.ownMessageIds = new Set()
+    this.messageQueue = Promise.resolve()
+    this.mediaRecovery = new Map()
+    this.historyRequested = false
+    this.historyRequests = new Map()
+    this.historySync = { requested: 0, received: 0, requestedAt: null, lastEventAt: null }
+    this.historyRecovery = createHistoryRecovery({
+      read: () => { try { return JSON.parse(fs.readFileSync(RECOVERY_FILE, 'utf8')) } catch { return null } },
+      write: record => fs.writeFileSync(RECOVERY_FILE, JSON.stringify(record, null, 2), { mode: 0o600 }),
+      log: text => console.log('[WhatsApp/Baileys] ' + text),
+    })
+    this.instanceId = randomUUID()
+    this.ingress = createWhatsAppIngress()
+    this.ingress.start()
+    this.historyJobs = createHistorySyncTracker({
+      emit: job => this.io?.emit('whatsapp:history-sync', serializeHistoryJob(job)),
+      persist: async job => { await db.flush(); await db.putWhatsAppHistoryJob(job) },
+      onPersistenceError: error => console.warn('[WhatsApp] Falha ao salvar sincronização:', error?.name || 'erro'),
+    })
+    this.ingestBaileys = createBaileysMessageIngestor({
+      database: db,
+      ownMessageIds: this.ownMessageIds,
+      download: (message) => this.downloadBaileysMedia(message),
+      storeMedia: saveWhatsAppMedia,
+      emit: (event, payload) => this.io?.emit(event, payload),
+      respond: (lead, message, buffer) => this.respondWithAi(lead, message, buffer),
+      resolvePhone: (jid) => this.socket?.signalRepository?.lidMapping?.getPNForLID(jid),
+      observe: (message, outcome) => this.ingress.outcome(message, outcome),
+    })
   }
 
   init(io) {
     this.io = io
+    this.historyJobs.restore(db.get('whatsappHistoryJobs').filter(job => db.find('leads', lead => lead.id === job.leadId)))
+    this.historyTimeoutTimer = setInterval(() => this.historyJobs.expire(), 1000)
+    this.historyTimeoutTimer.unref()
     const settings = db.getSettings()
     this.activeProvider = process.env.WHATSAPP_PROVIDER || settings.whatsappProvider || 'baileys'
 
@@ -98,6 +149,8 @@ class WhatsAppService {
     db.updateSettings({ whatsappProvider: provider })
 
     if (provider === 'baileys') {
+      // Voltando da Meta: restaura o status real do Baileys (senao fotos ficam presas em connected_meta)
+      if (this.status === 'connected_meta') this.status = this.socket && this.connectedNumber ? 'connected' : 'disconnected'
       if (!this.socket || this.status === 'disconnected') {
         await this.initBaileys()
       }
@@ -109,17 +162,6 @@ class WhatsAppService {
 
     this.broadcastStatus()
     return { provider: this.activeProvider, status: this.status }
-  }
-
-  hasIncompleteSession() {
-    const credentialsPath = path.join(AUTH_DIR, 'creds.json')
-    if (!fs.existsSync(credentialsPath)) return false
-
-    try {
-      return JSON.parse(fs.readFileSync(credentialsPath, 'utf8')).registered === false
-    } catch {
-      return true
-    }
   }
 
   archiveIncompleteSession() {
@@ -140,7 +182,13 @@ class WhatsAppService {
   }
 
   async resetBaileysSession() {
+    if (Date.now() < this.pairingProtectionUntil) {
+      const error = new Error('O pareamento está em andamento. Aguarde a conexão concluir antes de gerar outro QR Code.')
+      error.code = 'PAIRING_IN_PROGRESS'
+      throw error
+    }
     this.manualDisconnect = false
+    this.historyJobs.pauseAll('whatsapp_disconnected')
     this.connectionAttempt += 1
     this.socket = null
     this.qrCode = null
@@ -153,6 +201,7 @@ class WhatsAppService {
 
   async disconnectBaileysSession() {
     this.manualDisconnect = true
+    this.historyJobs.pauseAll('whatsapp_disconnected')
     this.connectionAttempt += 1
     if (this.reconnectTimer) {
       clearTimeout(this.reconnectTimer)
@@ -183,27 +232,37 @@ class WhatsAppService {
     try {
       if (this.socket && ['connecting', 'qr_ready', 'connected'].includes(this.status)) return
 
+      // Apos o aceite do QR ou codigo, o Baileys reinicia com registered=false.
+      // Preserve as credenciais ate confirmar logout ou sessao invalida.
       const attempt = ++this.connectionAttempt
       this.status = 'connecting'
-      this.lastError = null
+      if (Date.now() >= this.pairingProtectionUntil) this.lastError = null
       this.broadcastStatus()
 
-      const { makeWASocket, useMultiFileAuthState, DisconnectReason, Browsers, fetchLatestBaileysVersion } = await import('@whiskeysockets/baileys')
+      const { makeWASocket, useMultiFileAuthState, DisconnectReason, Browsers, fetchLatestWaWebVersion } = await import('@whiskeysockets/baileys')
       const { state, saveCreds } = await useMultiFileAuthState(AUTH_DIR)
-      const { version } = await fetchLatestBaileysVersion()
+      const { version } = await fetchLatestWaWebVersion()
 
       this.socket = makeWASocket({
         auth: state,
         version,
         printQRInTerminal: false,
-        logger: pino({ level: 'silent' }),
+        logger: pino({ level: 'debug', hooks: { logMethod: args => this.ingress.protocolLog(args) } }),
         browser: Browsers.ubuntu('Grupo YR CRM'),
         markOnlineOnConnect: false,
+        emitOwnEvents: false,
         syncFullHistory: false,
-        shouldSyncHistoryMessage: () => false,
+        shouldSyncHistoryMessage: () => true,
+        getMessage: async (key) => {
+          const saved = db.find('messages', (message) => message.sourceMessageId === key.id)
+          return saved?.whatsappSource ? decodeWhatsAppSource(saved.whatsappSource)?.message : saved?.type === 'text' ? { conversation: saved.content } : undefined
+        },
         connectTimeoutMs: 60000,
         qrTimeout: 60000,
         keepAliveIntervalMs: 15000,
+      })
+      this.socket.ws.on('CB:message', node => {
+        if (attempt === this.connectionAttempt) this.ingress.observeNode(node, this.socket?.user)
       })
 
       // O WhatsApp envia 515 logo depois que o celular aceita o QR. Antes de
@@ -235,6 +294,7 @@ class WhatsAppService {
 
         if (connection === 'open') {
           this.status = 'connected'
+          this.pairingProtectionUntil = 0
           this.disconnectNotificationSent = false
           this.qrCode = null
           this.qrGeneratedAt = null
@@ -243,6 +303,10 @@ class WhatsAppService {
           this.connectedNumber = this.socket.user?.id ? this.socket.user.id.split(':')[0] : 'Conectado'
           console.log(`[WhatsApp/Baileys] Conectado com sucesso! Número: ${this.connectedNumber}`)
           this.broadcastStatus()
+          this.resumeInterruptedHistory(attempt).then(() => this.recoverKnownHistory()).catch(() => console.warn('[WhatsApp/Baileys] Histórico ainda indisponível no telefone.'))
+          this.historyRecovery.request(this.socket, state.creds.processedHistoryMessages || []).catch(() => console.warn('[WhatsApp/Baileys] Recuperação limitada indisponível no telefone.'))
+          const recoveryTimer = setTimeout(() => this.messageQueue.then(() => this.historyRecovery.finish()).catch(() => {}), 95000)
+          recoveryTimer.unref()
         }
 
         if (connection === 'close') {
@@ -251,12 +315,16 @@ class WhatsAppService {
           console.warn(`[WhatsApp/Baileys] Conexão encerrada. Motivo: ${reason}`)
           await pendingCredsSave
           this.status = 'disconnected'
+          this.historyJobs.pauseAll('whatsapp_disconnected')
           this.socket = null
           this.connectedNumber = null
           this.qrCode = null
           this.qrGeneratedAt = null
           this.pairingCode = null
 
+          if (reason === DisconnectReason.restartRequired) {
+            this.pairingProtectionUntil = Math.max(this.pairingProtectionUntil, Date.now() + 30000)
+          }
           this.lastError = reason === DisconnectReason.restartRequired
             ? 'QR aceito. Finalizando a conexão com o WhatsApp...'
             : reason === DisconnectReason.loggedOut
@@ -283,12 +351,55 @@ class WhatsAppService {
         }
       })
 
-      this.socket.ev.on('messages.upsert', async ({ messages, type }) => {
-        if (type !== 'notify') return
-        for (const msg of messages) {
-          if (!msg.key.fromMe && msg.key.remoteJid) {
-            await this.handleIncomingMessage(msg, 'baileys')
+      this.socket.ev.on('messages.upsert', ({ messages, type }) => {
+        if (attempt !== this.connectionAttempt) return
+        const normalized = messages.map(message => this.ingress.normalize(message))
+        normalized.forEach(message => this.ingress.upsert(message))
+        this.queueBaileysMessages(normalized, { live: type === 'notify' })
+      })
+      this.socket.ev.on('messaging-history.set', async ({ messages = [], chats = [], progress, syncType, peerDataRequestSessionId }) => {
+        if (attempt !== this.connectionAttempt) return
+        messages = messages.map(message => this.ingress.normalize(message))
+        this.historySync.received += messages?.length || 0
+        this.historySync.lastEventAt = new Date().toISOString()
+        this.historyRecovery.packet(messages.length)
+        console.log(`[WhatsApp/Baileys] Pacote de histórico recebido: ${messages?.length || 0} mensagem(ns).`)
+        const historyCounts = new Map()
+        const messageLeads = new Map()
+        for (const message of messages) {
+          if (!parseWhatsAppMessage(message)) continue
+          const jid = message.key?.remoteJid
+          let phoneJid = jid
+          if (jid?.endsWith('@lid')) {
+            try { phoneJid = await this.socket?.signalRepository?.lidMapping?.getPNForLID(jid) }
+            catch { phoneJid = null }
           }
+          const lead = findWhatsAppLead(db, jid, message.key?.remoteJidAlt, phoneJid)
+          if (lead) {
+            messageLeads.set(message, lead.id)
+            historyCounts.set(lead.id, (historyCounts.get(lead.id) || 0) + 1)
+          }
+        }
+        for (const chat of chats) {
+          const lead = findWhatsAppLead(db, chat.id, chat.pnJid, chat.lidJid)
+          if (lead && !historyCounts.has(lead.id)) historyCounts.set(lead.id, 0)
+        }
+        // Associar respostas vazias pelo ID da solicitação, sem atribuir
+        // um pacote de outra conversa ao contato que está aberto na tela.
+        const request = syncType === 6 && this.historyRequests.get(peerDataRequestSessionId)
+        const requestedLeadId = request?.leadId
+        if (requestedLeadId && !historyCounts.has(requestedLeadId)) historyCounts.set(requestedLeadId, 0)
+        if (peerDataRequestSessionId && !request) historyCounts.clear()
+        const historyRunIds = new Map([...historyCounts.keys()].map(leadId => [leadId, request?.leadId === leadId ? request.runId : this.historyJobs.get(leadId)?.runId]))
+        this.queueBaileysMessages(messages, { historical: true, live: false, historyCounts, historyRunIds, messageLeads, providerProgress: progress })
+      })
+      this.socket.ev.on('call', async (calls) => {
+        if (attempt !== this.connectionAttempt) return
+        for (const call of calls) {
+          try {
+            const callerPn = call.callerPn || (call.from?.endsWith('@lid') ? await this.socket?.signalRepository?.lidMapping?.getPNForLID(call.from) : call.from)
+            recordWhatsAppCall(db, { ...call, callerPn }, (event, payload) => this.io?.emit(event, payload))
+          } catch { console.warn('[WhatsApp/Baileys] Não foi possível registrar uma chamada.') }
         }
       })
     } catch (err) {
@@ -298,6 +409,140 @@ class WhatsAppService {
       this.broadcastStatus()
       this.scheduleReconnect()
     }
+  }
+
+  rememberOwnMessage(message) {
+    if (!message?.key?.id) return
+    this.ownMessageIds.add(message.key.id)
+    if (this.ownMessageIds.size > 1000) this.ownMessageIds.delete(this.ownMessageIds.values().next().value)
+  }
+
+  queueBaileysMessages(messages = [], options = {}) {
+    const batch = (options.historical ? [...messages].reverse() : [...messages]).sort((a, b) => Number(a.messageTimestamp || 0) - Number(b.messageTimestamp || 0))
+    // Uma intervenção humana pausa a IA imediatamente, mesmo quando um
+    // download anterior ainda está aguardando o servidor de mídia.
+    if (!options.historical && options.live !== false) for (const message of batch) {
+      if (!message.key?.fromMe || this.ownMessageIds.has(message.key.id)) continue
+      const parsed = parseWhatsAppMessage(message)
+      if (!parsed || isExternalAutomaticPacket(message, parsed)) continue
+      const lead = findWhatsAppLead(db, message.key.remoteJid, message.key.remoteJidAlt)
+      if (lead && !db.find('messages', item => item.leadId === lead.id && item.sourceMessageId === message.key.id)) db.update('leads', lead.id, { aiEnabled: false, humanAssumedAt: whatsappTimestamp(message.messageTimestamp) })
+    }
+    this.messageQueue = this.messageQueue.then(async () => {
+      for (const [leadId, count] of options.historyCounts || []) this.historyJobs.beginBatch(leadId, count, options.providerProgress, options.historyRunIds?.get(leadId))
+      for (const message of batch) {
+        const trackedLeadId = options.messageLeads?.get(message)
+        const previous = trackedLeadId && db.find('messages', item => item.leadId === trackedLeadId && item.sourceMessageId === message.key?.id)
+        const recoveryScope = options.historical || options.live === false ? this.historyRecovery.scope() : null
+        const historyImport = recoveryScope ? { ...recoveryScope, ownJids: [this.socket?.user?.id, this.socket?.user?.lid].filter(Boolean) } : null
+        try { await this.ingestBaileys(message, { ...options, historical: options.historical || !!historyImport, historyImport, deferMedia: !!historyImport }) }
+        catch (error) { this.ingress.outcome(message, 'failed'); console.warn('[WhatsApp/Baileys] Falha ao sincronizar uma mensagem:', error?.name || 'erro') }
+        finally { if (trackedLeadId && options.historyCounts?.has(trackedLeadId)) this.historyJobs.processed(trackedLeadId, !previous && !!db.find('messages', item => item.leadId === trackedLeadId && item.sourceMessageId === message.key?.id), options.historyRunIds?.get(trackedLeadId)) }
+      }
+      const recovery = this.historyRecovery.scope()
+      if (recovery) this.historyRecovery.counts(db.filter('leads', lead => lead.historyRecoveryId === recovery.id).length, db.filter('messages', message => message.historyRecoveryId === recovery.id).length)
+      for (const [leadId] of options.historyCounts || []) this.historyJobs.finishBatch(leadId, options.historyRunIds?.get(leadId))
+    }).catch(() => {})
+    return this.messageQueue
+  }
+
+  async downloadBaileysMedia(message) {
+    if (!this.socket || this.status !== 'connected') throw new Error('WhatsApp desconectado')
+    const { downloadMediaMessage } = await import('@whiskeysockets/baileys')
+    return downloadMediaMessage(message, 'buffer', { options: { timeout: 20000 } }, {
+      logger: pino({ level: 'silent' }),
+      reuploadRequest: this.socket.updateMediaMessage.bind(this.socket),
+    })
+  }
+
+  async ensureMessageMedia(message) {
+    if (message.mediaBinaryFileId || message.mediaStorageKey || !message.whatsappSource) return message
+    if (this.mediaRecovery.has(message.id)) return this.mediaRecovery.get(message.id)
+    const recovering = (async () => {
+      try {
+        const source = decodeWhatsAppSource(message.whatsappSource)
+        const buffer = await this.downloadBaileysMedia(source)
+        const storage = await saveWhatsAppMedia(buffer, message.leadId, message.mediaMimeType, message.mediaFileName)
+        if (!storage) return message
+        const updated = db.update('messages', message.id, { ...storage, mediaSize: buffer.length, mediaStatus: 'available' })
+        this.io?.emit('message:updated', toClientMessage(updated))
+        return updated
+      } catch {
+        return message
+      }
+    })().finally(() => this.mediaRecovery.delete(message.id))
+    this.mediaRecovery.set(message.id, recovering)
+    return recovering
+  }
+
+  async requestHistorySync(leadId, { resume = false } = {}) {
+    const { job, started } = resume ? this.historyJobs.resume(leadId) : this.historyJobs.start(leadId)
+    await this.historyJobs.flush()
+    if (started) this.recoverKnownHistory(leadId, job.runId).catch(() => this.historyJobs.fail(leadId, job.runId))
+    return serializeHistoryJob(this.historyJobs.get(leadId) || job)
+  }
+
+  getHistoryJob(leadId) {
+    const job = this.historyJobs.get(leadId)
+    return job ? serializeHistoryJob(job) : null
+  }
+
+  async resumeInterruptedHistory(attempt) {
+    await this.historyJobs.flush()
+    for (const job of this.historyJobs.resumable()) {
+      if (attempt !== this.connectionAttempt || this.status !== 'connected') return
+      await this.requestHistorySync(job.leadId, { resume: true })
+    }
+  }
+
+  async recoverKnownHistory(leadId, runId) {
+    if (!this.socket || this.status !== 'connected') { this.historyJobs.pauseAll('whatsapp_disconnected'); return { requested: 0 } }
+    if (!leadId && this.historyRequested) return { requested: 0 }
+    const leads = db.get('leads').filter(lead => !leadId || lead.id === leadId)
+      .sort((a, b) => Date.parse(b.lastInteraction || 0) - Date.parse(a.lastInteraction || 0)).slice(0, 10)
+    let requested = 0
+    for (const lead of leads) {
+      // Não reiniciar automaticamente solicitações concluídas ou expiradas.
+      if (!leadId && this.historyJobs.get(lead.id)) continue
+      const messages = db.filter('messages', message => message.leadId === lead.id && message.sourceMessageId)
+        .sort((a, b) => Date.parse(b.timestamp) - Date.parse(a.timestamp))
+      const latest = messages[0]
+      const savedAnchor = this.historyJobs.get(lead.id)?.anchor
+      if ((!latest || !lead.whatsappJid) && !savedAnchor) {
+        if (leadId) this.historyJobs.unavailable(lead.id, runId)
+        continue
+      }
+      if (!leadId) this.historyJobs.start(lead.id)
+      const jobRunId = runId || this.historyJobs.get(lead.id)?.runId
+      const anchor = savedAnchor || { key: latest.whatsappKey || { remoteJid: lead.whatsappJid, id: latest.sourceMessageId, fromMe: latest.from !== 'client' }, timestamp: Date.parse(latest.timestamp) }
+      try {
+        this.historyJobs.setAnchor(lead.id, anchor, jobRunId)
+        await this.historyJobs.flush()
+        const currentJob = this.historyJobs.get(lead.id)
+        if (currentJob?.runId !== jobRunId || currentJob.phase !== 'requesting' || this.status !== 'connected') continue
+        const requestId = await this.socket.fetchMessageHistory(100, anchor.key, anchor.timestamp)
+        if (requestId) {
+          this.historyRequests.set(requestId, { leadId: lead.id, runId: jobRunId })
+          if (this.historyRequests.size > 100) this.historyRequests.delete(this.historyRequests.keys().next().value)
+        }
+        requested += 1
+        this.historyJobs.requested(lead.id, jobRunId)
+        // Os registros antigos só guardavam o ID. Solicitar a mensagem
+        // original permite recuperar a classificação e as chaves de mídia.
+        for (const missing of messages.filter(message => message.type === 'text' && message.content === '[Arquivo]').slice(0, 10)) {
+          await this.socket.requestPlaceholderResend?.(missing.whatsappKey || { remoteJid: lead.whatsappJid, id: missing.sourceMessageId, fromMe: missing.from !== 'client' })
+        }
+      } catch {
+        if (this.status !== 'connected') this.historyJobs.pauseAll('whatsapp_disconnected')
+        else this.historyJobs.fail(lead.id, jobRunId)
+        console.warn('[WhatsApp/Baileys] O telefone ainda não retornou o histórico solicitado.')
+      }
+    }
+    if (!leadId) this.historyRequested = requested > 0
+    this.historySync.requested = requested
+    this.historySync.requestedAt = new Date().toISOString()
+    console.log(`[WhatsApp/Baileys] Recuperação solicitada para ${requested} conversa(s) conhecida(s).`)
+    return { requested }
   }
 
   async downloadMetaMedia(mediaId) {
@@ -326,6 +571,7 @@ class WhatsAppService {
   }
 
   async handleIncomingMessage(rawMsg, provider = 'baileys') {
+    if (provider === 'baileys') return this.ingestBaileys(rawMsg)
     try {
       let fromPhone = ''
       let text = ''
@@ -333,90 +579,36 @@ class WhatsAppService {
       let mediaBuffer = null
       let mediaMimeType = ''
       let mediaFileName = ''
+      let contactName = ''
       let phoneJid = null
       let replyJid = null
       let remoteIdentifier = ''
 
-      if (provider === 'baileys') {
-        const remoteJid = rawMsg.key.remoteJid
-        if (!remoteJid || remoteJid.includes('@g.us')) return // Ignora grupos
-
-        // O WhatsApp atual pode entregar conversas individuais usando um LID
-        // interno em remoteJid e o número real em remoteJidAlt. Para o CRM,
-        // priorizamos sempre o PN JID e guardamos o destino correto da resposta.
-        phoneJid = [rawMsg.key.remoteJidAlt, remoteJid]
-          .find((jid) => jid?.endsWith('@s.whatsapp.net'))
-        replyJid = phoneJid || remoteJid
-        fromPhone = (phoneJid || remoteJid).split('@')[0].split(':')[0]
-        remoteIdentifier = remoteJid.split('@')[0].split(':')[0]
-
-        const sourceMessageId = rawMsg.key.id
-        if (sourceMessageId && db.find('messages', (message) => message.sourceMessageId === sourceMessageId)) return
-
-        let messageContent = rawMsg.message
-        // Baileys encapsula mensagens em wrappers de ephemeral/view-once.
-        // Desembrulhar evita perder fotos e vídeos enviados nesse formato.
-        for (let depth = 0; depth < 5; depth += 1) {
-          const nested = messageContent?.ephemeralMessage?.message
-            || messageContent?.viewOnceMessage?.message
-            || messageContent?.viewOnceMessageV2?.message
-            || messageContent?.documentWithCaptionMessage?.message
-          if (!nested) break
-          messageContent = nested
-        }
-        if (!messageContent) return
-
-        if (messageContent.conversation) {
-          text = messageContent.conversation
-        } else if (messageContent.extendedTextMessage?.text) {
-          text = messageContent.extendedTextMessage.text
-        } else {
-          const media = messageContent.imageMessage
-            ? { type: 'image', content: messageContent.imageMessage }
-            : messageContent.audioMessage
-              ? { type: 'audio', content: messageContent.audioMessage }
-              : messageContent.videoMessage
-                ? { type: 'video', content: messageContent.videoMessage }
-                : messageContent.documentMessage
-                  ? { type: 'file', content: messageContent.documentMessage }
-                  : null
-          if (media) {
-            mediaType = media.type
-            text = media.content.caption || ''
-            mediaMimeType = media.content.mimetype || (media.type === 'image' ? 'image/jpeg' : media.type === 'video' ? 'video/mp4' : '')
-            mediaFileName = media.content.fileName || media.content.title || ''
-            try {
-              const { downloadMediaMessage } = await import('@whiskeysockets/baileys')
-              mediaBuffer = await downloadMediaMessage(rawMsg, 'buffer', {})
-            } catch (error) {
-              console.warn('[WhatsApp/Baileys] Falha ao baixar mídia recebida:', error.message)
-            }
-          }
-        }
-      } else {
-        // Meta Provider
-        fromPhone = rawMsg.from
-        if (rawMsg.type === 'text') {
-          text = rawMsg.text?.body || ''
-        } else if (rawMsg.type === 'image') {
-          mediaType = 'image'
-          text = rawMsg.image?.caption || ''
-        } else if (rawMsg.type === 'audio') {
-          mediaType = 'audio'
-        } else if (rawMsg.type === 'video') {
-          mediaType = 'video'
-          text = rawMsg.video?.caption || ''
-        } else if (rawMsg.type === 'document') {
-          mediaType = 'file'
-          text = rawMsg.document?.caption || ''
-        }
-        if (['image', 'audio', 'video', 'file'].includes(mediaType)) {
-          const mediaObject = rawMsg[mediaType === 'file' ? 'document' : mediaType] || {}
-          const downloaded = await this.downloadMetaMedia(mediaObject.id)
-          mediaBuffer = downloaded.buffer
-          mediaMimeType = downloaded.mimeType || mediaObject.mime_type || ''
-          mediaFileName = downloaded.fileName || mediaObject.filename || ''
-        }
+      // Meta Provider
+      contactName = String(rawMsg.contactName || '').trim().slice(0, 120)
+      fromPhone = rawMsg.from
+      if (rawMsg.type === 'text') {
+        text = rawMsg.text?.body || ''
+      } else if (rawMsg.type === 'image') {
+        mediaType = 'image'
+        text = rawMsg.image?.caption || ''
+      } else if (rawMsg.type === 'audio') {
+        mediaType = 'audio'
+      } else if (rawMsg.type === 'video') {
+        mediaType = 'video'
+        text = rawMsg.video?.caption || ''
+      } else if (rawMsg.type === 'document') {
+        mediaType = 'file'
+        text = rawMsg.document?.caption || ''
+      } else if (rawMsg.type === 'sticker') {
+        mediaType = 'sticker'
+      }
+      if (['image', 'audio', 'video', 'file', 'sticker'].includes(mediaType)) {
+        const mediaObject = rawMsg[mediaType === 'file' ? 'document' : mediaType] || {}
+        const downloaded = await this.downloadMetaMedia(mediaObject.id)
+        mediaBuffer = downloaded.buffer
+        mediaMimeType = downloaded.mimeType || mediaObject.mime_type || ''
+        mediaFileName = downloaded.fileName || mediaObject.filename || ''
       }
 
       if (!fromPhone) return
@@ -453,7 +645,7 @@ class WhatsAppService {
       if (!lead) {
         lead = db.insert('leads', {
           id: `lead_${Date.now()}`,
-          name: `Cliente WhatsApp (+${fromPhone})`,
+          name: contactName || 'Contato WhatsApp',
           phone: fromPhone,
           email: '',
           stage: 'novo_lead',
@@ -476,7 +668,11 @@ class WhatsAppService {
           createdAt: new Date().toISOString(),
         })
       } else {
+        const existingName = String(lead.name || '').trim()
+        const phoneOnlyName = /^[+\d\s().-]+$/.test(existingName) && existingName.replace(/\D/g, '').length >= 8
+        const genericContactName = !existingName || phoneOnlyName || /^(?:cliente whatsapp\s*\(|contato whatsapp$)/i.test(existingName)
         const contactUpdate = {
+          ...(contactName && genericContactName ? { name: contactName } : {}),
           lastInteraction: new Date().toISOString(),
           // Abre (ou renova) a janela de 24h da Meta e reabre a conversa se
           // ela estava encerrada: cliente que volta a falar nao fica escondido.
@@ -493,10 +689,10 @@ class WhatsAppService {
       }
 
       // Save message in DB
-      const mediaStorageKey = mediaBuffer
-        ? saveWhatsAppMedia(mediaBuffer, lead.id, mediaMimeType, mediaFileName)
+      const mediaStorage = mediaBuffer
+        ? await saveWhatsAppMedia(mediaBuffer, lead.id, mediaMimeType, mediaFileName)
         : null
-      const mediaLabel = mediaType === 'image' ? '[Imagem]' : mediaType === 'audio' ? '[Áudio]' : mediaType === 'video' ? '[Vídeo]' : '[Arquivo]'
+      const mediaLabel = mediaType === 'image' ? '[Imagem]' : mediaType === 'audio' ? '[Áudio]' : mediaType === 'video' ? '[Vídeo]' : mediaType === 'sticker' ? '[Figurinha]' : '[Arquivo]'
       const savedMsg = db.insert('messages', {
         id: `msg_${Date.now()}`,
         sourceMessageId: provider === 'baileys' ? rawMsg.key.id : rawMsg.id,
@@ -504,7 +700,7 @@ class WhatsAppService {
         from: 'client',
         type: mediaType,
         content: text || mediaLabel,
-        ...(mediaStorageKey ? { mediaStorageKey, mediaMimeType, mediaFileName: String(mediaFileName || mediaLabel.slice(1, -1)).slice(0, 180), mediaSize: mediaBuffer.length } : {}),
+        ...(mediaStorage ? { ...mediaStorage, mediaMimeType, mediaFileName: String(mediaFileName || mediaLabel.slice(1, -1)).slice(0, 180), mediaSize: mediaBuffer.length } : {}),
         timestamp: new Date().toISOString(),
       })
 
@@ -549,95 +745,22 @@ class WhatsAppService {
   }
 
   async respondWithAi(lead, userMsg, mediaBuffer = null) {
-    if (this.aiBusyLeads.has(lead.id)) return
-    this.aiBusyLeads.add(lead.id)
-    try {
-      // Avisos do sistema ("conversa encerrada") nao sao fala de ninguem.
-      const history = db.filter('messages', (m) => m.leadId === lead.id && m.from !== 'system').slice(-10)
-
-      const systemInstruction = buildQualificationSystemPrompt()
-      let aiResult
-      if (userMsg.type === 'image' && mediaBuffer) {
-        aiResult = await analyzeImage(mediaBuffer, userMsg.mediaMimeType || 'image/jpeg', userMsg.content, systemInstruction)
-      } else if (userMsg.type === 'audio' && mediaBuffer) {
-        aiResult = await transcribeAndUnderstandAudio(mediaBuffer, userMsg.mediaMimeType || 'audio/ogg', systemInstruction)
-      } else {
-        aiResult = await runGeminiWithFallback({
-          prompt: userMsg.content,
-          history: history.slice(0, -1),
-          systemInstruction,
-        })
-      }
-
-      const { text: replyText, qualificationComplete } = cleanAssistantReply(aiResult.text)
-      if (!replyText) return
-
-      // Salva mensagem da IA no banco
-      const aiMsg = db.insert('messages', {
-        id: `msg_${Date.now()}`,
-        leadId: lead.id,
-        from: 'ai',
-        type: 'text',
-        modelUsed: aiResult.modelUsed,
-        content: replyText,
-        deliveryStatus: 'sending',
-        timestamp: new Date().toISOString(),
-      })
-
-      if (this.io) {
-        this.io.emit('message:new', aiMsg)
-      }
-
-      // Envia de volta para o cliente via WhatsApp
-      const delivered = await this.sendMessage(lead.phone, replyText)
-      db.update('messages', aiMsg.id, { deliveryStatus: delivered ? 'sent' : 'pending_connection' })
-
-      // Atualiza o estágio para 'qualificacao_ia' e gera resumo atualizado
-      const updatedHistory = db.filter('messages', (m) => m.leadId === lead.id)
-      const summary = await generateCustomerSummary(lead, updatedHistory)
-
-      const users = db.get('users')
-      const settings = db.getSettings()
-      const assignee = users.find((user) => user.id === lead.assignedTo)
-        || users.find((user) => user.id === settings.defaultLeadAssigneeId)
-        || users.find((user) => user.role === 'admin')
-      const updatedLead = db.update('leads', lead.id, {
-        stage: lead.stage === 'novo_lead' ? 'qualificacao_ia' : lead.stage,
-        aiSummary: summary,
-        lastInteraction: new Date().toISOString(),
-        ...(assignee && !lead.assignedTo ? { assignedTo: assignee.id } : {}),
-        ...(qualificationComplete ? {
-          aiEnabled: false,
-          qualificationCompletedAt: new Date().toISOString(),
-          ...(assignee ? { assignedTo: assignee.id } : {}),
-        } : {}),
-      })
-
-      if (this.io) {
-        this.io.emit('lead:updated', updatedLead)
-      }
-
-      if (qualificationComplete && assignee) {
-        const notification = db.insert('notifications', {
-          id: `ntf_${randomUUID()}`,
-          recipientId: assignee.id,
-          leadId: lead.id,
-          kind: 'lead_qualified',
-          title: 'Lead qualificado pela IA',
-          message: `${lead.name} concluiu a qualificação e aguarda o atendimento comercial.`,
-          createdAt: new Date().toISOString(),
-          readAt: null,
-        })
-        this.io?.emit('notification:new', { id: notification.id, recipientId: notification.recipientId })
-      }
-    } catch (err) {
-      console.error('[WhatsApp/AI] Erro ao responder com IA:', err)
-    } finally {
-      this.aiBusyLeads.delete(lead.id)
-    }
+    if (!this.yriaResponder) this.yriaResponder = createYriaResponder({
+        database: db, evaluate: evaluateYria, automationService: automaticContracts,
+      send: (phone, text, options) => this.sendMessage(phone, text, options),
+      emit: (name, payload) => this.io?.emit(name, payload),
+      push: deliverPushToUser,
+    })
+    try { await this.yriaResponder(lead, userMsg, mediaBuffer) }
+    catch (error) { console.error('[YRIA] Atendimento interrompido com segurança:', error?.name || 'erro') }
   }
 
-  async sendMessage(phone, messageText) {
+  cancelAiReply(leadId) {
+    this.yriaResponder?.cancel(leadId)
+  }
+
+  async sendMessage(phone, messageText, { isAllowed } = {}) {
+    if (isAllowed && !isAllowed()) return false
     const target = String(phone || '')
     const cleanPhone = target.replace(/\D/g, '')
     console.log(`[WhatsApp] Enviando mensagem para ${cleanPhone} via ${this.activeProvider}: ${messageText.slice(0, 60)}...`)
@@ -651,7 +774,9 @@ class WhatsAppService {
       const jid = target.includes('@')
         ? target
         : savedLead?.whatsappJid || `${cleanPhone}@s.whatsapp.net`
-      await this.socket.sendMessage(jid, { text: messageText })
+      if (isAllowed && !isAllowed()) return false
+      const sent = await this.socket.sendMessage(jid, { text: messageText })
+      this.rememberOwnMessage(sent)
       return true
     } else {
       // Meta Cloud API
@@ -664,6 +789,7 @@ class WhatsAppService {
       }
 
       try {
+        if (isAllowed && !isAllowed()) return false
         await axios.post(
           `https://graph.facebook.com/v21.0/${phoneNumberId}/messages`,
           {
@@ -688,31 +814,99 @@ class WhatsAppService {
     }
   }
 
-  async sendMedia(phone, buffer, mimetype, filename, caption = '') {
+  async sendMedia(phone, buffer, mimetype, filename, caption = '', options = {}) {
     const target = String(phone || '')
     const cleanPhone = target.replace(/\D/g, '')
-    if (this.activeProvider !== 'baileys') {
-      throw new Error('O envio de anexos pelo painel está disponível no Baileys. Configure a mídia pela Meta Cloud API.')
+    if (!buffer?.length || !mimetype) throw new Error('Arquivo inválido.')
+
+    if (this.activeProvider === 'meta') {
+      const { accessToken, phoneNumberId } = db.getSettings().metaConfig || {}
+      if (!accessToken || !phoneNumberId) throw new Error('Configure o token e o Phone Number ID da Meta em Ajustes.')
+
+      const mediaType = mimetype.startsWith('image/')
+        ? 'image'
+        : mimetype.startsWith('video/')
+          ? 'video'
+          : mimetype.startsWith('audio/')
+            ? 'audio'
+            : 'document'
+      if (mediaType === 'image' && buffer.length > 5 * 1024 * 1024) {
+        throw new Error('A API oficial da Meta aceita imagens de até 5 MB.')
+      }
+
+      const form = new FormData()
+      form.append('messaging_product', 'whatsapp')
+      form.append('file', new Blob([buffer], { type: mimetype }), String(filename || 'anexo').slice(0, 180))
+      const graphRoot = `https://graph.facebook.com/v21.0/${encodeURIComponent(phoneNumberId)}`
+      const uploadResponse = await fetch(`${graphRoot}/media`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${accessToken}` },
+        body: form,
+        signal: AbortSignal.timeout(30_000),
+      })
+      const uploadResult = await uploadResponse.json().catch(() => ({}))
+      if (!uploadResponse.ok || !uploadResult.id) {
+        const detail = uploadResult?.error?.error_user_msg || uploadResult?.error?.error_data?.details || uploadResult?.error?.message
+        throw new Error(String(detail || 'A Meta não aceitou o arquivo. Confira o formato e o tamanho.').slice(0, 280))
+      }
+
+      const mediaObject = { id: uploadResult.id }
+      if (caption.trim() && ['image', 'video', 'document'].includes(mediaType)) mediaObject.caption = caption.trim().slice(0, 1024)
+      if (mediaType === 'document') mediaObject.filename = String(filename || 'anexo').slice(0, 180)
+      const payload = {
+        messaging_product: 'whatsapp',
+        recipient_type: 'individual',
+        to: cleanPhone,
+        type: mediaType,
+        [mediaType]: mediaObject,
+      }
+      try {
+        await axios.post(`${graphRoot}/messages`, payload, {
+          headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+          timeout: 30_000,
+        })
+        if (mediaType === 'audio' && caption.trim()) {
+          await axios.post(`${graphRoot}/messages`, {
+            messaging_product: 'whatsapp',
+            recipient_type: 'individual',
+            to: cleanPhone,
+            type: 'text',
+            text: { body: caption.trim().slice(0, 1024) },
+          }, {
+            headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+            timeout: 30_000,
+          })
+        }
+        return true
+      } catch (error) {
+        const detail = error?.response?.data?.error?.error_user_msg
+          || error?.response?.data?.error?.error_data?.details
+          || error?.response?.data?.error?.message
+        throw new Error(String(detail || 'A Meta não conseguiu entregar este anexo. Confira a conexão e tente novamente.').slice(0, 280))
+      }
     }
+
     if (!this.socket || this.status !== 'connected') {
       throw new Error('WhatsApp não está conectado. Conecte o Baileys antes de enviar um anexo.')
     }
-    if (!buffer?.length || !mimetype) throw new Error('Arquivo inválido.')
 
     const savedLead = db.find('leads', (lead) => String(lead.phone || '').replace(/\D/g, '') === cleanPhone)
     const jid = target.includes('@')
       ? target
       : savedLead?.whatsappJid || `${cleanPhone}@s.whatsapp.net`
 
-    const payload = mimetype.startsWith('image/')
-      ? { image: buffer, caption }
+    const payload = options.sticker
+      ? { sticker: buffer }
+      : mimetype.startsWith('image/')
+        ? { image: buffer, caption }
       : mimetype.startsWith('audio/')
-        ? { audio: buffer, mimetype, ptt: true }
+        ? { audio: buffer, mimetype: mimetype === 'audio/ogg' ? 'audio/ogg; codecs=opus' : mimetype, ptt: true }
         : mimetype.startsWith('video/')
-          ? { video: buffer, mimetype, caption }
+          ? { video: buffer, mimetype, caption, ...(options.gifPlayback ? { gifPlayback: true } : {}) }
         : { document: buffer, mimetype, fileName: filename, caption }
 
-    await this.socket.sendMessage(jid, payload)
+    const sent = await this.socket.sendMessage(jid, payload)
+    this.rememberOwnMessage(sent)
     return true
   }
 
@@ -747,6 +941,7 @@ class WhatsAppService {
       const code = await socket.requestPairingCode(cleanPhone)
       if (!code) throw new Error('O WhatsApp não retornou um código de pareamento.')
       this.pairingCode = code
+      this.pairingProtectionUntil = Date.now() + 60000
       this.qrCode = null
       this.qrGeneratedAt = null
       this.lastError = null
@@ -770,19 +965,15 @@ class WhatsAppService {
 
   broadcastStatus() {
     if (!this.io) return
-    this.io.emit('whatsapp:status', {
-      provider: this.activeProvider,
-      status: this.status,
-      connectedNumber: this.connectedNumber,
-      qrCode: this.qrCode,
-      qrGeneratedAt: this.qrGeneratedAt,
-      pairingCode: this.pairingCode,
-      lastError: this.lastError,
-    })
+    this.io.emit('whatsapp:status', this.getStatus())
   }
 
   getStatus() {
     return {
+      instanceId: this.instanceId,
+      snapshotAt: new Date().toISOString(),
+      diagnostics: this.ingress.snapshot(),
+      historySync: { ...this.historySync, conversations: Object.fromEntries(Object.entries(this.historyJobs.all()).map(([leadId, job]) => [leadId, serializeHistoryJob(job)])) },
       provider: this.activeProvider,
       status: this.status,
       connectedNumber: this.connectedNumber,

@@ -1,30 +1,39 @@
 import React, { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import {
   LayoutDashboard,
+  BarChart3,
   KanbanSquare,
   MessageSquare,
-  CalendarDays,
+  Bot,
   Bed,
+  Camera,
+  BellRing,
   FileSignature,
   DollarSign,
   BookOpen,
+  UsersRound,
   Settings,
   X,
-  UsersRound,
+  ChevronLeft,
+  ChevronRight,
 } from 'lucide-react'
 import { useIsMobile } from '../hooks/useMediaQuery'
+import { useAuth } from '../contexts/AuthContext'
 
 export type TabType =
   | 'dashboard'
+  | 'insights'
   | 'kanban'
   | 'whatsapp'
-  | 'calendar'
-  | 'clients'
   | 'equipments'
   | 'contracts'
+  | 'clients'
+  | 'inspections'
+  | 'client-operations'
   | 'finance'
   | 'blog'
   | 'settings'
+  | 'yria'
 
 /** O que o menu mostra ao lado de cada item, vindo dos dados reais. */
 export interface SidebarMetrics {
@@ -58,6 +67,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onCloseMobile,
 }) => {
   const isMobile = useIsMobile()
+  const { user } = useAuth()
+  const [collapsed, setCollapsed] = useState(false)
 
   // O menu ja conta onde esta o problema antes de voce clicar: a metrica mora
   // dentro do proprio item, em vez de um numero solto.
@@ -69,6 +80,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
       label: 'Operação',
       items: [
         { id: 'dashboard', label: 'Visão geral', icon: LayoutDashboard },
+        ...(user?.role === 'admin' ? [{ id: 'insights' as TabType, label: 'Insights e Ads', icon: BarChart3 }] : []),
         {
           id: 'kanban',
           label: 'Funil',
@@ -81,8 +93,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
           icon: MessageSquare,
           note: metrics.conversations ? `${metrics.conversations}` : undefined,
         },
-        { id: 'calendar', label: 'Agenda', icon: CalendarDays },
-        { id: 'clients', label: 'Clientes', icon: UsersRound },
         {
           id: 'equipments',
           label: 'Equipamentos',
@@ -96,6 +106,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
           note: metrics.contractsPending ? `${metrics.contractsPending} a assinar` : undefined,
           tone: 'wait',
         },
+        { id: 'clients', label: 'Clientes', icon: UsersRound },
+        { id: 'inspections', label: 'Vistorias', icon: Camera },
+        ...(user?.role !== 'tecnico' ? [{ id: 'client-operations' as const, label: 'Operação e alertas', icon: BellRing }] : []),
         {
           id: 'finance',
           label: 'Financeiro',
@@ -109,6 +122,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
       label: 'Conteúdo e ajustes',
       items: [
         { id: 'blog', label: 'Blog', icon: BookOpen },
+        { id: 'yria', label: 'YRIA · laboratório', icon: Bot },
         { id: 'settings', label: 'Configurações', icon: Settings },
       ],
     },
@@ -137,7 +151,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
       cancelAnimationFrame(frame)
       window.removeEventListener('resize', measure)
     }
-  }, [activeTab, isMobile, mobileOpen])
+  }, [activeTab, collapsed, isMobile, mobileOpen])
 
   const handleSelectTab = (tab: TabType) => {
     onTabChange(tab)
@@ -162,7 +176,23 @@ export const Sidebar: React.FC<SidebarProps> = ({
   }
 
   const content = (
-    <div className="screen h-full p-3">
+    <div className={`screen h-full ${!isMobile && collapsed ? 'p-2' : 'p-3'}`}>
+      {!isMobile && (
+        <div className={`flex pb-2 ${collapsed ? 'justify-center' : 'justify-end'}`}>
+          <button
+            type="button"
+            onClick={() => setCollapsed((current) => !current)}
+            aria-label={collapsed ? 'Expandir barra lateral' : 'Recolher barra lateral'}
+            aria-controls="primary-navigation"
+            aria-expanded={!collapsed}
+            title={collapsed ? 'Expandir barra lateral' : 'Recolher barra lateral'}
+            className="grid h-9 w-9 shrink-0 place-items-center rounded-[10px] transition-colors hover:bg-blue-100/70 dark:hover:bg-slate-800"
+            style={{ color: 'var(--ink-muted)' }}
+          >
+            {collapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
+          </button>
+        </div>
+      )}
       {isMobile && onCloseMobile && (
         <div className="screen-bar flex items-center justify-between px-2 pb-2">
           <p className="serif text-[20px]" style={{ color: 'var(--ink)' }}>
@@ -179,7 +209,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         </div>
       )}
 
-      <nav className="screen-scroll relative" aria-label="Navegação principal" ref={navRef}>
+      <nav id="primary-navigation" className="screen-scroll relative" aria-label="Navegação principal" ref={navRef}>
         <span
           className={`nav-glider ${glider.ready ? 'is-ready' : ''}`}
           style={{ transform: `translateY(${glider.y}px)`, height: glider.h }}
@@ -188,7 +218,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         {groups.map((group) => (
           <div key={group.label} className="mb-4">
             <p
-              className="px-3 pb-2 pt-2 text-[10px] font-extrabold uppercase tracking-[0.13em]"
+              className={`${collapsed ? 'sr-only' : 'px-3 pb-2 pt-2 text-[10px] font-extrabold uppercase tracking-[0.13em]'}`}
               style={{ color: 'var(--ink-faint)' }}
             >
               {group.label}
@@ -202,12 +232,14 @@ export const Sidebar: React.FC<SidebarProps> = ({
                     <button
                       onClick={() => handleSelectTab(item.id)}
                       aria-current={active ? 'page' : undefined}
-                      className="nav-item flex w-full items-center gap-3 rounded-[12px] px-3 py-2.5 text-left text-[13.5px] font-bold"
+                      aria-label={item.label}
+                      title={collapsed ? item.label : undefined}
+                      className={`nav-item flex min-h-11 w-full items-center rounded-[12px] py-2.5 text-left text-[13.5px] font-bold ${collapsed ? 'justify-center px-0' : 'gap-3 px-3'}`}
                       data-active={active}
                     >
                       <Icon className="h-[18px] w-[18px] shrink-0" aria-hidden="true" />
-                      <span className="min-w-0 flex-1 truncate">{item.label}</span>
-                      {item.note && (
+                      <span className={`${collapsed ? 'sr-only' : 'min-w-0 flex-1 truncate'}`}>{item.label}</span>
+                      {!collapsed && item.note && (
                         <span
                           className="tap-exempt tnum shrink-0 rounded-full px-2 py-0.5 text-[10.5px] font-extrabold"
                           style={noteStyle(item.tone, active)}
@@ -224,14 +256,20 @@ export const Sidebar: React.FC<SidebarProps> = ({
         ))}
       </nav>
 
-      <div
-        className="screen-bar mt-2 flex items-center gap-2 rounded-[12px] px-3 py-2.5 text-[11px] font-bold"
-        style={{ background: 'var(--surface-raised)', color: 'var(--ink-muted)', border: '1px solid var(--border-subtle)' }}
-      >
-        <span className="h-2 w-2 rounded-full" style={{ background: 'var(--ok)' }} />
-        Operação ativa
-        <span className="plus ml-auto text-[11px]" style={{ color: 'var(--yr-500)' }} aria-hidden="true" />
-      </div>
+      {collapsed && !isMobile ? (
+        <div className="screen-bar mt-2 flex justify-center py-3" title="Operação ativa" aria-label="Operação ativa">
+          <span className="h-2 w-2 rounded-full" style={{ background: 'var(--ok)' }} />
+        </div>
+      ) : (
+        <div
+          className="screen-bar mt-2 flex items-center gap-2 rounded-[12px] px-3 py-2.5 text-[11px] font-bold"
+          style={{ background: 'var(--surface-raised)', color: 'var(--ink-muted)', border: '1px solid var(--border-subtle)' }}
+        >
+          <span className="h-2 w-2 rounded-full" style={{ background: 'var(--ok)' }} />
+          Operação ativa
+          <span className="plus ml-auto text-[11px]" style={{ color: 'var(--yr-500)' }} aria-hidden="true" />
+        </div>
+      )}
     </div>
   )
 
@@ -257,7 +295,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
   return (
     <aside
-      className="flex w-[264px] shrink-0 flex-col"
+      className={`flex ${collapsed ? 'w-[68px]' : 'w-[264px]'} shrink-0 flex-col overflow-hidden transition-[width] duration-200 ease-out`}
       style={{ background: 'var(--surface-sunken)', borderRight: '1px solid var(--border-subtle)' }}
     >
       {content}

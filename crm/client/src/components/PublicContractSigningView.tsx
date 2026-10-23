@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { CheckCircle2, FileSignature, LoaderCircle, ShieldCheck, Trash2, XCircle } from 'lucide-react'
 import { Contract } from '../types'
+import { freightAmounts } from '../lib/freight'
 
 interface PublicContractSigningViewProps {
   token: string
@@ -108,6 +109,7 @@ export const PublicContractSigningView: React.FC<PublicContractSigningViewProps>
         body: JSON.stringify({
           signatureDataUrl: canvasRef.current?.toDataURL('image/png'),
           signerName: signerName.trim(),
+          accepted,
         }),
       })
       const data = await response.json().catch(() => null)
@@ -143,6 +145,8 @@ export const PublicContractSigningView: React.FC<PublicContractSigningViewProps>
   if (!contract) return null
 
   const isSigned = contract.status === 'assinado'
+  const freight = freightAmounts(contract)
+  const pickupCharge = contract.freightBillingVersion === 3 ? contract.billingSchedule?.find(charge => charge.kind === 'frete_retirada') : null
 
   return (
     <div className="min-h-screen bg-[#edf3f8] text-slate-900">
@@ -180,7 +184,14 @@ export const PublicContractSigningView: React.FC<PublicContractSigningViewProps>
               <div className="flex justify-between gap-4 border-b border-slate-100 pb-2"><dt className="text-slate-500">Contratante</dt><dd className="text-right font-semibold">{contract.clientName}</dd></div>
               <div className="flex justify-between gap-4 border-b border-slate-100 pb-2"><dt className="text-slate-500">Equipamento</dt><dd className="text-right font-semibold">{contract.equipmentNames}</dd></div>
               <div className="flex justify-between gap-4 border-b border-slate-100 pb-2"><dt className="text-slate-500">Vigência</dt><dd className="text-right font-semibold">{formatDate(contract.startDate)} a {formatDate(contract.endDate)}</dd></div>
-              <div className="flex justify-between gap-4"><dt className="text-slate-500">Valor</dt><dd className="text-right font-bold text-emerald-600">{formatCurrency(contract.monthlyValue)}</dd></div>
+              <div className="flex justify-between gap-4"><dt className="text-slate-500">{contract.type==='locacao'?'Mensalidade':'Equipamento(s)'}</dt><dd className="text-right font-bold text-emerald-600">{formatCurrency(contract.monthlyValue)}</dd></div>
+              {contract.oneTimePurchaseTotal ? <div className="flex justify-between gap-4"><dt className="text-slate-500">Acessórios em compra (uma vez)</dt><dd className="text-right font-semibold">{formatCurrency(contract.oneTimePurchaseTotal)}</dd></div> : null}
+              {contract.freightQuote || contract.deliveryFreight != null ? <><div className="flex justify-between gap-4"><dt className="text-slate-500">Frete de entrega (ida)</dt><dd className="text-right">{formatCurrency(freight.delivery)}</dd></div>{contract.type === 'locacao' ? <div className="flex justify-between gap-4"><dt className="text-slate-500">Frete de retirada (volta)</dt><dd className="text-right">{formatCurrency(freight.pickup)}</dd></div> : null}</> : null}
+              {contract.automatic&&contract.quoteSnapshot?<div className="flex justify-between gap-4 border-t border-slate-100 pt-2"><dt className="text-slate-500">Total previsto{contract.rentalMonths?' · '+contract.rentalMonths+' meses':''}</dt><dd className="text-right font-bold">{formatCurrency(contract.quoteSnapshot.totalCents/100)}</dd></div>:null}
+              {contract.itemDetailsVersion === 1 || (contract.freightBillingVersion || 0) >= 2 ? <div className="flex justify-between gap-4 border-t border-slate-100 pt-2"><dt className="text-slate-500">Primeira cobrança</dt><dd className="text-right font-bold">{formatCurrency(contract.billingSchedule?.[0]?.amount ?? contract.monthlyValue + (contract.oneTimePurchaseTotal || 0) + freight.delivery + ((contract.freightBillingVersion || 0) >= 2 ? 0 : freight.pickup))}</dd></div> : null}
+              {contract.freightBillingVersion === 2 && contract.billingSchedule?.[1] ? <div className="flex justify-between gap-4 border-t border-slate-100 pt-2"><dt className="text-slate-500">Segunda cobrança{contract.billingSchedule[1].pickupCents > 0 ? ' (com frete de volta)' : ''}<span className="block text-xs">{formatDate(contract.billingSchedule[1].dueDate)}</span></dt><dd className="text-right font-bold">{formatCurrency(contract.billingSchedule[1].amount)}</dd></div> : null}
+              {contract.freightBillingVersion === 3 ? (contract.billingSchedule || []).filter(charge => charge.kind === 'mensalidade').map(charge => <div key={charge.installment} className="flex justify-between gap-4 border-t border-slate-100 pt-2"><dt className="text-slate-500">Mensalidade {charge.installment} (sem frete)<span className="block text-xs">{formatDate(charge.dueDate)}</span></dt><dd className="text-right font-bold">{formatCurrency(charge.amount)}</dd></div>) : null}
+              {pickupCharge ? <div className="flex justify-between gap-4 border-t border-slate-100 pt-2"><dt className="text-slate-500">Retirada — cobrança única, não mensal<span className="block text-xs">Vencimento {formatDate(pickupCharge.dueDate)}</span></dt><dd className="text-right font-bold">{formatCurrency(pickupCharge.amount)}</dd></div> : null}
             </dl>
           </div>
 

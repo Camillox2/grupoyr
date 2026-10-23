@@ -5,13 +5,37 @@ import path from 'node:path'
 import fs from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { randomUUID, createHmac, timingSafeEqual } from 'node:crypto'
+import { normalizeCalendarEvent, normalizeContractExpense } from './operations.js'
+import { registerOperationsRoutes } from './operationsRoutes.js'
+import { generateGeminiRetentionInsights, registerRetentionInsightRoute } from './retentionInsights.js'
 import { Server } from 'socket.io'
 import cors from 'cors'
 import multer from 'multer'
 import { db } from './db.js'
+import { evaluateYria } from './yriaService.js'
+import { qualificationSummary, initialState, getYriaConfiguration } from './yriaCore.js'
+import { rebuildLeadQualification } from './yriaLeadFacts.js'
+import { registerYriaRoutes } from './yriaRoutes.js'
+import { registerGoogleModelRoutes } from './googleModels.js'
+import { registerInsightsRoutes } from './insights.js'
+import { registerCustomerRoutes } from './customerRoutes.js'
+import { registerWebsiteChat } from './websiteChat.js'
+import { registerCommercialRoutes } from './commercial.js'
+import { registerFreightApiRoutes } from './freightRoutes.js'
+import { automaticContracts,configureAutomaticContracts } from './automaticRuntime.js'
+import { registerFunnelRoutes, isInFunnel, FUNNEL_STAGES } from './funnel.js'
+import { createContractPdf, createDeliveryChecklistPdf } from './documents.js'
+import { createEmailStore, createContractEmail, registerContractEmailRoutes } from './contractEmail.js'
+import { deliverPushToUser, getPushPublicKey, pushIsConfigured, subscriptionId } from './push.js'
 import { loginUser, requireAuth } from './auth.js'
-import { whatsappService } from './whatsapp.js'
-import { runGeminiWithFallback, generateCustomerSummary, FALLBACK_MODELS } from './gemini.js'
+import { isMetaMediaTypeSupported, whatsappService } from './whatsapp.js'
+import { serializeWhatsAppMessage } from './whatsappMessages.js'
+import { createContactPhotoService } from './contactPhotos.js'
+import { registerConversationRoutes, normalizeConversationSla } from './conversationMetrics.js'
+import { repairExternalAutomationReplies } from './whatsappAutomationRepair.js'
+import { registerYriaControlRoute } from './yriaControl.js'
+import { prepareWhatsAppUpload } from './whatsappMedia.js'
+import { runGeminiWithFallback, generateStructuredQualification, FALLBACK_MODELS } from './gemini.js'
 import {
   createContract,
   signContract,
@@ -25,13 +49,30 @@ import { sanitizeLeadDetails } from './leadDetails.js'
 import { listTemplates, sendTemplate, windowState, backfillLastInbound, MetaError } from './metaTemplates.js'
 import { normalizePhone, phoneKey } from './phone.js'
 import * as siteBlog from './blog.js'
-import { registerOperationsRoutes } from './operations.js'
-import { generateGeminiRetentionInsights, registerRetentionInsightRoute } from './retentionInsights.js'
+
+process.on('uncaughtException', (err) => {
+  console.error('[Process] Exceção não capturada (evitando crash):', err?.stack || err)
+})
+process.on('unhandledRejection', (reason) => {
+  console.error('[Process] Rejeição de Promise não tratada (evitando crash):', reason?.stack || reason)
+})
 
 const app = express()
+// Links pessoais não podem entrar no cache, nos buscadores ou no referer.
+app.use(['/cliente', '/vistoria'], (_req, res, next) => {
+  res.setHeader('Cache-Control', 'private, no-store')
+  res.setHeader('Referrer-Policy', 'no-referrer')
+  res.setHeader('X-Robots-Tag', 'noindex, nofollow, noarchive')
+  next()
+})
 const server = http.createServer(app)
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const CRM_DATA_DIR = path.join(__dirname, '..', 'data')
+const contractEmail = createContractEmail({
+  store: createEmailStore(path.join(CRM_DATA_DIR, 'email')),
+  db, createPdf: createContractPdf, ensureToken: ensureSigningToken,
+  publicUrl: () => resolvePublicUrl(),
+})
 const BLOG_UPLOAD_DIR = path.join(__dirname, '..', 'data', 'uploads', 'blog')
 const LEAD_UPLOAD_DIR = path.join(__dirname, '..', 'data', 'uploads', 'leads')
 const WHATSAPP_UPLOAD_DIR = path.join(__dirname, '..', 'data', 'uploads', 'whatsapp')
@@ -56,6 +97,15 @@ const storedFilePath = (storageKey) => {
   const relative = path.relative(CRM_DATA_DIR, absolute)
   if (!relative || relative.startsWith('..') || path.isAbsolute(relative)) return null
   return absolute
+}
+
+const sendFileBuffer = (res, { data, mimeType, fileName }, download = false) => {
+  const asciiName = String(fileName || 'anexo').replace(/[\r\n"\\]/g, '_').replace(/[^\x20-\x7E]/g, '_')
+  res.setHeader('Content-Type', mimeType || 'application/octet-stream')
+  res.setHeader('X-Content-Type-Options', 'nosniff')
+  res.setHeader('Cache-Control', 'private, no-store')
+  res.setHeader('Content-Disposition', `${download ? 'attachment' : 'inline'}; filename="${asciiName}"`)
+  res.send(data)
 }
 
 const imageUpload = multer({
@@ -143,6 +193,7 @@ app.use(express.json({
   },
 }))
 app.use(express.urlencoded({ extended: true, limit: '25mb' }))
+registerContractEmailRoutes(app, { service: contractEmail, db, requireAuth })
 app.use('/uploads/blog', express.static(BLOG_UPLOAD_DIR, { maxAge: '7d', index: false }))
 
 io.on('connection', (socket) => {
@@ -154,13 +205,16 @@ io.on('connection', (socket) => {
   })
 })
 
-const serializeMessage = (message) => {
-  if (!message) return message
-  const { mediaStorageKey, ...safeMessage } = message
-  return mediaStorageKey
-    ? { ...safeMessage, mediaUrl: `/api/leads/${encodeURIComponent(message.leadId)}/messages/${encodeURIComponent(message.id)}/media` }
-    : safeMessage
-}
+const serializeMessage = serializeWhatsAppMessage
+
+app.get('/api/health', async (_req, res) => {
+  try {
+    await db.ready
+    res.json({ ok: true, database: db.storageMode, uptimeSeconds: Math.floor(process.uptime()) })
+  } catch {
+    res.status(503).json({ ok: false, database: 'unavailable' })
+  }
+})
 
 /* ==========================================================================
    AUTH ROUTES
@@ -180,7 +234,6 @@ app.get('/api/auth/me', requireAuth(), (req, res) => {
   res.json({ user: req.user })
 })
 
-registerOperationsRoutes(app, { db, requireAuth })
 registerRetentionInsightRoute(app, {
   db,
   requireAuth,
@@ -220,6 +273,7 @@ app.post('/api/whatsapp/reset-session', requireAuth(['admin']), async (_req, res
     await whatsappService.resetBaileysSession()
     res.json({ ok: true, message: 'Nova sessão iniciada. Aguarde o QR Code aparecer.' })
   } catch (err) {
+    if (err?.code === 'PAIRING_IN_PROGRESS') return res.status(409).json({ error: err.message })
     console.error('[WhatsApp/Baileys] Erro ao reiniciar sessão:', err)
     res.status(500).json({ error: 'Não foi possível reiniciar a sessão do WhatsApp.' })
   }
@@ -252,6 +306,7 @@ app.post('/api/whatsapp/send', requireAuth(), async (req, res) => {
       })
     }
 
+    db.update('leads', lead.id, { aiEnabled: false, humanAssumedAt: new Date().toISOString() })
     const success = await whatsappService.sendMessage(lead.phone, text)
 
     const savedMsg = db.insert('messages', {
@@ -285,36 +340,68 @@ app.post('/api/whatsapp/send-media', requireAuth(), whatsappMediaUpload.single('
     const lead = db.find('leads', (l) => l.id === leadId)
     if (!lead) return res.status(404).json({ error: 'Lead não encontrado' })
     if (!req.file) return res.status(400).json({ error: 'Envie uma imagem, áudio, vídeo ou documento válido de até 10 MB.' })
+    req.file = await prepareWhatsAppUpload(req.file, { provider: whatsappService.activeProvider, asSticker: req.body.asSticker === 'true' })
 
-    const mediaType = req.file.mimetype.startsWith('image/')
+    if (whatsappService.activeProvider === 'meta' && !windowState(lead).open) {
+      return res.status(409).json({ code: 'window_closed', error: 'A janela de 24h fechou. Envie um template aprovado para retomar a conversa antes de mandar anexos.' })
+    }
+    if (whatsappService.activeProvider === 'meta' && !isMetaMediaTypeSupported(req.file.mimetype)) {
+      return res.status(400).json({ error: 'A API oficial não aceita esse formato. Use JPG/PNG, MP4/3GPP, áudio AAC/M4A/MP3/AMR/OGG-Opus ou um documento compatível.' })
+    }
+    if (whatsappService.activeProvider === 'meta' && req.file.mimetype.startsWith('image/') && req.file.size > 5 * 1024 * 1024) {
+      return res.status(400).json({ error: 'A API oficial da Meta aceita imagens de até 5 MB.' })
+    }
+
+    const mediaType = req.file.mediaType || (req.file.mimetype.startsWith('image/')
       ? 'image'
       : req.file.mimetype.startsWith('audio/')
         ? 'audio'
         : req.file.mimetype.startsWith('video/')
           ? 'video'
-          : 'file'
-    const leadFolder = String(lead.id).replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 80)
-    const mediaFolder = path.join(WHATSAPP_UPLOAD_DIR, leadFolder)
-    fs.mkdirSync(mediaFolder, { recursive: true })
-    const mediaName = `${randomUUID()}${safeFileExtension(req.file.mimetype, req.file.originalname)}`
-    const mediaPath = path.join(mediaFolder, mediaName)
-    fs.writeFileSync(mediaPath, req.file.buffer)
-    const mediaStorageKey = path.relative(CRM_DATA_DIR, mediaPath)
+          : 'file')
+    const mediaBinaryFileId = `wa_${randomUUID()}`
+    let storedInNeon = false
+    try {
+      storedInNeon = await db.putBinaryFile({
+        id: mediaBinaryFileId,
+        ownerId: lead.id,
+        kind: 'whatsapp_media',
+        mimeType: req.file.mimetype,
+        fileName: String(req.file.originalname || 'anexo').slice(0, 180),
+        data: req.file.buffer,
+      })
+    } catch (error) {
+      console.warn('[Files] Não foi possível guardar a mídia no Neon; mantendo cópia local:', error?.message || error)
+    }
+    let mediaStorageKey
+    if (!storedInNeon) {
+      const leadFolder = String(lead.id).replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 80)
+      const mediaFolder = path.join(WHATSAPP_UPLOAD_DIR, leadFolder)
+      fs.mkdirSync(mediaFolder, { recursive: true })
+      const mediaName = `${randomUUID()}${safeFileExtension(req.file.mimetype, req.file.originalname)}`
+      const mediaPath = path.join(mediaFolder, mediaName)
+      fs.writeFileSync(mediaPath, req.file.buffer)
+      mediaStorageKey = path.relative(CRM_DATA_DIR, mediaPath)
+    }
 
+    db.update('leads', lead.id, { aiEnabled: false, humanAssumedAt: new Date().toISOString() })
     const delivered = await whatsappService.sendMedia(
       lead.phone,
       req.file.buffer,
       req.file.mimetype,
       req.file.originalname,
-      caption,
+      mediaType === 'sticker' ? '' : caption,
+      { sticker: mediaType === 'sticker', gifPlayback: req.file.mediaIsGif },
     )
     const savedMsg = db.insert('messages', {
       id: `msg_${Date.now()}`,
       leadId: lead.id,
       from: 'agent',
       type: mediaType,
-      content: caption || (mediaType === 'image' ? '[Imagem]' : mediaType === 'video' ? '[Vídeo]' : mediaType === 'audio' ? '[Áudio]' : `[Arquivo: ${req.file.originalname}]`),
-      mediaStorageKey,
+      content: mediaType === 'sticker' ? '[Figurinha]' : caption || (mediaType === 'image' ? '[Imagem]' : mediaType === 'video' ? '[Vídeo]' : mediaType === 'audio' ? '[Áudio]' : `[Arquivo: ${req.file.originalname}]`),
+      mediaIsGif: req.file.mediaIsGif,
+      mediaIsAnimated: req.file.mediaIsAnimated,
+      ...(storedInNeon ? { mediaBinaryFileId } : { mediaStorageKey }),
       mediaMimeType: req.file.mimetype,
       mediaFileName: String(req.file.originalname || 'anexo').slice(0, 180),
       mediaSize: req.file.size,
@@ -324,6 +411,11 @@ app.post('/api/whatsapp/send-media', requireAuth(), whatsappMediaUpload.single('
 
     db.update('leads', lead.id, { lastInteraction: new Date().toISOString() })
     io.emit('message:new', serializeMessage(savedMsg))
+    if (mediaType === 'sticker' && caption.trim()) {
+      const textDelivered = await whatsappService.sendMessage(lead.phone, caption.trim())
+      const captionMessage = db.insert('messages', { id: `msg_${randomUUID()}`, leadId: lead.id, from: 'agent', type: 'text', content: caption.trim(), deliveryStatus: textDelivered ? 'sent' : 'pending_connection', timestamp: new Date().toISOString() })
+      io.emit('message:new', serializeMessage(captionMessage))
+    }
     io.emit('lead:updated', db.find('leads', (l) => l.id === lead.id))
     res.json({ ok: true, message: serializeMessage(savedMsg), delivered })
   } catch (err) {
@@ -569,7 +661,9 @@ app.post('/api/whatsapp/webhook', async (req, res) => {
           }
           if (value.messages) {
             for (const message of value.messages) {
-              await whatsappService.handleIncomingMessage(message, 'meta')
+              const sender = String(message.from || '').replace(/\D/g, '')
+              const contactName = (value.contacts || []).find((contact) => String(contact.wa_id || '').replace(/\D/g, '') === sender)?.profile?.name
+              await whatsappService.handleIncomingMessage({ ...message, contactName }, 'meta')
             }
           }
         }
@@ -586,10 +680,17 @@ app.post('/api/whatsapp/webhook', async (req, res) => {
 /* ==========================================================================
    LEADS & KANBAN ROUTES
    ========================================================================== */
+registerCommercialRoutes(app, { database: db, requireAuth, emit: (event, value) => io.emit(event, value) })
+registerFreightApiRoutes(app,{database:db,requireAuth,emit:(event,value)=>io.emit(event,value)})
+configureAutomaticContracts((event,value)=>io.emit(event,value))
+registerFunnelRoutes(app, { database: db, requireAuth, emit: (event, value) => io.emit(event, value) })
 app.get('/api/leads', requireAuth(), (req, res) => {
   const leads = db.get('leads')
   res.json(leads)
 })
+registerConversationRoutes(app, { database: db, requireAuth, photos: createContactPhotoService({
+  getConnection: () => ({ provider: whatsappService.activeProvider, status: whatsappService.status, socket: whatsappService.socket, sessionId: whatsappService.instanceId + ':' + (whatsappService.socket?.user?.id || '') }),
+}) })
 
 app.get('/api/users', requireAuth(['admin']), (_req, res) => {
   res.json(db.get('users').map(({ id, name, email, role }) => ({ id, name, email, role })))
@@ -620,6 +721,67 @@ app.put('/api/notifications/read-all', requireAuth(), (req, res) => {
   const updated = db.filter('notifications', (item) => item.recipientId === req.user.id && !item.readAt)
     .map((item) => db.update('notifications', item.id, { readAt }))
   res.json({ ok: true, updated: updated.length })
+})
+
+app.get('/api/push/public-key', requireAuth(), (_req, res) => {
+  if (!pushIsConfigured()) return res.status(503).json({ error: 'Notificações push indisponíveis neste servidor.' })
+  res.json({ publicKey: getPushPublicKey() })
+})
+
+app.post('/api/push/subscribe', requireAuth(), async (req, res) => {
+  const subscription = req.body?.subscription
+  const endpoint = String(subscription?.endpoint || '')
+  try {
+    const parsedEndpoint = new URL(endpoint)
+    if (parsedEndpoint.protocol !== 'https:' || !subscription?.keys?.p256dh || !subscription?.keys?.auth) {
+      return res.status(400).json({ error: 'Assinatura de notificações inválida.' })
+    }
+    if (!pushIsConfigured()) return res.status(503).json({ error: 'Notificações push indisponíveis neste servidor.' })
+
+    await db.ready
+    const id = subscriptionId(endpoint)
+    const existing = db.find('pushSubscriptions', (item) => item.id === id)
+    const record = {
+      id,
+      recipientId: req.user.id,
+      subscription,
+      userAgent: String(req.headers['user-agent'] || '').slice(0, 240),
+      updatedAt: new Date().toISOString(),
+    }
+    if (existing) db.update('pushSubscriptions', id, record)
+    else db.insert('pushSubscriptions', { ...record, createdAt: record.updatedAt })
+    await db.flush()
+    res.json({ ok: true })
+  } catch (error) {
+    res.status(400).json({ error: error instanceof TypeError ? 'Endereço de assinatura inválido.' : 'Não foi possível salvar a assinatura de notificações.' })
+  }
+})
+
+app.delete('/api/push/subscribe', requireAuth(), async (req, res) => {
+  const endpoint = String(req.body?.endpoint || '')
+  if (!endpoint) return res.status(400).json({ error: 'Assinatura não informada.' })
+  await db.ready
+  const id = subscriptionId(endpoint)
+  const existing = db.find('pushSubscriptions', (item) => item.id === id && item.recipientId === req.user.id)
+  if (existing) {
+    db.delete('pushSubscriptions', id)
+    await db.flush()
+  }
+  res.json({ ok: true })
+})
+
+app.post('/api/push/test', requireAuth(), async (req, res) => {
+  await db.ready
+  const hasSubscription = db.filter('pushSubscriptions', (item) => item.recipientId === req.user.id).length > 0
+  if (!hasSubscription) return res.status(409).json({ error: 'Ative as notificações neste dispositivo antes de enviar um teste.' })
+  const result = await deliverPushToUser(req.user.id, {
+    title: 'Notificação ativada',
+    body: 'O CRM Grupo YR pode avisar você quando uma qualificação precisar de atendimento.',
+    url: '/',
+    tag: 'yr-crm-push-test',
+  })
+  if (!result.delivered) return res.status(502).json({ error: 'O navegador não confirmou a entrega do teste. Confira as permissões de notificação.' })
+  res.json({ ok: true, delivered: result.delivered })
 })
 
 app.post('/api/leads', requireAuth(), (req, res) => {
@@ -656,6 +818,9 @@ app.post('/api/leads', requireAuth(), (req, res) => {
 
 app.put('/api/leads/:id/stage', requireAuth(), (req, res) => {
   const { stage } = req.body
+  if (!FUNNEL_STAGES.includes(stage)) return res.status(400).json({ error: 'Etapa do funil inválida.' })
+  const current = db.find('leads', lead => lead.id === req.params.id)
+  if (current && !isInFunnel(current)) return res.status(409).json({ error: 'Restaure este cartão pela Lixeira antes de mudar a etapa.' })
   const updated = db.update('leads', req.params.id, { stage })
   if (!updated) return res.status(404).json({ error: 'Lead não encontrado' })
 
@@ -670,51 +835,79 @@ app.put('/api/leads/:id/details', requireAuth(), (req, res) => {
   const existing = db.find('leads', (lead) => lead.id === req.params.id)
   if (!existing) return res.status(404).json({ error: 'Lead não encontrado' })
 
-  const updated = db.update('leads', req.params.id, sanitizeLeadDetails(req.body))
-  io.emit('lead:updated', updated)
-  res.json(updated)
-})
-
-app.put('/api/leads/:id/toggle-ai', requireAuth(), (req, res) => {
-  const { enabled } = req.body
-  const updated = db.update('leads', req.params.id, { aiEnabled: enabled })
-  if (!updated) return res.status(404).json({ error: 'Lead não encontrado' })
-
-  io.emit('lead:updated', updated)
-  res.json(updated)
-})
-
-app.post('/api/leads/:id/ai-summary', requireAuth(), async (req, res) => {
-  try {
-    const lead = db.find('leads', (l) => l.id === req.params.id)
-    if (!lead) return res.status(404).json({ error: 'Lead não encontrado' })
-
-    const messages = db.filter('messages', (m) => m.leadId === lead.id)
-    const summary = await generateCustomerSummary(lead, messages)
-
-    const updated = db.update('leads', lead.id, { aiSummary: summary })
-    io.emit('lead:updated', updated)
-    res.json({ summary, lead: updated })
-  } catch (err) {
-    res.status(500).json({ error: err.message })
+  if (Object.hasOwn(req.body || {}, 'name') && (typeof req.body.name !== 'string' || req.body.name.trim().length < 2)) return res.status(400).json({ error: 'Informe o nome completo do cliente.' })
+  if (Object.hasOwn(req.body || {}, 'phone')) {
+    const requestedPhone = normalizePhone(req.body.phone)
+    if (!requestedPhone) return res.status(400).json({ error: 'Informe um telefone válido com DDD.' })
+    if (db.find('leads', other => other.id !== existing.id && phoneKey(other.phone) === phoneKey(requestedPhone))) return res.status(409).json({ error: 'Este telefone já pertence a outro contato. Confira o cadastro antes de alterar.' })
   }
+  const updated = db.update('leads', req.params.id, sanitizeLeadDetails({ ...existing, ...req.body, addressData: { ...(existing.addressData || {}), ...(req.body?.addressData || {}) } }, db.get('equipments')))
+  io.emit('lead:updated', updated)
+  res.json(updated)
+})
+
+registerYriaControlRoute(app, {
+  database: db, requireAuth,
+  cancel: leadId => whatsappService.cancelAiReply(leadId),
+  emit: (event, value) => io.emit(event, value),
+})
+
+app.post('/api/leads/:id/ai-summary', requireAuth(), (req, res) => {
+  const lead = db.find('leads', l => l.id === req.params.id)
+  if (!lead) return res.status(404).json({ error: 'Lead não encontrado' })
+  const recovered = rebuildLeadQualification(lead, db.filter('messages', m => m.leadId === lead.id), getYriaConfiguration(db.getSettings()).published.config)
+  const summary = recovered.aiSummary
+  const updated = db.update('leads', lead.id, recovered)
+  io.emit('lead:updated', updated)
+  res.json({ summary, qualification: updated.qualificationData, lead: updated })
 })
 
 app.get('/api/leads/:id/messages', requireAuth(), (req, res) => {
   const messages = db.filter('messages', (m) => m.leadId === req.params.id)
-  res.json(messages.map(serializeMessage))
+  res.json(messages.filter(message => !message.hidden).sort((a, b) => Date.parse(a.timestamp) - Date.parse(b.timestamp) || Date.parse(a.receivedAt || a.timestamp) - Date.parse(b.receivedAt || b.timestamp)).map(serializeMessage))
 })
 
-app.get('/api/leads/:id/messages/:messageId/media', requireAuth(), (req, res) => {
-  const message = db.find('messages', (item) => item.id === req.params.messageId && item.leadId === req.params.id)
-  if (!message?.mediaStorageKey) return res.status(404).json({ error: 'Mídia não encontrada' })
+app.get('/api/leads/:id/messages/sync', requireAuth(), (req, res) => {
+  if (!db.find('leads', item => item.id === req.params.id)) return res.status(404).json({ error: 'Contato não encontrado.' })
+  res.json({ sync: whatsappService.getHistoryJob(req.params.id) })
+})
+
+app.post('/api/leads/:id/messages/sync', requireAuth(), async (req, res) => {
+  const lead = db.find('leads', item => item.id === req.params.id)
+  if (!lead) return res.status(404).json({ error: 'Contato não encontrado.' })
+  if (whatsappService.activeProvider !== 'baileys' || whatsappService.status !== 'connected') return res.status(409).json({ error: 'Conecte o WhatsApp para sincronizar o histórico.' })
+  try {
+    const sync = await whatsappService.requestHistorySync(lead.id)
+    res.status(202).json({ ok: true, sync })
+  } catch { res.status(502).json({ error: 'Não foi possível solicitar o histórico ao WhatsApp.' }) }
+})
+
+app.get('/api/leads/:id/messages/:messageId/media', requireAuth(), async (req, res) => {
+  let message = db.find('messages', (item) => item.id === req.params.messageId && item.leadId === req.params.id)
+  if (message?.whatsappSource && !message.mediaStorageKey && !message.mediaBinaryFileId) message = await whatsappService.ensureMessageMedia(message)
+  if (!message?.mediaStorageKey && !message?.mediaBinaryFileId) return res.status(404).json({ error: 'Mídia não encontrada' })
+  if (message.mediaBinaryFileId) {
+    const file = await db.getBinaryFile(message.mediaBinaryFileId, { ownerId: message.leadId, kind: 'whatsapp_media' })
+    if (file) return sendFileBuffer(res, file, req.query.download === '1')
+  }
   const filePath = storedFilePath(message.mediaStorageKey)
   if (!filePath || !fs.existsSync(filePath)) return res.status(404).json({ error: 'Arquivo não encontrado' })
-  res.setHeader('Content-Type', message.mediaMimeType || 'application/octet-stream')
-  res.setHeader('X-Content-Type-Options', 'nosniff')
-  if (req.query.download === '1') return res.download(filePath, String(message.mediaFileName || 'anexo').replace(/[\r\n"\\]/g, '_'))
-  res.setHeader('Content-Disposition', 'inline')
-  res.sendFile(filePath)
+  const data = fs.readFileSync(filePath)
+  try {
+    const binaryId = message.mediaBinaryFileId || `wa_migrated_${message.id}`
+    const stored = await db.putBinaryFile({
+      id: binaryId,
+      ownerId: message.leadId,
+      kind: 'whatsapp_media',
+      mimeType: message.mediaMimeType || 'application/octet-stream',
+      fileName: message.mediaFileName || 'anexo',
+      data,
+    })
+    if (stored && !message.mediaBinaryFileId) db.update('messages', message.id, { mediaBinaryFileId: binaryId })
+  } catch (error) {
+    console.warn('[Files] Mídia legada mantida no disco local:', error?.message || error)
+  }
+  sendFileBuffer(res, { data, mimeType: message.mediaMimeType, fileName: message.mediaFileName }, req.query.download === '1')
 })
 
 app.get('/api/leads/:id/attachments', requireAuth(), (req, res) => {
@@ -722,47 +915,97 @@ app.get('/api/leads/:id/attachments', requireAuth(), (req, res) => {
   if (!lead) return res.status(404).json({ error: 'Lead não encontrado' })
   const attachments = db.filter('leadAttachments', (item) => item.leadId === lead.id)
     .sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)))
-    .map(({ storageKey, ...item }) => item)
+    .map(({ storageKey, binaryFileId, ...item }) => item)
   res.json(attachments)
 })
 
-app.post('/api/leads/:id/attachments', requireAuth(), leadAttachmentUpload.single('file'), (req, res) => {
+app.post('/api/leads/:id/attachments', requireAuth(), leadAttachmentUpload.single('file'), async (req, res) => {
   const lead = db.find('leads', (item) => item.id === req.params.id)
   if (!lead) return res.status(404).json({ error: 'Lead não encontrado' })
   if (!req.file) return res.status(400).json({ error: 'Selecione um anexo permitido de até 15 MB.' })
 
-  const leadFolder = String(lead.id).replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 80)
-  const targetFolder = path.join(LEAD_UPLOAD_DIR, leadFolder)
-  fs.mkdirSync(targetFolder, { recursive: true })
   const id = `att_${randomUUID()}`
-  const fileName = `${randomUUID()}${safeFileExtension(req.file.mimetype, req.file.originalname)}`
-  const filePath = path.join(targetFolder, fileName)
-  fs.writeFileSync(filePath, req.file.buffer)
+  let storedInNeon = false
+  try {
+    storedInNeon = await db.putBinaryFile({
+      id,
+      ownerId: lead.id,
+      kind: 'lead_attachment',
+      mimeType: req.file.mimetype,
+      fileName: String(req.file.originalname || 'anexo').slice(0, 180),
+      data: req.file.buffer,
+    })
+  } catch (error) {
+    console.warn('[Files] Não foi possível guardar o anexo no Neon; mantendo cópia local:', error?.message || error)
+  }
+  let storageKey
+  if (!storedInNeon) {
+    const leadFolder = String(lead.id).replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 80)
+    const targetFolder = path.join(LEAD_UPLOAD_DIR, leadFolder)
+    fs.mkdirSync(targetFolder, { recursive: true })
+    const fileName = `${randomUUID()}${safeFileExtension(req.file.mimetype, req.file.originalname)}`
+    const filePath = path.join(targetFolder, fileName)
+    fs.writeFileSync(filePath, req.file.buffer)
+    storageKey = path.relative(CRM_DATA_DIR, filePath)
+  }
   const attachment = db.insert('leadAttachments', {
     id,
     leadId: lead.id,
-    storageKey: path.relative(CRM_DATA_DIR, filePath),
+    ...(storedInNeon ? { binaryFileId: id } : { storageKey }),
     fileName: String(req.file.originalname || 'anexo').slice(0, 180),
     mimeType: req.file.mimetype,
     size: req.file.size,
     uploadedBy: req.user.id,
     createdAt: new Date().toISOString(),
   })
-  const { storageKey, ...safeAttachment } = attachment
+  const safeAttachment = { ...attachment }
+  delete safeAttachment.storageKey
+  delete safeAttachment.binaryFileId
   res.status(201).json(safeAttachment)
 })
 
-app.get('/api/leads/:id/attachments/:attachmentId', requireAuth(), (req, res) => {
+app.get('/api/leads/:id/attachments/:attachmentId', requireAuth(), async (req, res) => {
   const attachment = db.find('leadAttachments', (item) => item.id === req.params.attachmentId && item.leadId === req.params.id)
   if (!attachment) return res.status(404).json({ error: 'Anexo não encontrado' })
+  if (attachment.binaryFileId) {
+    const file = await db.getBinaryFile(attachment.binaryFileId, { ownerId: attachment.leadId, kind: 'lead_attachment' })
+    if (file) return sendFileBuffer(res, file, true)
+  }
   const filePath = storedFilePath(attachment.storageKey)
   if (!filePath || !fs.existsSync(filePath)) return res.status(404).json({ error: 'Arquivo não encontrado' })
-  res.download(filePath, String(attachment.fileName || 'anexo').replace(/[\r\n"\\]/g, '_'))
+  const data = fs.readFileSync(filePath)
+  try {
+    const stored = await db.putBinaryFile({
+      id: attachment.id,
+      ownerId: attachment.leadId,
+      kind: 'lead_attachment',
+      mimeType: attachment.mimeType || 'application/octet-stream',
+      fileName: attachment.fileName || 'anexo',
+      data,
+    })
+    if (stored && !attachment.binaryFileId) db.update('leadAttachments', attachment.id, { binaryFileId: attachment.id })
+  } catch (error) {
+    console.warn('[Files] Anexo legado mantido no disco local:', error?.message || error)
+  }
+  sendFileBuffer(res, { data, mimeType: attachment.mimeType, fileName: attachment.fileName }, true)
 })
 
 /* ==========================================================================
    EQUIPMENT & INVENTORY ROUTES
    ========================================================================== */
+app.get('/api/leads/:id/checklist.pdf', requireAuth(), async (req, res) => {
+  const lead = db.find('leads', (item) => item.id === req.params.id)
+  if (!lead) return res.status(404).json({ error: 'Cliente não encontrado' })
+  try {
+    const data = await createDeliveryChecklistPdf(lead)
+    const name = String(lead.name || lead.id).normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-zA-Z0-9_-]+/g, '-').slice(0, 70)
+    sendFileBuffer(res, { data, mimeType: 'application/pdf', fileName: `checklist-entrega-${name}.pdf` }, true)
+  } catch (error) {
+    console.error('[PDF] Falha ao gerar checklist:', error?.message || error)
+    res.status(500).json({ error: 'Não foi possível gerar o checklist em PDF.' })
+  }
+})
+
 const PRODUCT_CATEGORY_CODES = {
   Camas: 'CAM',
   Macas: 'MAC',
@@ -793,7 +1036,34 @@ const nextPatrimonySequence = () => db.get('equipments').reduce((highest, item) 
 }, 0) + 1
 
 app.get('/api/equipments', requireAuth(), (req, res) => {
-  res.json(db.get('equipments'))
+  res.json(db.get('equipments').filter((e) => !e.archived))
+})
+
+// Exclusao segura: apaga de vez se nada referencia o item; senao arquiva
+// (archived + status 'arquivado') para nao quebrar historico de contratos/cotacoes.
+app.delete('/api/equipments/:id', requireAuth(['admin']), (req, res) => {
+  try {
+    const id = req.params.id
+    const eq = db.find('equipments', (e) => e.id === id)
+    if (!eq || eq.archived) return res.status(404).json({ error: 'Equipamento não encontrado.' })
+    if (eq.reservationContractId || ['alugado', 'vendido', 'reservado'].includes(eq.status)) {
+      return res.status(409).json({ error: 'Item alugado, reservado ou vendido não pode ser excluído. Resolva pelo contrato primeiro.' })
+    }
+    const referenced = Object.keys(db.data || {}).some((collection) => (
+      collection !== 'equipments' && Array.isArray(db.data[collection])
+      && db.data[collection].some((record) => JSON.stringify(record).includes(id))
+    ))
+    if (referenced) {
+      db.update('equipments', id, {
+        archived: true, status: 'arquivado', archivedAt: new Date().toISOString(), archivedBy: req.user?.id || null,
+      })
+      return res.json({ id, mode: 'archived' })
+    }
+    db.delete('equipments', id)
+    res.json({ id, mode: 'deleted' })
+  } catch (err) {
+    res.status(400).json({ error: err.message })
+  }
 })
 
 app.post('/api/equipments', requireAuth(['admin']), (req, res) => {
@@ -841,6 +1111,10 @@ app.post('/api/equipments', requireAuth(['admin']), (req, res) => {
 
 app.put('/api/equipments/:id/status', requireAuth(), (req, res) => {
   const { status } = req.body
+  const eq=db.find('equipments',e=>e.id===req.params.id)
+  if(!eq)return res.status(404).json({error:'Equipamento não encontrado.'})
+  if(eq.reservationContractId||eq.status==='vendido')return res.status(409).json({error:'Item reservado/vendido. Resolva pelo contrato, sem liberar estoque manualmente.'})
+  if(!['disponivel','alugado','higienizacao','manutencao'].includes(status))return res.status(400).json({error:'Status inválido.'})
   const updated = db.update('equipments', req.params.id, {
     status,
     ...(status === 'disponivel' ? { currentLeadId: null, currentClientName: null } : {}),
@@ -859,9 +1133,9 @@ app.get('/api/contracts', requireAuth(), (req, res) => {
 })
 
 // Cancelar, encerrar ou reativar. A tabela de transicoes fica em contracts.js.
-app.put('/api/contracts/:id/status', requireAuth(), (req, res) => {
+app.put('/api/contracts/:id/status', requireAuth(), async (req, res) => {
   try {
-    const result = changeContractStatus(req.params.id, String(req.body.status || ''), {
+    const result = await changeContractStatus(req.params.id, String(req.body.status || ''), {
       reason: req.body.reason,
       user: req.user,
     })
@@ -912,6 +1186,7 @@ app.post('/api/contracts', requireAuth(), (req, res) => {
   try {
     const contract = createContract(req.body)
     io.emit('contract:new', contract)
+    contractEmail.onCreated(contract)
     res.status(201).json(contract)
   } catch (err) {
     res.status(400).json({ error: err.message })
@@ -922,7 +1197,7 @@ app.get('/api/contracts/signing/:token', (req, res) => {
   const contract = findContractBySigningToken(req.params.token)
   if (!contract) return res.status(404).json({ error: 'Link de assinatura inválido ou expirado.' })
 
-  const { signingToken, signerIp, ...publicContract } = contract
+  const { signingToken, signerIp, emailRecipient, ...publicContract } = contract
   res.json({ contract: publicContract })
 })
 
@@ -941,9 +1216,11 @@ app.post('/api/contracts/signing/:token/sign', async (req, res) => {
 
     const { signatureDataUrl, signerName } = req.body
     const signerIp = req.headers['x-forwarded-for'] || req.socket.remoteAddress || '127.0.0.1'
-    const signedContract = signContract(contract.id, signatureDataUrl, signerIp, signerName)
+    const signedContract = await signContract(contract.id, signatureDataUrl, signerIp, signerName, req.body.accepted)
+    await db.flush?.()
 
     io.emit('contract:signed', signedContract)
+    contractEmail.onSigned(signedContract)
     io.emit('lead:updated', db.find('leads', (l) => l.id === signedContract.leadId))
     res.json({ ok: true, contract: signedContract })
   } catch (err) {
@@ -959,14 +1236,28 @@ app.get('/api/contracts/:id/html', requireAuth(), (req, res) => {
   res.send(renderContractHtml(contract))
 })
 
+app.get('/api/contracts/:id/pdf', requireAuth(), async (req, res) => {
+  const contract = db.find('contracts', (item) => item.id === req.params.id)
+  if (!contract) return res.status(404).json({ error: 'Contrato não encontrado' })
+  try {
+    const data = await createContractPdf(contract)
+    sendFileBuffer(res, { data, mimeType: 'application/pdf', fileName: `${contract.number || 'contrato'}-grupo-yr.pdf` }, true)
+  } catch (error) {
+    console.error('[PDF] Falha ao gerar contrato:', error?.message || error)
+    res.status(500).json({ error: 'Não foi possível gerar o contrato em PDF.' })
+  }
+})
+
 app.post('/api/contracts/:id/sign', requireAuth(), async (req, res) => {
   try {
     const { signatureDataUrl, signerName } = req.body
     const signerIp = req.headers['x-forwarded-for'] || req.socket.remoteAddress || '127.0.0.1'
 
-    const signedContract = signContract(req.params.id, signatureDataUrl, signerIp, signerName)
+    const signedContract = await signContract(req.params.id, signatureDataUrl, signerIp, signerName, req.body.accepted)
+    await db.flush?.()
 
     io.emit('contract:signed', signedContract)
+    contractEmail.onSigned(signedContract)
     io.emit('lead:updated', db.find('leads', (l) => l.id === signedContract.leadId))
 
     res.json({ ok: true, contract: signedContract })
@@ -981,6 +1272,9 @@ app.post('/api/contracts/:id/sign', requireAuth(), async (req, res) => {
 app.get('/api/finance/invoices', requireAuth(), (req, res) => {
   res.json(db.get('invoices'))
 })
+
+/* Versioned calendar, team, and contract-cost APIs */
+registerOperationsRoutes(app, { db, requireAuth })
 
 app.post('/api/finance/invoices', requireAuth(), (req, res) => {
   const { contractNumber, clientName, leadId, amount, dueDate, status } = req.body
@@ -1106,7 +1400,7 @@ const sendBlogError = (res, error, fallback) => {
 }
 
 app.get('/api/blog/status', requireAuth(), async (_req, res) => {
-  res.json({ linked: await siteBlog.isLinked(), siteUrl: 'https://grupoyrhospitalar.com.br/blog' })
+  res.json({ linked: await siteBlog.isLinked(), siteUrl: 'https://site.grupoyrhospitalar.com.br/blog' })
 })
 
 app.get('/api/blog/posts', requireAuth(), async (_req, res) => {
@@ -1219,7 +1513,7 @@ app.post('/api/blog/media', requireAuth(['admin']), imageUpload.array('images', 
    DASHBOARD & ANALYTICS
    ========================================================================== */
 app.get('/api/analytics/overview', requireAuth(), (req, res) => {
-  const leads = db.get('leads')
+  const leads = db.get('leads').filter(isInFunnel)
   const equipments = db.get('equipments')
   const invoices = db.get('invoices')
 
@@ -1272,7 +1566,7 @@ app.get('/api/analytics/overview', requireAuth(), (req, res) => {
 app.get('/api/activities', requireAuth(), (req, res) => {
   const contracts = db.get('contracts')
   const invoices = db.get('invoices')
-  const leads = db.get('leads')
+  const leads = db.get('leads').filter(isInFunnel)
   const equipments = db.get('equipments')
 
   const activities = []
@@ -1341,21 +1635,25 @@ app.get('/api/activities', requireAuth(), (req, res) => {
   res.json(activities.slice(0, 10))
 })
 
-app.post('/api/gemini/test-pipeline', requireAuth(), async (req, res) => {
+registerYriaRoutes(app, { database: db, requireAuth, evaluate: evaluateYria })
+registerGoogleModelRoutes(app, { database: db, requireAuth })
+registerInsightsRoutes(app, { database: db, requireAuth, publicUrl: resolvePublicUrl })
+registerCustomerRoutes(app, { database: db, requireAuth, renderContract: renderContractHtml, evaluate: evaluateYria, origin: resolvePublicUrl, emit: (event, value) => io.emit(event, value), push: deliverPushToUser })
+registerWebsiteChat(app, { database: db, evaluate: evaluateYria, getConfiguration: getYriaConfiguration })
+
+app.post('/api/gemini/test-pipeline', requireAuth(), async (_req, res) => {
   try {
-    const result = await runGeminiWithFallback({
-      prompt: 'Responda brevemente confirmando que a inteligência artificial do Grupo YR Hospitalar está ativa e pronta para qualificação de pacientes.',
+    const result = await evaluateYria({
+      message: { id: 'diagnostic', content: 'Olá, preciso alugar uma cama hospitalar.', from: 'client' },
+      messages: [], previous: {},
     })
     res.json({
-      ok: true,
-      activeModel: result.modelUsed,
-      latencyMs: result.latencyMs,
-      response: result.text,
-      fallbackModels: FALLBACK_MODELS,
+      ok: result.provider.ok, activeModel: result.provider.model || 'roteiro-seguro',
+      latencyMs: result.provider.latencyMs, response: result.reply, qualification: result.state,
+      ...(result.provider.ok ? {} : { error: 'O provedor não respondeu. O roteiro seguro está ativo; confira chave, cota e conexão.' }),
+      fallbackModels: [], sandbox: true,
     })
-  } catch (err) {
-    res.status(500).json({ error: err.message })
-  }
+  } catch { res.status(503).json({ ok: false, error: 'Não foi possível testar o atendimento da YRIA.' }) }
 })
 
 /* ==========================================================================
@@ -1363,6 +1661,7 @@ app.post('/api/gemini/test-pipeline', requireAuth(), async (req, res) => {
    ========================================================================== */
 const maskSettingsSecrets = (settings) => ({
   ...settings,
+  freightProvider: { ...settings.freightProvider, token: settings.freightProvider?.token ? '__configured__' : '' },
   geminiApiKey: settings.geminiApiKey ? '__configured__' : '',
   metaConfig: {
     ...settings.metaConfig,
@@ -1378,6 +1677,9 @@ app.get('/api/settings', requireAuth(['admin']), (req, res) => {
 
 app.put('/api/settings', requireAuth(['admin']), (req, res) => {
   const current = db.getSettings()
+  let conversationSla
+  try { conversationSla = normalizeConversationSla(req.body.conversationSla ?? current.conversationSla) }
+  catch (error) { return res.status(400).json({ error: error.message }) }
   const requestedMeta = req.body.metaConfig || {}
   const users = db.get('users')
   const requestedAssignee = String(req.body.defaultLeadAssigneeId || '').slice(0, 100)
@@ -1390,6 +1692,12 @@ app.put('/api/settings', requireAuth(['admin']), (req, res) => {
 
   const updated = db.updateSettings({
     ...req.body,
+    conversationSla,
+    yria: current.yria,
+    freightProvider: current.freightProvider,
+    freightProviderRevision: current.freightProviderRevision,
+    freightRates: current.freightRates,
+    freightRevision: current.freightRevision,
     aiServicePrompt: typeof req.body.aiServicePrompt === 'string'
       ? req.body.aiServicePrompt.trim().slice(0, 5000)
       : (current.aiServicePrompt || ''),
@@ -1426,6 +1734,16 @@ if (fs.existsSync(clientDist)) {
 
 const PORT = process.env.PORT || 3001
 await db.ready
+try {
+  const automationRepair = await repairExternalAutomationReplies(db)
+  if (automationRepair.reclassified || automationRepair.resumed) console.log('[WhatsApp] Correção de automação externa:', JSON.stringify(automationRepair))
+} catch {
+  // A concurrent seller intervention must not take the entire CRM offline.
+  console.warn('[WhatsApp] Correção de automação externa aguarda uma nova conferência segura; nenhum envio foi feito.')
+}
+contractEmail.start()
+void automaticContracts.expire().catch(()=>console.warn('[YRIA] Confira as reservas automáticas pendentes.'))
+setInterval(()=>void automaticContracts.expire().catch(()=>console.warn('[YRIA] Falha ao conferir vencimento de reservas.')),60000).unref()
 backfillLastInbound()
 
 // Initialize WhatsApp engine with WebSockets after the database is ready.

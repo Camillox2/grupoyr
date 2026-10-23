@@ -31,19 +31,17 @@ import {
   Pie,
   Cell,
 } from 'recharts'
-import { Lead, Equipment, Invoice, Contract } from '../types'
+import { Lead, Equipment, Invoice } from '../types'
 import { Mark } from './ui/PageHeader'
 import { CountUp, brl } from './ui/Feedback'
 import { useAuth } from '../contexts/AuthContext'
 import { useSocket } from '../contexts/SocketContext'
 import { SiteLinkActions } from './SiteLinkActions'
-import { ContractRetentionPanel } from './ContractRetentionPanel'
 
 interface DashboardViewProps {
   leads: Lead[]
   equipments: Equipment[]
   invoices: Invoice[]
-  contracts: Contract[]
   onSelectLead: (lead: Lead) => void
   onNavigateTab: (tab: any) => void
   onOpenNewLead: () => void
@@ -59,7 +57,6 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   leads,
   equipments,
   invoices,
-  contracts,
   onSelectLead,
   onNavigateTab,
   onOpenNewLead,
@@ -100,14 +97,16 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
     .filter((i) => i.status === 'paga' || i.status === 'pendente')
     .reduce((acc, curr) => acc + (curr.amount || 0), 0)
 
-  const validInvoicesCount = invoices.length
+  const validInvoicesCount = invoices.filter(i => i.status !== 'cancelada').length
   const ticketMedio = validInvoicesCount > 0 ? (totalRevenue + pendingRevenue + overdueRevenue) / validInvoicesCount : 0
-  const estimatedLtv = ticketMedio * 8.5
+  const linkedPaid = invoices.filter(i => i.status === 'paga' && i.leadId)
+  const payingClients = new Set(linkedPaid.map(i => i.leadId)).size
+  const observedReceivedPerClient = payingClients ? linkedPaid.reduce((s,i) => s + i.amount,0) / payingClients : null
   const totalInvoiced = totalRevenue + pendingRevenue + overdueRevenue
   const defaultRate = totalInvoiced > 0 ? Math.round((overdueRevenue / totalInvoiced) * 100 * 10) / 10 : 0
 
   const rentedCount = equipments.filter((e) => e.status === 'alugado').length
-  const totalEquipments = equipments.length
+  const totalEquipments = equipments.filter(e => e.status !== 'vendido').length
   const occupancyRate = totalEquipments > 0 ? Math.round((rentedCount / totalEquipments) * 100) : 0
 
   // Origem dos Leads (Google Ads vs Orgânico, etc.)
@@ -170,7 +169,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   const isConnected =
     whatsappStatus.status === 'connected' || whatsappStatus.status === 'connected_meta'
 
-  const isFirstUse = leads.length === 0 && equipments.length === 0 && invoices.length === 0 && contracts.length === 0
+  const isFirstUse = leads.length === 0 && equipments.length === 0 && invoices.length === 0
 
   if (isFirstUse) {
     return (
@@ -179,7 +178,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           <div className="grid lg:grid-cols-[1.1fr_.9fr]">
             <div className="p-8 sm:p-10">
               <img
-                src="https://grupoyrhospitalar.com.br/yr-hospitalar-logo.jpg"
+                src="https://site.grupoyrhospitalar.com.br/yr-hospitalar-logo.jpg"
                 alt="Grupo YR Hospitalar"
                 className="w-20 h-20 object-contain rounded-lg border border-slate-100 bg-white"
               />
@@ -211,7 +210,6 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             </div>
           </div>
         </div>
-        <ContractRetentionPanel contracts={contracts} onOpenContracts={() => onNavigateTab('contracts')} />
       </section>
     )
   }
@@ -279,7 +277,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
       </section>
 
       {/* 2. Atalhos: todos na mesma lingua, em vez de um bloco de cada cor */}
-      <section className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+      <section className="grid grid-cols-1 min-[380px]:grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
         {(
           [
             ['Novo lead', 'Orçamento ou contato', Plus, onOpenNewLead],
@@ -474,8 +472,6 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         </div>
       </div>
 
-      <ContractRetentionPanel contracts={contracts} onOpenContracts={() => onNavigateTab('contracts')} />
-
       {/* 4.5. Métricas Personalizadas de Alto Impacto (MRR, Ticket Médio, LTV, Inadimplência) */}
       <div className="card p-5 space-y-4" style={{ background: 'var(--surface-sunken)' }}>
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
@@ -501,11 +497,11 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           <div className="p-3.5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm">
-            <span className="text-[11px] font-bold text-slate-400 uppercase">MRR Recorrência</span>
+            <span className="text-[11px] font-bold text-slate-400 uppercase">Faturas pagas e a vencer</span>
             <div className="text-lg sm:text-xl font-black text-emerald-600 dark:text-emerald-400 mt-0.5">
               R$ {mrr.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             </div>
-            <span className="text-[10px] text-slate-400">Base ativa de locações</span>
+            <span className="text-[10px] text-slate-400">Histórico de faturas; não é MRR</span>
           </div>
 
           <div className="p-3.5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm">
@@ -513,15 +509,15 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             <div className="text-lg sm:text-xl font-black text-blue-600 dark:text-blue-400 mt-0.5">
               R$ {ticketMedio.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             </div>
-            <span className="text-[10px] text-slate-400">Por contrato ativo</span>
+            <span className="text-[10px] text-slate-400">Por fatura não cancelada</span>
           </div>
 
           <div className="p-3.5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm">
-            <span className="text-[11px] font-bold text-slate-400 uppercase">LTV Médio Est.</span>
+            <span className="text-[11px] font-bold text-slate-400 uppercase">Recebido por cliente</span>
             <div className="text-lg sm:text-xl font-black text-purple-600 dark:text-purple-400 mt-0.5">
-              R$ {estimatedLtv.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              {observedReceivedPerClient === null ? '—' : observedReceivedPerClient.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
             </div>
-            <span className="text-[10px] text-slate-400">Permanência média 8.5m</span>
+            <span className="text-[10px] text-slate-400">Média observada · clientes vinculados</span>
           </div>
 
           <div className="p-3.5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm">

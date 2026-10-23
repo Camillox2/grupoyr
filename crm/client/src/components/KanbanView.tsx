@@ -9,10 +9,13 @@ import {
   ChevronLeft,
   ChevronRight,
   KanbanSquare,
+  Trash2,
 } from 'lucide-react'
 import { Lead, Stage } from '../types'
 import { useIsMobile } from '../hooks/useMediaQuery'
-import { PageHeader, ActionButton } from './ui/PageHeader'
+import { PageHeader, ActionButton, Notice } from './ui/PageHeader'
+import { FunnelArchiveDialog, FunnelTrashView } from './FunnelArchive'
+import { useAuth } from '../contexts/AuthContext'
 import { EmptyState } from './ui/ResponsiveTable'
 import { brl } from './ui/Feedback'
 import { WaveScrollbar } from './ui/WaveScrollbar'
@@ -23,6 +26,8 @@ interface KanbanViewProps {
   onSelectLead: (lead: Lead) => void
   onOpenNewContract: (lead: Lead) => void
   onOpenNewLeadModal: () => void
+  onLeadUpdated: (lead: Lead) => void
+  onNavigate: (tab: 'contracts' | 'finance') => void
 }
 
 /** Cada etapa tem uma cor de token, nao uma classe do Tailwind solta. */
@@ -44,7 +49,17 @@ export const KanbanView: React.FC<KanbanViewProps> = ({
   onSelectLead,
   onOpenNewContract,
   onOpenNewLeadModal,
+  onLeadUpdated,
+  onNavigate,
 }) => {
+  const { user } = useAuth()
+  const [showTrash, setShowTrash] = useState(false)
+  const [archiveTarget, setArchiveTarget] = useState<Lead | null>(null)
+  const [notice, setNotice] = useState('')
+  const canManage = (lead: Lead) => user?.role === 'admin' || !lead.assignedTo || lead.assignedTo === user?.id
+  const trashCount = leads.filter(lead => lead.funnelArchive?.at).length
+  const actionCompleted = (lead: Lead, message: string) => { onLeadUpdated(lead); setNotice(message) }
+  const archiveDialog = <FunnelArchiveDialog lead={archiveTarget} onClose={()=>setArchiveTarget(null)} onUpdated={actionCompleted} onNavigate={onNavigate}/>
   const isMobile = useIsMobile()
   const [searchTerm, setSearchTerm] = useState('')
   const [filterOrigin, setFilterOrigin] = useState('todos')
@@ -55,6 +70,7 @@ export const KanbanView: React.FC<KanbanViewProps> = ({
   const filteredLeads = useMemo(() => {
     const term = searchTerm.trim().toLowerCase()
     return leads.filter((lead) => {
+      if (Boolean(lead.funnelArchive?.at) !== showTrash) return false
       const matchesSearch =
         !term ||
         lead.name.toLowerCase().includes(term) ||
@@ -63,7 +79,7 @@ export const KanbanView: React.FC<KanbanViewProps> = ({
       const matchesOrigin = filterOrigin === 'todos' || lead.origin === filterOrigin
       return matchesSearch && matchesOrigin
     })
-  }, [leads, searchTerm, filterOrigin])
+  }, [leads, searchTerm, filterOrigin, showTrash])
 
   const byStage = useMemo(() => {
     const map = new Map<Stage, Lead[]>()
@@ -135,6 +151,15 @@ export const KanbanView: React.FC<KanbanViewProps> = ({
           {brl(lead.value)}
         </span>
         <div className="flex items-center gap-1">
+          <button
+            type="button"
+            onClick={event => { event.stopPropagation(); setArchiveTarget(lead); setNotice('') }}
+            disabled={!canManage(lead)}
+            className="grid h-10 w-10 place-items-center rounded-[8px] transition-colors hover:bg-[var(--alert-surface)] disabled:opacity-30"
+            style={{ color: 'var(--alert)' }}
+            title={canManage(lead)?'Excluir do funil (recuperável)':'Somente o responsável ou um administrador'}
+            aria-label={`Excluir ${lead.name} do funil`}
+          ><Trash2 className="h-4 w-4"/></button>
           {stage === 'proposta_enviada' && (
             <button
               onClick={(event) => {
@@ -213,18 +238,23 @@ export const KanbanView: React.FC<KanbanViewProps> = ({
     <PageHeader
       icon={<KanbanSquare className="h-5 w-5" />}
       eyebrow="Funil"
-      title="Funil de vendas"
-      description={`${filteredLeads.length} lead${filteredLeads.length === 1 ? '' : 's'} em acompanhamento, ${brl(
+      title={showTrash ? 'Lixeira do funil' : 'Funil de vendas'}
+      description={showTrash ? `${filteredLeads.length} cartão(ões) recuperável(is). Clientes e documentos preservados.` : `${filteredLeads.length} lead${filteredLeads.length === 1 ? '' : 's'} em acompanhamento, ${brl(
         filteredLeads.reduce((total, lead) => total + (lead.value || 0), 0),
       )} em jogo.`}
       actions={
+        <>
+        <ActionButton variant="ghost" onClick={()=>{setShowTrash(v=>!v);setNotice('')}}><Trash2 className="h-4 w-4"/>{showTrash?'Voltar ao funil':`Lixeira (${trashCount})`}</ActionButton>
         <ActionButton onClick={onOpenNewLeadModal}>
           <Plus className="h-4 w-4" />
           Novo lead
         </ActionButton>
+        </>
       }
     />
   )
+
+  if (showTrash) return <div className="pb-6">{header}{notice?<Notice tone="ok">{notice}</Notice>:null}{filters}<FunnelTrashView leads={filteredLeads} canManage={canManage} onUpdated={actionCompleted}/>{archiveDialog}</div>
 
   // ---------------------------------------------------------------- MOBILE
   if (isMobile) {
@@ -234,6 +264,7 @@ export const KanbanView: React.FC<KanbanViewProps> = ({
     return (
       <div className="pb-10">
         {header}
+        {notice?<div role="status"><Notice tone="ok">{notice}</Notice></div>:null}
         {filters}
 
         {/* Seletor de etapa: substitui as 7 colunas lado a lado. */}
@@ -322,6 +353,7 @@ export const KanbanView: React.FC<KanbanViewProps> = ({
             ))}
           </ul>
         )}
+        {archiveDialog}
       </div>
     )
   }
@@ -330,6 +362,7 @@ export const KanbanView: React.FC<KanbanViewProps> = ({
   return (
     <div className="pb-6">
       {header}
+      {notice?<div role="status"><Notice tone="ok">{notice}</Notice></div>:null}
       {filters}
 
       <DragDropContext onDragEnd={onDragEnd}>
@@ -408,6 +441,7 @@ export const KanbanView: React.FC<KanbanViewProps> = ({
       </DragDropContext>
 
       <WaveScrollbar target={boardRef} />
+      {archiveDialog}
     </div>
   )
 }

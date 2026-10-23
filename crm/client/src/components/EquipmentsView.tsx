@@ -6,11 +6,14 @@ import {
   ShieldCheck,
   MapPin,
   X,
+  Trash2,
 } from 'lucide-react'
 import { Equipment } from '../types'
 import { PageHeader, ActionButton } from './ui/PageHeader'
 import { NewEquipmentModal } from './NewEquipmentModal'
 import { EquipmentStatus } from './ui/Status'
+import { CommercialPanel } from './CommercialPanel'
+import { useAuth } from '../contexts/AuthContext'
 
 interface EquipmentsViewProps {
   equipments: Equipment[]
@@ -24,6 +27,34 @@ export const EquipmentsView: React.FC<EquipmentsViewProps> = ({
   const [filterStatus, setFilterStatus] = useState<string>('todos')
   const [searchTerm, setSearchTerm] = useState('')
   const [showAddModal, setShowAddModal] = useState(false)
+  const { user } = useAuth()
+  const isAdmin = user?.role === 'admin'
+  const [deletingId, setDeletingId] = useState<string | null>(null)
+
+  const handleDelete = async (eq: Equipment) => {
+    if (!window.confirm(`Excluir o equipamento "${eq.name}" (patrimônio ${eq.serialNumber})?\n\nSe ele já aparece em contratos, cotações ou histórico, será apenas arquivado (some da lista, mas o histórico é preservado). Esta ação não pode ser desfeita pelo sistema.`)) return
+    setDeletingId(eq.id)
+    try {
+      const res = await fetch(`/api/equipments/${eq.id}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${localStorage.getItem('yr_crm_token') || ''}` },
+      })
+      const body = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        window.alert(body.error || 'Não foi possível excluir o equipamento.')
+        return
+      }
+      window.alert(body.mode === 'archived'
+        ? 'Equipamento arquivado: ele tem histórico vinculado, então foi ocultado da lista sem apagar registros.'
+        : 'Equipamento excluído.')
+      onRefreshEquipments()
+    } catch (e) {
+      console.error('Erro ao excluir equipamento:', e)
+      window.alert('Erro de conexão ao excluir o equipamento.')
+    } finally {
+      setDeletingId(null)
+    }
+  }
 
   const filtered = equipments.filter((eq) => {
     const matchesStatus = filterStatus === 'todos' || eq.status === filterStatus
@@ -68,6 +99,7 @@ export const EquipmentsView: React.FC<EquipmentsViewProps> = ({
         }
       />
 
+      <CommercialPanel equipments={equipments} onRefresh={onRefreshEquipments}/>
       {/* Filter Tabs & Search */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         {/* Status Pills */}
@@ -187,13 +219,16 @@ export const EquipmentsView: React.FC<EquipmentsViewProps> = ({
                 <div>
                   <span className="text-[10px] text-slate-400 block">Mensalidade / Venda:</span>
                   <span className="text-xs font-bold text-emerald-600 dark:text-emerald-400">
-                    {eq.monthlyPrice > 0 ? `R$ ${eq.monthlyPrice}/mês` : `Venda R$ ${eq.salePrice}`}
+                    {eq.monthlyPrice > 0 ? `Locação R$ ${eq.monthlyPrice}/mês` : 'Locação sob consulta'}
+                    <span className="block mt-1">{eq.salePrice > 0 ? `Venda R$ ${eq.salePrice}` : 'Venda sob consulta'}</span>
                   </span>
                 </div>
 
                 {/* Status Switcher Action */}
+                <div className="flex items-center gap-2">
                 <select
                   value={eq.status}
+                  disabled={!!eq.reservationContractId||eq.status==='vendido'}
                   onChange={(e) => handleUpdateStatus(eq.id, e.target.value)}
                   className="text-[11px] font-medium py-1 px-2 rounded-lg bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 focus:outline-none"
                 >
@@ -201,7 +236,22 @@ export const EquipmentsView: React.FC<EquipmentsViewProps> = ({
                   <option value="alugado">Alugado</option>
                   <option value="higienizacao">Higienização</option>
                   <option value="manutencao">Manutenção</option>
+                  <option value="reservado" disabled>Reservado · contrato</option>
+                  <option value="vendido" disabled>Vendido</option>
                 </select>
+                {isAdmin && (
+                  <button
+                    type="button"
+                    title="Excluir equipamento"
+                    onClick={() => handleDelete(eq)}
+                    disabled={deletingId === eq.id || !!eq.reservationContractId || ['alugado', 'vendido', 'reservado'].includes(eq.status)}
+                    className="inline-flex items-center gap-1 text-[11px] font-medium py-1 px-2 rounded-lg border border-red-200 dark:border-red-900 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/40 disabled:opacity-40 disabled:cursor-not-allowed"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                    {deletingId === eq.id ? 'Excluindo…' : 'Excluir'}
+                  </button>
+                )}
+                </div>
               </div>
             </div>
           )

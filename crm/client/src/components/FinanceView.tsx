@@ -13,7 +13,6 @@ import {
   Percent,
   Calculator,
   Search,
-  FileSignature,
 } from 'lucide-react'
 import { ResponsiveTable, EmptyState } from './ui/ResponsiveTable'
 import { InvoiceStatus } from './ui/Status'
@@ -28,19 +27,16 @@ import {
   Pie,
   Cell,
 } from 'recharts'
-import { Contract, ContractExpense, Invoice, Lead } from '../types'
+import { Invoice, Lead } from '../types'
 import { PageHeader, ActionButton } from './ui/PageHeader'
 import { Modal } from './ui/Modal'
 import { TextField, SelectField, FormError } from './ui/Field'
 import { SubmitButton } from './ui/Feedback'
 import { Toast, useToast } from './ui/Toast'
-import { ContractFinanceView } from './ContractFinanceView'
 
 interface FinanceViewProps {
   invoices: Invoice[]
   leads: Lead[]
-  contracts: Contract[]
-  contractExpenses: ContractExpense[]
   onRefreshInvoices: () => void
   /** Abre a conversa do lead no atendimento. */
   onOpenLead?: (leadId: string) => void
@@ -51,10 +47,9 @@ interface FinanceViewProps {
 const dueDateLabel = (value: string) =>
   new Date(value && value.length === 10 ? `${value}T00:00:00` : value).toLocaleDateString('pt-BR')
 
-export const FinanceView: React.FC<FinanceViewProps> = ({ invoices, leads, contracts, contractExpenses, onRefreshInvoices, onOpenLead }) => {
+export const FinanceView: React.FC<FinanceViewProps> = ({ invoices, leads, onRefreshInvoices, onOpenLead }) => {
   const { toast, show: showToast, dismiss: dismissToast } = useToast()
   const [periodFilter, setPeriodFilter] = useState<'all' | '7d' | 'month' | 'quarter' | 'year'>('month')
-  const [financeSection, setFinanceSection] = useState<'invoices' | 'contracts'>('invoices')
   const [statusFilter, setStatusFilter] = useState<'all' | 'paga' | 'pendente' | 'atrasada'>('all')
   const [searchTerm, setSearchTerm] = useState('')
   const [sendingReminderId, setSendingReminderId] = useState<string | null>(null)
@@ -129,21 +124,30 @@ export const FinanceView: React.FC<FinanceViewProps> = ({ invoices, leads, contr
     .reduce((acc, curr) => acc + (curr.amount || 0), 0)
 
   // Ticket Médio
-  const validInvoicesCount = filteredInvoices.length
+  const validInvoicesCount = filteredInvoices.filter(i => i.status !== 'cancelada').length
   const ticketMedio = validInvoicesCount > 0 ? totalFilteredSum / validInvoicesCount : 0
 
   // LTV Médio Estimado (Tempo médio de locação hospitalar de 8.5 meses x ticket médio)
-  const estimatedLTV = ticketMedio * 8.5
+  const linkedPaid = filteredInvoices.filter(i => i.status === 'paga' && i.leadId)
+  const payingClients = new Set(linkedPaid.map(i => i.leadId)).size
+  const observedReceivedPerClient = payingClients ? linkedPaid.reduce((s,i) => s + i.amount,0) / payingClients : null
 
   // Taxa de Inadimplência (%)
   const defaultRate =
     totalFilteredSum > 0 ? Math.round((overdueTotal / totalFilteredSum) * 100 * 10) / 10 : 0
 
-  // Cenários simples, baseados somente no valor em aberto carregado do banco.
-  // Eles não substituem um calendário de faturamento por contrato.
-  const forecast30 = pendingTotal
-  const forecast60 = pendingTotal * 2
-  const forecast90 = pendingTotal * 3
+  // Carteira real a vencer, sem multiplicar mensalidades nem supor renovações.
+  const dueWithin = (days: number) => {
+    const today = new Date(); today.setHours(0, 0, 0, 0)
+    const end = new Date(today); end.setDate(end.getDate() + days)
+    return invoices.filter(i => {
+      const due = new Date(`${i.dueDate}T12:00:00`)
+      return ['pendente', 'atrasada'].includes(i.status) && due >= today && due <= end
+    }).reduce((total, i) => total + i.amount, 0)
+  }
+  const forecast30 = dueWithin(30)
+  const forecast60 = dueWithin(60)
+  const forecast90 = dueWithin(90)
 
   // Gráficos calculados apenas com as faturas reais carregadas do banco.
   const cashFlowData = useMemo(() => {
@@ -272,10 +276,10 @@ export const FinanceView: React.FC<FinanceViewProps> = ({ invoices, leads, contr
   }
 
   const handleExportCsv = () => {
-    const headers = 'ID;Contrato;Cliente;Vencimento;Valor;Status;PagoEm\n'
+    const headers = 'ID;Contrato;Tipo;Cliente;Vencimento;Valor;Status;PagoEm\n'
     const rows = filteredInvoices
       .map((i) =>
-        [i.id, i.contractNumber, i.clientName, i.dueDate, i.amount, i.status, i.paidAt || ''].map(csvCell).join(';'),
+        [i.id, i.contractNumber, i.kind === 'frete_retirada' ? 'Frete de retirada — cobrança única' : i.kind === 'mensalidade' ? 'Mensalidade' : '', i.clientName, i.dueDate, i.amount, i.status, i.paidAt || ''].map(csvCell).join(';'),
       )
       .join('\n')
     // BOM: sem ele o Excel abre os acentos quebrados.
@@ -303,7 +307,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({ invoices, leads, contr
     const rows = filteredInvoices
       .map(
         (invoice) => `<tr>
-          <td class="mono">${esc(invoice.contractNumber)}</td>
+          <td class="mono">${esc(invoice.contractNumber)}${invoice.kind === 'frete_retirada' ? '<br>Frete de retirada — cobrança única' : invoice.kind === 'mensalidade' ? '<br>Mensalidade' : ''}</td>
           <td>${esc(invoice.clientName)}</td>
           <td class="mono">${esc(new Date(`${invoice.dueDate}T00:00:00`).toLocaleDateString('pt-BR'))}</td>
           <td class="num">${esc(money(invoice.amount || 0))}</td>
@@ -368,21 +372,6 @@ export const FinanceView: React.FC<FinanceViewProps> = ({ invoices, leads, contr
     }, 250)
   }
 
-  const sectionTabs = (
-    <div className="yr-finance-tabs" role="tablist" aria-label="Visão financeira">
-      <button type="button" role="tab" aria-selected={financeSection === 'invoices'} className={financeSection === 'invoices' ? 'is-active' : ''} onClick={() => setFinanceSection('invoices')}><DollarSign className="h-4 w-4" /> Cobranças</button>
-      <button type="button" role="tab" aria-selected={financeSection === 'contracts'} className={financeSection === 'contracts' ? 'is-active' : ''} onClick={() => setFinanceSection('contracts')}><FileSignature className="h-4 w-4" /> Por contrato</button>
-    </div>
-  )
-
-  if (financeSection === 'contracts') return (
-    <div className="space-y-5 pb-16">
-      <PageHeader icon={<DollarSign className="h-5 w-5" />} eyebrow="Financeiro" title="Financeiro por contrato" description="Receita recebida, valores em aberto e custos diretos associados a cada contrato." />
-      {sectionTabs}
-      <ContractFinanceView contracts={contracts} invoices={invoices} expenses={contractExpenses} leads={leads} onRefresh={onRefreshInvoices} onOpenLead={onOpenLead} />
-    </div>
-  )
-
   return (
     <div className="space-y-6 pb-16">
       <PageHeader
@@ -407,8 +396,6 @@ export const FinanceView: React.FC<FinanceViewProps> = ({ invoices, leads, contr
           </>
         }
       />
-
-      {sectionTabs}
 
       {/* 2. Filtros de Período Personalizáveis */}
       <div className="bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm flex flex-col lg:flex-row lg:items-center justify-between gap-3">
@@ -485,7 +472,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({ invoices, leads, contr
         <div className="p-5 rounded-3xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm transition-all hover:shadow-md">
           <div className="flex items-center justify-between">
             <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">
-              MRR (Recorrência Mensal)
+              Faturas pagas e a vencer
             </span>
             <div className="w-9 h-9 rounded-xl bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 flex items-center justify-center">
               <DollarSign className="w-4 h-4" />
@@ -497,7 +484,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({ invoices, leads, contr
             </h3>
             <div className="flex items-center gap-1 text-[11px] text-emerald-700 dark:text-emerald-400 mt-1 font-semibold">
               <ArrowUpRight className="w-3.5 h-3.5" />
-              <span>Contratos de locação ativos</span>
+              <span>Histórico de faturas; não é MRR</span>
             </div>
           </div>
         </div>
@@ -506,7 +493,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({ invoices, leads, contr
         <div className="p-5 rounded-3xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm transition-all hover:shadow-md">
           <div className="flex items-center justify-between">
             <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">
-              Ticket Médio por Locação
+              Ticket Médio por Fatura
             </span>
             <div className="w-9 h-9 rounded-xl bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 flex items-center justify-center">
               <Calculator className="w-4 h-4" />
@@ -516,7 +503,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({ invoices, leads, contr
             <h3 className="text-2xl font-black text-slate-900 dark:text-white">
               R$ {ticketMedio.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             </h3>
-            <p className="text-[11px] text-slate-400 mt-1">Valor médio mensal por contrato</p>
+            <p className="text-[11px] text-slate-400 mt-1">Faturas não canceladas no filtro selecionado</p>
           </div>
         </div>
 
@@ -524,7 +511,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({ invoices, leads, contr
         <div className="p-5 rounded-3xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm transition-all hover:shadow-md">
           <div className="flex items-center justify-between">
             <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">
-              LTV Médio Estimado
+              Recebido por cliente
             </span>
             <div className="w-9 h-9 rounded-xl bg-purple-50 dark:bg-purple-950/60 text-purple-600 dark:text-purple-400 flex items-center justify-center">
               <Sparkles className="w-4 h-4" />
@@ -532,9 +519,9 @@ export const FinanceView: React.FC<FinanceViewProps> = ({ invoices, leads, contr
           </div>
           <div className="mt-2">
             <h3 className="text-2xl font-black text-purple-600 dark:text-purple-400">
-              R$ {estimatedLTV.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              {observedReceivedPerClient === null ? '—' : observedReceivedPerClient.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
             </h3>
-            <p className="text-[11px] text-slate-400 mt-1">Tempo médio de permanência: 8.5 meses</p>
+            <p className="text-[11px] text-slate-400 mt-1">Média observada dos clientes vinculados no filtro</p>
           </div>
         </div>
 
@@ -573,10 +560,10 @@ export const FinanceView: React.FC<FinanceViewProps> = ({ invoices, leads, contr
           <div className="flex items-center gap-2">
             <TrendingUp className="w-4 h-4 text-blue-600 dark:text-blue-400" />
             <h3 className="text-xs font-bold text-slate-900 dark:text-white uppercase tracking-wider">
-              Projeção de Faturamento Recorrente (Previsibilidade de Caixa)
+              Carteira de faturas a vencer
             </h3>
           </div>
-          <span className="text-[11px] text-slate-500">Cenário calculado com o valor em aberto carregado</span>
+          <span className="text-[11px] text-slate-500">Carteira total · independente dos filtros · não garante recebimento</span>
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
@@ -585,7 +572,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({ invoices, leads, contr
             <div className="text-xl font-black text-slate-900 dark:text-white mt-1">
               R$ {forecast30.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             </div>
-            <span className="text-[10px] text-emerald-600 font-semibold">Base em aberto atual</span>
+            <span className="text-[10px] text-emerald-600 font-semibold">Vencimentos cadastrados até D+30</span>
           </div>
 
           <div className="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm">
@@ -593,7 +580,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({ invoices, leads, contr
             <div className="text-xl font-black text-slate-900 dark:text-white mt-1">
               R$ {forecast60.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             </div>
-            <span className="text-[10px] text-blue-600 font-semibold">Duas mensalidades na mesma base</span>
+            <span className="text-[10px] text-blue-600 font-semibold">Vencimentos acumulados até D+60</span>
           </div>
 
           <div className="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm">
@@ -601,7 +588,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({ invoices, leads, contr
             <div className="text-xl font-black text-slate-900 dark:text-white mt-1">
               R$ {forecast90.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             </div>
-            <span className="text-[10px] text-purple-600 font-semibold">Três mensalidades na mesma base</span>
+            <span className="text-[10px] text-purple-600 font-semibold">Vencimentos acumulados até D+90</span>
           </div>
         </div>
       </div>
@@ -733,9 +720,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({ invoices, leads, contr
               header: 'Contrato',
               primary: true,
               cell: (invoice) => (
-                <span className="font-mono font-bold" style={{ color: 'var(--yr-500)' }}>
-                  {invoice.contractNumber}
-                </span>
+                <div><span className="font-mono font-bold" style={{ color: 'var(--yr-500)' }}>{invoice.contractNumber}</span>{invoice.kind === 'frete_retirada' ? <p className="mt-1 text-xs font-semibold" style={{ color: 'var(--ink-muted)' }}>Frete de retirada — cobrança única</p> : invoice.kind === 'mensalidade' ? <p className="mt-1 text-xs" style={{ color: 'var(--ink-muted)' }}>Mensalidade</p> : null}</div>
               ),
             },
             {

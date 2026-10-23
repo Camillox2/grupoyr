@@ -5,6 +5,7 @@ import { Modal } from './ui/Modal'
 import { TextField, SelectField, FormError } from './ui/Field'
 import { SubmitButton, brl } from './ui/Feedback'
 import { EQUIPMENT_STATUS } from './ui/Status'
+import { freightAmounts, addCalendarMonths, billingMonthsForDates } from '../lib/freight'
 
 interface NewContractModalProps {
   open: boolean
@@ -29,10 +30,14 @@ export const NewContractModal: React.FC<NewContractModalProps> = ({
   const [selectedEquipmentId, setSelectedEquipmentId] = useState('')
   const [contractType, setContractType] = useState<'locacao' | 'venda'>('locacao')
   const [monthlyValue, setMonthlyValue] = useState('480')
+  const [deliveryFreight, setDeliveryFreight] = useState('0')
+  const [pickupFreight, setPickupFreight] = useState('0')
+  const [pickupFreightDueDate, setPickupFreightDueDate] = useState('')
   const [startDate, setStartDate] = useState(() => isoDate(new Date()))
   const [endDate, setEndDate] = useState(() => isoDate(new Date(Date.now() + 30 * 86400000)))
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const pickupDueDate = pickupFreightDueDate || addCalendarMonths(startDate, Math.max(1, billingMonthsForDates(startDate, endDate) - 1))
 
   // O estado inicial de useState roda uma vez so; sem sincronizar, abrir o
   // modal para um segundo lead continuava mostrando o primeiro.
@@ -59,6 +64,11 @@ export const NewContractModal: React.FC<NewContractModalProps> = ({
     // valor do equipamento quando o valor do lead não representa uma moeda.
     setMonthlyValue(String(leadValue >= 1 ? leadValue : equipmentValue >= 1 ? equipmentValue : 480))
     setContractType(lead?.modality === 'compra' ? 'venda' : 'locacao')
+    const client = lead || leads[0]
+    const freight = freightAmounts(client || {})
+    setDeliveryFreight(String(freight.delivery))
+    setPickupFreight(String(freight.pickup))
+    setPickupFreightDueDate(client?.pickupFreightDueDate || '')
     setError(null)
   }, [open, lead, leads, equipments])
 
@@ -101,6 +111,9 @@ export const NewContractModal: React.FC<NewContractModalProps> = ({
           startDate,
           endDate,
           monthlyValue: Number(monthlyValue) || 0,
+          deliveryFreight: Number(deliveryFreight) || 0,
+          pickupFreight: contractType === 'locacao' ? Number(pickupFreight) || 0 : 0,
+          pickupFreightDueDate: contractType === 'locacao' ? pickupDueDate : '',
         }),
       })
 
@@ -142,7 +155,13 @@ export const NewContractModal: React.FC<NewContractModalProps> = ({
         <SelectField
           label="Cliente contratante"
           value={selectedLeadId}
-          onChange={(event) => setSelectedLeadId(event.target.value)}
+          onChange={(event) => {
+            setSelectedLeadId(event.target.value)
+            const freight = freightAmounts(leads.find(item => item.id === event.target.value) || {})
+            setDeliveryFreight(String(freight.delivery))
+            setPickupFreight(String(freight.pickup))
+            setPickupFreightDueDate(leads.find(item => item.id === event.target.value)?.pickupFreightDueDate || '')
+          }}
           options={leads.map((item) => ({
             value: item.id,
             label: `${item.name} (${item.phone})`,
@@ -199,6 +218,12 @@ export const NewContractModal: React.FC<NewContractModalProps> = ({
           value={monthlyValue}
           onChange={(event) => setMonthlyValue(event.target.value)}
         />
+        <div className="grid gap-4 sm:grid-cols-2">
+          <TextField label="Frete de entrega / ida (R$)" type="number" inputMode="decimal" min={0} step={0.01} value={deliveryFreight} onChange={event => setDeliveryFreight(event.target.value)} />
+          {contractType === 'locacao' ? <TextField label="Frete de retirada / volta (R$)" type="number" inputMode="decimal" min={0} step={0.01} value={pickupFreight} onChange={event => setPickupFreight(event.target.value)} /> : null}
+        </div>
+        {contractType === 'locacao' && Number(pickupFreight) > 0 ? <TextField label="Vencimento do frete de retirada" type="date" min={startDate} value={pickupDueDate} onChange={event => setPickupFreightDueDate(event.target.value)} /> : null}
+        <p className="text-xs leading-relaxed" style={{ color: 'var(--ink-muted)' }}>Frete de ida somente na primeira cobrança.{contractType === 'locacao' ? ' Frete de volta em cobrança única separada, sem compor as mensalidades. Confira a data combinada acima; ela não confirma o agendamento da coleta.' : ''}</p>
       </form>
     </Modal>
   )

@@ -1,4 +1,5 @@
 import React, { useState } from 'react'
+import { PwaInstallPanel } from './PwaStatus'
 import { Mail, Lock, Eye, EyeOff, ArrowRight, Sun, Moon, AlertCircle, LoaderCircle } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 import { useTheme } from '../contexts/ThemeContext'
@@ -221,6 +222,7 @@ export const LoginView: React.FC = () => {
           </p>
         </div>
 
+        <PwaInstallPanel compact />
         <p className="text-center text-[11px]" style={{ color: 'var(--ink-faint)' }}>
           Grupo YR Hospitalar · Curitiba, PR · Uso interno
         </p>

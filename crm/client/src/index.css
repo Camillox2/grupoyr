@@ -239,7 +239,16 @@
      porque ele, sim, rola pela pagina. */
   html:has(.app-shell),
   body:has(.app-shell) {
-    overflow: hidden;
+    /* Unlike hidden, clip prevents scrollIntoView from moving the whole shell. */
+    overflow: clip;
+  }
+  /* Keep browser focus/auto-scroll inside authenticated panes, not the viewport.
+     Login/public signing remain ordinary scrolling documents. */
+  body:has(.app-shell) #root {
+    position: fixed;
+    inset: 0;
+    height: 100dvh;
+    overflow: clip;
   }
 
   /* Dinheiro e metrica nao podem dancar de linha para linha. */
@@ -556,11 +565,25 @@
   display: flex;
   flex-direction: column;
   min-height: 0;
-  width: 420px;
-  flex: 0 0 420px;
+  width: 360px;
+  flex: 0 0 360px;
   height: 100%;
   background: var(--surface-sunken);
   border-left: 1px solid var(--border-subtle);
+}
+.chat-details-panel {
+  width: 360px;
+  min-width: 0;
+  height: 100%;
+  flex: 0 0 360px;
+  overflow: hidden;
+  opacity: 1;
+  transition: flex-basis 220ms var(--ease-out), opacity 160ms ease-out;
+}
+.chat-details-panel.is-collapsed {
+  flex-basis: 0;
+  opacity: 0;
+  pointer-events: none;
 }
 .sheet-drawer .sheet {
   width: 100%;
@@ -850,6 +873,10 @@
   margin-top: 10px;
 }
 .sheet-add button {
+  max-width: 100%;
+  flex-wrap: wrap;
+  text-align: left;
+  overflow-wrap: anywhere;
   display: inline-flex;
   align-items: center;
   gap: 5px;
@@ -1066,7 +1093,20 @@
    rolagem: sem isso a barra aparecia e sumia a cada aba e a tela "puxava".
    Quem entra e o palco interno, e os blocos da tela sobem em cascata. */
 .app-main {
+  min-width: 0;
   scrollbar-gutter: stable;
+}
+.sheet-add button:disabled { opacity: 0.5; cursor: not-allowed; }
+
+@media (max-width: 820px) {
+  .app-main.app-main--chat { padding: 0; overflow: hidden; scrollbar-gutter: auto; display: flex; }
+  .app-main--chat > .view-stage { flex: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column; }
+  .chat-actions-popover > a,
+  .chat-actions-popover > button { width: 100%; min-height: 44px; justify-content: flex-start; border: 0; border-radius: 8px; padding: 10px 12px; box-shadow: none; font-size: 12px; }
+  .chat-actions-popover > a span { display: inline; }
+  .chat-actions-popover > a:hover,
+  .chat-actions-popover > button:hover { background: var(--surface-sunken); }
+  .chat-composer { padding-bottom: max(10px, env(safe-area-inset-bottom)); }
 }
 
 @keyframes view-enter {
@@ -1097,6 +1137,11 @@
 .view-stage > * > *:nth-child(5) { animation-delay: 280ms; }
 .view-stage > * > *:nth-child(n + 6) { animation-delay: 340ms; }
 
+/* Dados assíncronos não devem reaplicar a cascata nem sumir ao atualizar. */
+.view-stage > .insights-view > * {
+  animation: none;
+}
+
 /* Telas que sao um painel unico (atendimento) entram inteiras. Em cascata, as
    colunas subiam em tempos diferentes e parecia que a tela balancava. */
 .view-stage > .no-cascade {
@@ -1105,6 +1150,37 @@
 .view-stage > .no-cascade > * {
   animation: none;
 }
+
+/* Cabeçalho e campo ficam estáveis; o histórico entra depois de posicionado. */
+.view-stage > .chat-panel,
+.view-stage > .no-cascade > .chat-conversation-enter { animation: none; }
+.chat-messages-content { opacity: 0; }
+.chat-messages-content.chat-messages-ready { opacity: 1; animation: chat-history-reveal 260ms ease-out; }
+@keyframes chat-history-reveal { from { opacity: 0; } to { opacity: 1; } }
+.chat-message-enter { animation: chat-history-reveal 220ms ease-out; }
+.chat-contact-avatar { position: relative; display: grid; place-items: center; width: 40px; height: 40px; flex-shrink: 0; border-radius: 50%; overflow: hidden; background: var(--surface-sunken); color: var(--yr-700); border: 1px solid var(--border-subtle); font-size: 12px; font-weight: 800; }
+.chat-contact-avatar img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.chat-entry-filters { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
+.chat-entry-filters button { min-height: 40px; display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 5px; border: 1px solid var(--border-subtle); border-radius: 10px; padding: 6px; background: var(--surface-raised); color: var(--ink-muted); font-size: 11px; font-weight: 700; }
+.chat-entry-filters button[aria-pressed='true'] { background: var(--yr-700); color: #fff; border-color: var(--yr-700); }
+.chat-entry-filters button:focus-visible { outline: 2px solid var(--yr-500); outline-offset: 2px; }
+.chat-sla { display: inline-flex; max-width: 100%; align-items: center; border-radius: 7px; border: 1px solid var(--border-subtle); padding: 3px 6px; color: var(--ink-muted); background: var(--surface-raised); font-size: 10px; font-weight: 700; overflow-wrap: anywhere; }
+.chat-sla[data-tone='late'] { color: #b42318; background: #fff1ef; border-color: #f5b7af; }
+.chat-sla[data-tone='wait'] { color: #895008; background: #fff7e6; border-color: #efd5a5; }
+.chat-sla[data-tone='ok'] { color: var(--yr-700); background: var(--surface-sunken); }
+.chat-attendance-bar { display: flex; flex-shrink: 0; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 6px; padding: 7px 12px; border-bottom: 1px solid var(--border-subtle); color: var(--ink-muted); font-size: 10px; }
+.chat-day-divider { display: flex; align-items: center; gap: 10px; margin: 16px 0 12px; color: var(--ink-muted); font-size: 10px; font-weight: 700; }
+.chat-day-divider::before, .chat-day-divider::after { content: ''; height: 1px; flex: 1; background: var(--border-subtle); }
+.chat-day-divider time { max-width: 80%; text-align: center; padding: 5px 10px; border-radius: 8px; background: var(--surface-raised); border: 1px solid var(--border-subtle); }
+.chat-media-frame { margin-bottom: 0.5rem; max-width: 100%; overflow: hidden; }
+.chat-media-frame--image { width: 18rem; height: 12rem; }
+.chat-media-frame--video { width: 18rem; height: 14rem; }
+.chat-media-frame--sticker { width: 10rem; height: 10rem; }
+.chat-media-frame--audio { width: 16rem; height: 4.5rem; }
+.chat-media-frame--file { width: 16rem; height: 2.75rem; }
+.chat-media-asset { display: block; width: 100%; height: 100%; object-fit: contain; }
+.chat-media-frame--video .chat-media-asset { height: 12rem; }
+.chat-media-placeholder { display: flex; height: 100%; flex-direction: column; align-items: flex-start; justify-content: center; }
 
 /* Dialogos e camadas fixas que moram dentro da tela nao entram na cascata:
    transform em quem e position:fixed desloca o dialogo inteiro. */
@@ -1991,207 +2067,4 @@
     animation: none;
   }
 }
-
-/* Atendimento: a conversa precisa continuar utilizável em celular estreito. */
-.whatsapp-chat-root {
-  min-width: 0;
-  max-width: 100%;
-}
-.chat-message-bubble {
-  min-width: 0;
-  max-width: min(90%, 42rem);
-  overflow-wrap: anywhere;
-}
-.chat-media-missing {
-  display: block;
-  color: var(--ink-muted);
-  font-size: 11px;
-}
-.chat-media-link {
-  display: block;
-  max-width: min(100%, 360px);
-  margin-bottom: 6px;
-}
-.chat-media-image {
-  display: block;
-  max-height: 58vh;
-  max-width: 100%;
-  border-radius: 10px;
-  object-fit: contain;
-}
-.chat-media-video {
-  display: block;
-  width: min(100%, 360px);
-  max-height: 58vh;
-  margin-bottom: 6px;
-  border-radius: 10px;
-  background: #080d15;
-}
-.chat-media-audio {
-  display: block;
-  width: min(100%, 320px);
-  min-width: 210px;
-  margin: 2px 0 6px;
-}
-.chat-media-download {
-  display: flex;
-  min-width: 0;
-  align-items: center;
-  gap: 9px;
-  margin-bottom: 6px;
-  border: 1px solid var(--border-subtle);
-  border-radius: 10px;
-  padding: 10px;
-  color: var(--ink);
-  background: var(--surface-raised);
-  text-decoration: none;
-}
-.chat-media-download:hover {
-  border-color: var(--yr-500);
-}
-.whatsapp-ai-label-compact {
-  display: none;
-}
-@media (max-width: 820px) {
-  .whatsapp-app-main {
-    padding: 0 !important;
-    overflow: hidden !important;
-    scrollbar-gutter: auto;
-  }
-  .whatsapp-app-main .view-stage {
-    height: 100%;
-  }
-  .whatsapp-chat-root {
-    width: 100%;
-    height: 100%;
-    min-height: 0;
-    border-radius: 0;
-  }
-  .whatsapp-conversation-header {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr);
-    align-items: center;
-    gap: 8px;
-    padding: 8px 11px;
-  }
-  .whatsapp-conversation-header > div:first-child {
-    min-width: 0;
-    width: 100%;
-    flex: none;
-    align-items: center;
-    gap: 8px;
-  }
-  .whatsapp-conversation-header > div:first-child > button {
-    width: 32px;
-    height: 32px;
-  }
-  .whatsapp-conversation-header > div:first-child > div:first-of-type {
-    width: 34px;
-    height: 34px;
-  }
-  .whatsapp-conversation-header > div:first-child > div:last-child {
-    flex: 1;
-    min-width: 0;
-  }
-  .whatsapp-conversation-header > div:last-child {
-    display: grid;
-    width: 100%;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    align-items: stretch;
-    gap: 6px;
-    max-width: 100%;
-    justify-content: initial;
-  }
-  .whatsapp-conversation-header > div:last-child > .chat-window {
-    grid-column: 1 / -1;
-    justify-self: start;
-    max-width: 100%;
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
-  .whatsapp-conversation-header > div:last-child > button {
-    width: 100%;
-    min-width: 0;
-    min-height: 34px;
-    justify-content: center;
-    gap: 4px;
-    padding: 6px 4px;
-    overflow: hidden;
-    font-size: 10px;
-    white-space: nowrap;
-  }
-  .whatsapp-conversation-header > div:last-child > button svg {
-    width: 13px;
-    height: 13px;
-    flex: none;
-  }
-  .whatsapp-ai-label-full {
-    display: none;
-  }
-  .whatsapp-ai-label-compact {
-    display: inline;
-  }
-  .whatsapp-composer {
-    display: grid;
-    grid-template-columns: 40px 40px minmax(0, 1fr) 40px;
-    gap: 7px;
-    padding: 9px;
-  }
-  .whatsapp-composer > button {
-    display: grid;
-    width: 40px;
-    height: 40px;
-    place-items: center;
-    padding: 0;
-  }
-  .whatsapp-composer-input {
-    width: 100%;
-    padding: 10px 11px;
-    font-size: 12px;
-  }
-  .chat-message-bubble {
-    max-width: 94%;
-    padding: 11px;
-  }
-  .chat-media-audio {
-    min-width: 0;
-    width: min(100%, 300px);
-  }
-}
-@media (max-width: 380px) {
-  .whatsapp-composer {
-    grid-template-columns: 36px 36px minmax(0, 1fr) 36px;
-    gap: 5px;
-    padding: 7px;
-  }
-  .whatsapp-composer > button {
-    width: 36px;
-    height: 38px;
-  }
-  .whatsapp-composer-input {
-    padding-inline: 8px;
-  }
-  .whatsapp-conversation-header > div:last-child {
-    gap: 5px;
-  }
-}
-
-@media (max-width: 820px) {
-  .notification-panel {
-    position: fixed;
-    top: calc(env(safe-area-inset-top, 0px) + 72px);
-    right: max(12px, env(safe-area-inset-right, 0px));
-    left: auto;
-    width: min(360px, calc(100vw - max(12px, env(safe-area-inset-left, 0px)) - max(12px, env(safe-area-inset-right, 0px))));
-    max-height: calc(100dvh - env(safe-area-inset-top, 0px) - 88px);
-    display: flex;
-    flex-direction: column;
-  }
-  .notification-panel-list {
-    flex: 1 1 auto;
-    min-height: 0;
-    max-height: none;
-    overscroll-behavior: contain;
-    -webkit-overflow-scrolling: touch;
-  }
-}
+.navbar-mobile-actions{display:none;position:absolute;top:calc(100% + 8px);right:12px;width:min(300px,calc(100vw - 24px));padding:12px;gap:12px;border:1px solid #7898bd66;border-radius:16px;background:#102a4c;box-shadow:0 16px 40px #0004;color:#fff;z-index:45}.navbar-mobile-actions.is-open{display:flex;flex-direction:column;align-items:stretch}.navbar-mobile-actions>button{display:flex;width:auto;justify-content:flex-start;gap:12px;padding:0 12px}.navbar-mobile-actions a,.navbar-mobile-actions button{min-height:44px}.navbar-mobile-actions>div:last-child{border-top:1px solid #7898bd66;padding-top:12px}

@@ -26,6 +26,8 @@ export const QrModal: React.FC<QrModalProps> = ({ open, onClose }) => {
 
   const isConnected =
     whatsappStatus.status === 'connected' || whatsappStatus.status === 'connected_meta'
+  const isPairingInProgress = Boolean(pairingCode) ||
+    whatsappStatus.lastError?.startsWith('QR aceito.') === true
 
   const handleRequestPairingCode = async (e?: React.FormEvent) => {
     if (e) e.preventDefault()
@@ -132,7 +134,7 @@ export const QrModal: React.FC<QrModalProps> = ({ open, onClose }) => {
             <p className="text-xs text-slate-600 dark:text-slate-300">
               Número ativo:{' '}
               <span className="font-mono font-bold text-slate-900 dark:text-white bg-slate-100 dark:bg-slate-800 px-2 py-1 rounded-lg">
-                {whatsappStatus.connectedNumber || '(41) 99724-4279'}
+                {whatsappStatus.connectedNumber || 'Conectado'}
               </span>
             </p>
             <p className="text-[11px] text-slate-400 max-w-xs mx-auto">
@@ -214,7 +216,7 @@ export const QrModal: React.FC<QrModalProps> = ({ open, onClose }) => {
                       </div>
                       <button
                         type="submit"
-                        disabled={loadingPairing}
+                        disabled={loadingPairing || isPairingInProgress}
                         className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white text-xs font-bold transition-all shadow-md shadow-emerald-500/20 shrink-0"
                       >
                         {loadingPairing ? 'Gerando...' : 'Gerar Código'}
@@ -229,6 +231,12 @@ export const QrModal: React.FC<QrModalProps> = ({ open, onClose }) => {
                 {pairingError && (
                   <p className="text-xs text-rose-500 bg-rose-50 dark:bg-rose-950/50 p-2.5 rounded-xl border border-rose-200 dark:border-rose-800">
                     {pairingError}
+                  </p>
+                )}
+
+                {whatsappStatus.lastError?.startsWith('QR aceito.') && (
+                  <p role="status" className="rounded-xl border border-blue-200 bg-blue-50 p-3 text-xs text-blue-900 dark:border-blue-800 dark:bg-blue-950/40 dark:text-blue-200">
+                    {whatsappStatus.lastError}
                   </p>
                 )}
 
@@ -275,19 +283,25 @@ export const QrModal: React.FC<QrModalProps> = ({ open, onClose }) => {
                   </div>
                 ) : (
                   <div className="py-8 space-y-3">
-                    <RefreshCw className="w-8 h-8 text-blue-500 animate-spin mx-auto" />
-                    <p className="text-xs text-slate-500">
-                      {whatsappStatus.lastError || 'Preparando uma sessão segura com o WhatsApp...'}
+                    <RefreshCw className="w-8 h-8 text-blue-500 motion-safe:animate-spin mx-auto" />
+                    <p role="status" className="text-xs text-slate-500">
+                      {isPairingInProgress
+                        ? whatsappStatus.lastError?.startsWith('QR aceito.')
+                          ? whatsappStatus.lastError
+                          : 'Código gerado. Conclua o vínculo no WhatsApp e aguarde a confirmação.'
+                        : whatsappStatus.lastError || 'Preparando uma sessão segura com o WhatsApp...'}
                     </p>
-                    <button
-                      type="button"
-                      onClick={handleResetSession}
-                      disabled={resetting}
-                      className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white text-xs font-bold shadow-sm"
-                    >
-                      <RefreshCw className="w-3.5 h-3.5" />
-                      {resetting ? 'Reiniciando sessão...' : 'Gerar novo QR Code'}
-                    </button>
+                    {!isPairingInProgress && (
+                      <button
+                        type="button"
+                        onClick={handleResetSession}
+                        disabled={resetting}
+                        className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white text-xs font-bold shadow-sm"
+                      >
+                        <RefreshCw className="w-3.5 h-3.5" />
+                        {resetting ? 'Reiniciando sessão...' : 'Gerar novo QR Code'}
+                      </button>
+                    )}
                   </div>
                 )}
               </div>

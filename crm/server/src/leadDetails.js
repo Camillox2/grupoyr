@@ -8,6 +8,8 @@
  * descartado em silencio.
  */
 
+import { normalizePhone } from './phone.js'
+
 const ACCESS = ['terreo', 'escada', 'elevador', 'nao_sei']
 const MODALITY = ['locacao', 'compra']
 
@@ -45,11 +47,11 @@ function cleanAddress(raw) {
   }
 }
 
-function cleanItems(raw) {
+function cleanItems(raw, catalog) {
   if (!Array.isArray(raw)) return []
   return raw.slice(0, 12).flatMap((item) => {
     if (!item || typeof item !== 'object') return []
-    const product = CATALOG.find((entry) => entry.name === item.product || entry.code === item.productCode)
+    const product = catalog.find((entry) => entry.name === item.product || (item.productCode && entry.code === item.productCode))
     if (!product) return [] // so entra o que existe no catalogo
     let modality = MODALITY.includes(item.modality) ? item.modality : 'locacao'
     // Regra de negocio: item sem locacao e sempre compra, diga o cliente o que disser.
@@ -89,13 +91,20 @@ export function addressLine(address) {
 }
 
 /** Devolve apenas os campos aceitos, ja saneados, prontos para db.update. */
-export function sanitizeLeadDetails(body) {
+export function sanitizeLeadDetails(body, equipments = []) {
   const source = body && typeof body === 'object' ? body : {}
   const addressData = cleanAddress(source.addressData)
-  const quoteItems = cleanItems(source.quoteItems)
+  const catalog = [...equipments.map(eq => ({ name: eq.name, code: eq.productCode || '', rent: true })), ...CATALOG]
+  const quoteItems = cleanItems(source.quoteItems, catalog)
   const itemsTotal = quoteItems.reduce((total, item) => total + item.qty * item.unitPrice, 0)
 
+  const pickupFreight = money(source.pickupFreight)
+  const deliveryFreight = source.deliveryFreight == null
+    ? Math.max(0, money(source.freight) - pickupFreight)
+    : money(source.deliveryFreight)
   const details = {
+    ...(typeof source.name === 'string' && source.name.trim().length >= 2 ? { name: text(source.name, 120) } : {}),
+    ...(typeof source.phone === 'string' && normalizePhone(source.phone) ? { phone: normalizePhone(source.phone) } : {}),
     cpf: text(source.cpf, 20).replace(/[^\d./-]/g, ''),
     email: text(source.email, 120),
     addressData,
@@ -103,11 +112,15 @@ export function sanitizeLeadDetails(body) {
     access: ACCESS.includes(source.access) ? source.access : 'nao_sei',
     floor: text(source.floor, 20),
     quoteItems,
-    freight: money(source.freight),
+    deliveryFreight,
+    pickupFreight,
+    pickupFreightDueDate: isoDate(source.pickupFreightDueDate),
+    freight: Math.round((deliveryFreight + pickupFreight) * 100) / 100,
     rentalMonths: integer(source.rentalMonths, 0, 120),
     deliveryDate: isoDate(source.deliveryDate),
     deliveryNotes: text(source.deliveryNotes, 400),
     internalNotes: text(source.internalNotes, 3000),
+    closingNotes: text(source.closingNotes, 2000),
     checklist: cleanChecklist(source.checklist),
     detailsUpdatedAt: new Date().toISOString(),
   }

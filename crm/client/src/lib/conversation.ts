@@ -37,6 +37,12 @@ export function windowInfo(lead: Pick<Lead, 'lastInboundAt'> | null | undefined,
 
 export const isClosed = (lead: Pick<Lead, 'conversationStatus'>) => lead.conversationStatus === 'closed'
 
+export const displayContactName = (name: string) => {
+  const value = String(name || '').trim()
+  const phoneOnly = /^[+\d\s().-]+$/.test(value) && value.replace(/\D/g, '').length >= 8
+  return !value || phoneOnly || /^cliente whatsapp\s*\(/i.test(value) ? 'Contato WhatsApp' : value
+}
+
 /** (41) 99999-0000 enquanto digita. So formata: quem valida e o servidor. */
 export function maskPhone(raw: string): string {
   const digits = raw.replace(/\D/g, '').slice(0, 13)

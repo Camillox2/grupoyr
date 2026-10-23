@@ -1,12 +1,11 @@
-import React, { useMemo, useRef, useState } from 'react'
-import { CalendarDays, ChevronLeft, ChevronRight, Clock3, FileText, MapPin, Phone, Plus, RotateCcw, Search, Truck, UserRound, Wrench } from 'lucide-react'
-import { CalendarEvent, CalendarEventType, Contract, Equipment, Invoice, Lead, User } from '../types'
+import React, { useMemo, useState } from 'react'
+import { CalendarDays, ChevronLeft, ChevronRight, Clock3, FileText, MapPin, Phone, Plus, RotateCcw, Truck, UserRound, Wrench } from 'lucide-react'
+import { CalendarEvent, CalendarEventType, Contract, Equipment, Invoice, Lead } from '../types'
 import { addLocalDays, buildAgendaItems, formatLocalDate, parseLocalDate, startOfLocalWeek, toLocalDateKey, AgendaItem } from '../lib/operations'
 import { ActionButton, PageHeader } from './ui/PageHeader'
 import { Modal } from './ui/Modal'
 import { Toast, useToast } from './ui/Toast'
 import { CalendarEventDialog } from './CalendarEventDialog'
-import { EquipmentAvailabilityView } from './EquipmentAvailabilityView'
 
 type CalendarMode = 'month' | 'week' | 'list'
 type EventFilter = 'all' | 'entrega' | 'retirada' | 'visita' | 'cobranca' | 'other'
@@ -17,8 +16,6 @@ interface CalendarViewProps {
   leads: Lead[]
   equipments: Equipment[]
   invoices: Invoice[]
-  team: User[]
-  currentUserId: string
   onRefresh: () => void
   onOpenLead: (leadId: string) => void
 }
@@ -43,15 +40,6 @@ const FILTERS: { id: EventFilter; label: string }[] = [
 ]
 const safeDate = (value: string) => parseLocalDate(value) || new Date()
 
-const AgendaAnimatedMark = () => (
-  <svg className="yr-calendar-mark" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-    <rect x="3.5" y="4.5" width="17" height="16" rx="3" stroke="currentColor" strokeWidth="1.5" />
-    <path d="M8 3.5v3M16 3.5v3M4 9.5h16" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-    <path className="yr-calendar-mark__route" d="M6.5 16h3.4l2.3-3.2h5.3" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
-    <circle cx="17.5" cy="12.8" r="1.1" fill="currentColor" />
-  </svg>
-)
-
 const AgendaVectorArt = () => (
   <div className="yr-vector-float" aria-hidden="true">
     <svg className="yr-agenda-art" viewBox="0 0 210 148" fill="none">
@@ -66,39 +54,25 @@ const AgendaVectorArt = () => (
   </div>
 )
 
-export const CalendarView: React.FC<CalendarViewProps> = ({ customEvents, contracts, leads, equipments, invoices, team, currentUserId, onRefresh, onOpenLead }) => {
+export const CalendarView: React.FC<CalendarViewProps> = ({ customEvents, contracts, leads, equipments, invoices, onRefresh, onOpenLead }) => {
   const { toast, show: showToast, dismiss: dismissToast } = useToast()
   const [mode, setMode] = useState<CalendarMode>('month')
   const [anchorDate, setAnchorDate] = useState(() => new Date())
   const [selectedDate, setSelectedDate] = useState(() => toLocalDateKey(new Date()))
   const [filter, setFilter] = useState<EventFilter>('all')
-  const [responsibleFilter, setResponsibleFilter] = useState('all')
-  const [searchTerm, setSearchTerm] = useState('')
-  const [panel, setPanel] = useState<'calendar' | 'equipment'>('calendar')
   const [showEventDialog, setShowEventDialog] = useState(false)
   const [editingEvent, setEditingEvent] = useState<CalendarEvent | null>(null)
   const [detailEvent, setDetailEvent] = useState<AgendaItem | null>(null)
-  const monthDateRefs = useRef(new Map<string, HTMLButtonElement>())
 
   const agendaItems = useMemo(() => buildAgendaItems(customEvents, contracts, leads, invoices).filter((item) => {
-    if (filter !== 'all' && filter === 'other' && ['entrega', 'retirada', 'visita', 'cobranca'].includes(item.type)) return false
-    if (filter !== 'all' && filter !== 'other' && item.type !== filter) return false
-    if (responsibleFilter !== 'all' && item.assignedTo !== responsibleFilter) return false
-    const query = searchTerm.trim().toLocaleLowerCase('pt-BR')
-    if (query) {
-      const lead = leads.find((candidate) => candidate.id === item.leadId)
-      const contract = contracts.find((candidate) => candidate.id === item.contractId)
-      const responsible = team.find((candidate) => candidate.id === item.assignedTo)
-      const haystack = [item.title, item.notes, lead?.name, contract?.number, contract?.clientName, responsible?.name].filter(Boolean).join(' ').toLocaleLowerCase('pt-BR')
-      if (!haystack.includes(query)) return false
-    }
-    return true
-  }), [customEvents, contracts, leads, invoices, filter, responsibleFilter, searchTerm, team])
+    if (filter === 'all') return true
+    if (filter === 'other') return !['entrega', 'retirada', 'visita', 'cobranca'].includes(item.type)
+    return item.type === filter
+  }), [customEvents, contracts, leads, invoices, filter])
 
   const todayKey = toLocalDateKey(new Date())
   const selectedItems = agendaItems.filter((item) => item.date === selectedDate)
   const upcomingItems = agendaItems.filter((item) => item.date >= todayKey && item.status !== 'done' && item.status !== 'cancelled').slice(0, 7)
-  const responsibleName = (id: string | null) => team.find((member) => member.id === id)?.name || ''
   const monthGrid = useMemo(() => {
     const start = startOfLocalWeek(new Date(anchorDate.getFullYear(), anchorDate.getMonth(), 1))
     return Array.from({ length: 42 }, (_, index) => addLocalDays(start, index))
@@ -190,7 +164,7 @@ export const CalendarView: React.FC<CalendarViewProps> = ({ customEvents, contra
         return (
           <button type="button" key={item.id} className={`yr-agenda-list__row ${item.status === 'done' || item.status === 'cancelled' ? 'is-muted' : ''}`} onClick={() => openEvent(item)}>
             <span className={`yr-agenda-list__icon yr-agenda-list__icon--${TYPE_CLASS[item.type]}`}><Icon className="h-4 w-4" /></span>
-            <span className="min-w-0 flex-1 text-left"><span className="block truncate text-[12.5px] font-extrabold" style={{ color: 'var(--ink)' }}>{item.title}</span><span className="mt-0.5 block truncate text-[11px]" style={{ color: 'var(--ink-muted)' }}>{TYPE_LABEL[item.type]}{item.leadId ? ` · ${leads.find((lead) => lead.id === item.leadId)?.name || ''}` : ''}{responsibleName(item.assignedTo) ? ` · ${responsibleName(item.assignedTo)}` : ''}{item.notes ? ` · ${item.notes}` : ''}</span></span>
+            <span className="min-w-0 flex-1 text-left"><span className="block truncate text-[12.5px] font-extrabold" style={{ color: 'var(--ink)' }}>{item.title}</span><span className="mt-0.5 block truncate text-[11px]" style={{ color: 'var(--ink-muted)' }}>{TYPE_LABEL[item.type]}{item.notes ? ` · ${item.notes}` : ''}</span></span>
             <span className="ml-2 shrink-0 text-right text-[11px] font-bold tabular-nums" style={{ color: 'var(--ink-muted)' }}>{item.startTime || '—'}{item.endTime && <span className="block font-medium">até {item.endTime}</span>}</span>
             {item.status === 'overdue' && <span className="yr-agenda-status yr-agenda-status--overdue">Vencida</span>}
           </button>
@@ -204,19 +178,13 @@ export const CalendarView: React.FC<CalendarViewProps> = ({ customEvents, contra
   return (
     <div className="yr-calendar-page space-y-5 pb-14">
       <PageHeader
-        icon={<AgendaAnimatedMark />}
+        icon={<CalendarDays className="h-5 w-5" />}
         eyebrow="Operação"
         title="Agenda"
         description="Entregas, retiradas, visitas, retornos e cobranças em um só lugar."
         actions={<ActionButton onClick={() => openNewEvent()}><Plus className="h-4 w-4" /> Novo compromisso</ActionButton>}
       />
 
-      <div className="yr-operations-tabs" role="tablist" aria-label="Agenda operacional">
-        <button type="button" role="tab" aria-selected={panel === 'calendar'} className={panel === 'calendar' ? 'is-active' : ''} onClick={() => setPanel('calendar')}><CalendarDays className="h-4 w-4" /> Calendário</button>
-        <button type="button" role="tab" aria-selected={panel === 'equipment'} className={panel === 'equipment' ? 'is-active' : ''} onClick={() => setPanel('equipment')}><Wrench className="h-4 w-4" /> Equipamentos</button>
-      </div>
-
-      {panel === 'equipment' ? <EquipmentAvailabilityView equipments={equipments} contracts={contracts} events={customEvents} leads={leads} onOpenLead={onOpenLead} /> : (
       <section className="yr-calendar-shell" aria-label="Agenda operacional">
         <div className="yr-calendar-toolbar">
           <div className="yr-calendar-toolbar__top">
@@ -234,8 +202,6 @@ export const CalendarView: React.FC<CalendarViewProps> = ({ customEvents, contra
           </div>
           <div className="yr-calendar-filters" aria-label="Filtrar compromissos">
             {FILTERS.map((item) => <button key={item.id} type="button" aria-pressed={filter === item.id} className={filter === item.id ? 'is-active' : ''} onClick={() => setFilter(item.id)}>{item.label}</button>)}
-            <label className="yr-calendar-filter-select"><span className="sr-only">Responsável</span><select value={responsibleFilter} onChange={(event) => setResponsibleFilter(event.target.value)}><option value="all">Toda a equipe</option>{team.map((member) => <option key={member.id} value={member.id}>{member.name}</option>)}</select></label>
-            <label className="yr-calendar-search"><Search className="h-3.5 w-3.5" aria-hidden="true" /><span className="sr-only">Buscar na agenda</span><input value={searchTerm} onChange={(event) => setSearchTerm(event.target.value)} placeholder="Cliente, contrato ou evento" /></label>
           </div>
         </div>
 
@@ -265,21 +231,10 @@ export const CalendarView: React.FC<CalendarViewProps> = ({ customEvents, contra
                     const isCurrentMonth = day.getMonth() === anchorDate.getMonth()
                     const isSelected = dateKey === selectedDate
                     const isToday = dateKey === todayKey
-                    const moveWithKeyboard = (event: React.KeyboardEvent<HTMLButtonElement>) => {
-                      const delta = event.key === 'ArrowRight' ? 1 : event.key === 'ArrowLeft' ? -1 : event.key === 'ArrowDown' ? 7 : event.key === 'ArrowUp' ? -7 : 0
-                      if (!delta) return
-                      event.preventDefault()
-                      const next = addLocalDays(day, delta)
-                      const nextKey = toLocalDateKey(next)
-                      setSelectedDate(nextKey)
-                      if (next.getMonth() !== anchorDate.getMonth() || next.getFullYear() !== anchorDate.getFullYear()) setAnchorDate(new Date(next.getFullYear(), next.getMonth(), 1))
-                      requestAnimationFrame(() => requestAnimationFrame(() => monthDateRefs.current.get(nextKey)?.focus()))
-                    }
                     return (
-                      <div key={dateKey} className={`yr-calendar-cell ${!isCurrentMonth ? 'is-outside' : ''} ${isSelected ? 'is-selected' : ''} ${isToday ? 'is-today' : ''}`}>
-                        <button ref={(element) => { if (element) monthDateRefs.current.set(dateKey, element); else monthDateRefs.current.delete(dateKey) }} type="button" className="yr-calendar-cell__date" tabIndex={isSelected ? 0 : -1} onKeyDown={moveWithKeyboard} onClick={() => { setSelectedDate(dateKey); setAnchorDate(new Date(day.getFullYear(), day.getMonth(), 1)) }} aria-label={`${formatLocalDate(dateKey, { weekday: 'long', day: 'numeric', month: 'long' })}, ${itemsForDay(day).length} compromissos`} aria-current={isToday ? 'date' : undefined} aria-pressed={isSelected}>{day.getDate()}</button>
-                        {renderDayEvents(dateKey)}
-                      </div>
+                      <button type="button" key={dateKey} className={`yr-calendar-cell ${!isCurrentMonth ? 'is-outside' : ''} ${isSelected ? 'is-selected' : ''} ${isToday ? 'is-today' : ''}`} onClick={() => { setSelectedDate(dateKey); setAnchorDate(new Date(day.getFullYear(), day.getMonth(), 1)) }} aria-label={`${formatLocalDate(dateKey, { weekday: 'long', day: 'numeric', month: 'long' })}, ${itemsForDay(day).length} compromissos`} aria-pressed={isSelected}>
+                        <span className="yr-calendar-cell__date">{day.getDate()}</span>{renderDayEvents(dateKey)}
+                      </button>
                     )
                   })}
                 </div>
@@ -334,7 +289,6 @@ export const CalendarView: React.FC<CalendarViewProps> = ({ customEvents, contra
           </div>
         )}
       </section>
-      )}
 
       <CalendarEventDialog
         open={showEventDialog}
@@ -343,9 +297,6 @@ export const CalendarView: React.FC<CalendarViewProps> = ({ customEvents, contra
         leads={leads}
         contracts={contracts}
         equipments={equipments}
-        invoices={invoices}
-        team={team}
-        currentUserId={currentUserId}
         onClose={() => setShowEventDialog(false)}
         onSaved={handleSaved}
       />
@@ -361,15 +312,12 @@ export const CalendarView: React.FC<CalendarViewProps> = ({ customEvents, contra
         {detailEvent && (
           <div className="space-y-4">
             <div className="yr-event-detail-row"><Clock3 className="h-4 w-4" /><span>{detailEvent.startTime ? `${detailEvent.startTime}${detailEvent.endTime ? `–${detailEvent.endTime}` : ''}` : 'Sem horário definido'}</span></div>
-            {detailEvent.endDate && <p className="yr-event-detail-label">Indisponível até {formatLocalDate(detailEvent.endDate, { day: 'numeric', month: 'long', year: 'numeric' })}</p>}
             {detailEvent.notes && <p className="yr-event-detail-notes">{detailEvent.notes}</p>}
             {detailEvent.source === 'invoice' && <p className="yr-event-detail-label">Esta data vem de uma cobrança cadastrada no financeiro.</p>}
             {detailEvent.contractId && <p className="yr-event-detail-label">Contrato: {contracts.find((item) => item.id === detailEvent.contractId)?.number || '—'}</p>}
-            {detailEvent.equipmentId && <p className="yr-event-detail-label">Equipamento: {equipments.find((item) => item.id === detailEvent.equipmentId)?.name || '—'}</p>}
-            {detailEvent.assignedTo && <p className="yr-event-detail-label">Responsável: {responsibleName(detailEvent.assignedTo) || '—'}</p>}
             <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
               {detailEvent.leadId && <button type="button" className="yr-dialog-secondary" onClick={() => { onOpenLead(detailEvent.leadId!); setDetailEvent(null) }}><UserRound className="h-4 w-4" /> Abrir cliente</button>}
-              {detailEvent.source === 'manual' && detailEvent.status !== 'done' && detailEvent.status !== 'cancelled' && <button type="button" className="yr-dialog-primary" onClick={handleMarkDone}>Marcar concluído</button>}
+              {detailEvent.source === 'manual' && detailEvent.status !== 'done' && <button type="button" className="yr-dialog-primary" onClick={handleMarkDone}>Marcar concluído</button>}
             </div>
           </div>
         )}

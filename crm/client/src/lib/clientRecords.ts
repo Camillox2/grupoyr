@@ -20,7 +20,7 @@ export const normalizedText = (value: string | null | undefined) => String(value
   .toLowerCase()
   .trim()
 
-const clientStages = new Set<Lead['stage']>([
+const contractlessClientStages = new Set<Lead['stage']>([
   'contrato_gerado',
   'assinado_entrega',
   'locacao_ativa',
@@ -31,36 +31,44 @@ export const buildClientRecords = (leads: Lead[], contracts: Contract[]): Client
   const leadsById = new Map(leads.map((lead) => [lead.id, lead]))
   const leadsByCpf = new Map<string, Lead>()
   const leadsByContact = new Map<string, Lead>()
-
   for (const lead of leads) {
     const cpf = digitsOnly(lead.cpf)
+    if (cpf) leadsByCpf.set(cpf, lead)
     const phone = digitsOnly(lead.phone)
     const name = normalizedText(lead.name)
-    if (cpf) leadsByCpf.set(cpf, lead)
-    if (phone && name) leadsByContact.set(`${phone}:${name}`, lead)
+    if (phone && name) leadsByContact.set(phone + ':' + name, lead)
   }
 
   const grouped = new Map<string, ClientRecord>()
-  const completeness = (lead: Lead) => Number(Boolean(lead.email))
-    + Number(Boolean(lead.cpf))
-    + Number(Boolean(lead.address))
-    + Number(Boolean(lead.addressData?.street))
-    + Number(Boolean(lead.quoteItems?.length))
-    + Number(Boolean(lead.deliveryDate))
+  const completeness = (lead: Lead) => (
+    Number(Boolean(lead.email)) +
+    Number(Boolean(lead.cpf)) +
+    Number(Boolean(lead.address)) +
+    Number(Boolean(lead.addressData?.street)) +
+    Number(Boolean(lead.quoteItems?.length)) +
+    Number(Boolean(lead.deliveryDate))
+  )
 
-  for (const contract of contracts) {
+  const addContract = (contract: Contract) => {
     const phone = digitsOnly(contract.clientPhone)
-    const name = normalizedText(contract.clientName)
+    const nameKey = normalizedText(contract.clientName)
     const cpf = digitsOnly(contract.clientCpf)
     const lead = leadsById.get(contract.leadId)
       || (cpf ? leadsByCpf.get(cpf) : undefined)
-      || (phone && name ? leadsByContact.get(`${phone}:${name}`) : undefined)
+      || (phone && nameKey ? leadsByContact.get(phone + ':' + nameKey) : undefined)
       || null
     const clientCpf = cpf || digitsOnly(lead?.cpf)
-    const contactKey = name && phone ? `contact:${name}:${phone}` : ''
-    const id = clientCpf ? `cpf:${clientCpf}` : contactKey || (lead ? `lead:${lead.id}` : `legacy:${name}:${phone}`)
+    const contactId = nameKey && phone ? 'contact:' + nameKey + ':' + phone : ''
+    const id = clientCpf
+      ? 'cpf:' + clientCpf
+      : contactId
+        ? contactId
+      : lead
+        ? 'lead:' + lead.id
+        : contract.leadId
+          ? 'lead:' + contract.leadId
+          : 'legacy:' + nameKey + ':' + phone
     let record = grouped.get(id)
-
     if (!record) {
       record = {
         id,
@@ -81,21 +89,22 @@ export const buildClientRecords = (leads: Lead[], contracts: Contract[]): Client
       record.email = lead.email || record.email
       record.cpf = lead.cpf || record.cpf
     }
-
     if (lead?.id && !record.leadIds.includes(lead.id)) record.leadIds.push(lead.id)
+    else if (contract.leadId && !record.leadIds.includes(contract.leadId)) record.leadIds.push(contract.leadId)
     record.contracts.push(contract)
     if (String(contract.createdAt || '') > record.lastActivity) record.lastActivity = contract.createdAt
   }
 
+  for (const contract of contracts) addContract(contract)
+
   for (const lead of leads) {
-    if (!clientStages.has(lead.stage)) continue
+    if (!lead.clientRegisteredAt && !contractlessClientStages.has(lead.stage)) continue
     const cpf = digitsOnly(lead.cpf)
     const phone = digitsOnly(lead.phone)
     const name = normalizedText(lead.name)
-    const contactKey = name && phone ? `contact:${name}:${phone}` : ''
-    const id = cpf ? `cpf:${cpf}` : contactKey || `lead:${lead.id}`
+    const contactId = name && phone ? 'contact:' + name + ':' + phone : ''
+    const id = cpf ? 'cpf:' + cpf : contactId || 'lead:' + lead.id
     const existing = grouped.get(id)
-
     if (existing) {
       if (!existing.leadIds.includes(lead.id)) existing.leadIds.push(lead.id)
       if (!existing.lead || completeness(lead) > completeness(existing.lead)) {
@@ -107,7 +116,6 @@ export const buildClientRecords = (leads: Lead[], contracts: Contract[]): Client
       }
       continue
     }
-
     grouped.set(id, {
       id,
       lead,

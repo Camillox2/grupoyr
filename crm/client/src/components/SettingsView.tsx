@@ -8,35 +8,43 @@ import {
   QrCode,
   Save,
   BellRing,
-  UserRound,
+  Bell,
 } from 'lucide-react'
 import { PageHeader } from './ui/PageHeader'
 import { Toast, useToast } from './ui/Toast'
 import { useSocket } from '../contexts/SocketContext'
-import { User } from '../types'
+import { PwaInstallPanel } from './PwaStatus'
+import { ContractEmailSettings } from './ContractEmailPanel'
 
 interface SettingsViewProps {
   onOpenQr: () => void
+  onOpenYria?: () => void
 }
 
-export const SettingsView: React.FC<SettingsViewProps> = ({ onOpenQr }) => {
+const toApplicationServerKey = (value: string) => {
+  const padding = '='.repeat((4 - value.length % 4) % 4)
+  const base64 = (value + padding).replace(/-/g, '+').replace(/_/g, '/')
+  const raw = window.atob(base64)
+  return Uint8Array.from(raw, (character) => character.charCodeAt(0))
+}
+
+export const SettingsView: React.FC<SettingsViewProps> = ({ onOpenQr, onOpenYria }) => {
   const { whatsappStatus, switchWhatsAppProvider } = useSocket()
   const [geminiApiKey, setGeminiApiKey] = useState('')
+  const [aiServicePrompt, setAiServicePrompt] = useState('')
+  const [slaGoalMinutes, setSlaGoalMinutes] = useState(15)
+  const [settingsLoaded, setSettingsLoaded] = useState(false)
+  const [settingsLoadError, setSettingsLoadError] = useState('')
   const [metaToken, setMetaToken] = useState('')
   const [metaPhoneId, setMetaPhoneId] = useState('')
   const [metaWabaId, setMetaWabaId] = useState('')
   const [metaAppSecret, setMetaAppSecret] = useState('')
-  const [aiServicePrompt, setAiServicePrompt] = useState('')
-  const [settingsLoaded, setSettingsLoaded] = useState(false)
-  const [settingsLoadFailed, setSettingsLoadFailed] = useState(false)
-  const [defaultLeadAssigneeId, setDefaultLeadAssigneeId] = useState('')
-  const [users, setUsers] = useState<User[]>([])
-  const [notificationPermission, setNotificationPermission] = useState(() => (
-    typeof Notification === 'undefined' ? 'unsupported' : Notification.permission
-  ))
   const [metaAppSecretConfigured, setMetaAppSecretConfigured] = useState(false)
   const [geminiConfigured, setGeminiConfigured] = useState(false)
   const [metaTokenConfigured, setMetaTokenConfigured] = useState(false)
+  const [pushState, setPushState] = useState<'checking' | 'unsupported' | 'disabled' | 'enabled' | 'denied'>('checking')
+  const [pushBusy, setPushBusy] = useState(false)
+  const [pushMessage, setPushMessage] = useState('')
   const { toast, show: showToast, dismiss: dismissToast } = useToast()
 
   useEffect(() => {
@@ -45,56 +53,138 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onOpenQr }) => {
         Authorization: `Bearer ${localStorage.getItem('yr_crm_token') || ''}`,
       },
     })
-      .then((res) => {
-        if (!res.ok) throw new Error('Não foi possível carregar as configurações.')
-        return res.json()
-      })
+      .then((res) => (res.ok ? res.json() : Promise.reject(new Error('Não foi possível carregar as configurações.'))))
       .then((data) => {
-        setGeminiConfigured(data.geminiApiKey === '__configured__')
-        setGeminiApiKey(data.geminiApiKey === '__configured__' ? '' : data.geminiApiKey || '')
-        setMetaTokenConfigured(data.metaConfig?.accessToken === '__configured__')
-        setMetaToken(data.metaConfig?.accessToken === '__configured__' ? '' : data.metaConfig?.accessToken || '')
-        setMetaPhoneId(data.metaConfig?.phoneNumberId || '')
-        setMetaWabaId(data.metaConfig?.wabaId || '')
-        setMetaAppSecretConfigured(data.metaConfig?.appSecret === '__configured__')
-        setAiServicePrompt(data.aiServicePrompt || '')
-        setDefaultLeadAssigneeId(data.defaultLeadAssigneeId || '')
-        setSettingsLoaded(true)
+        if (data) {
+          setGeminiConfigured(data.geminiApiKey === '__configured__')
+          setGeminiApiKey(data.geminiApiKey === '__configured__' ? '' : data.geminiApiKey || '')
+          setAiServicePrompt(typeof data.aiServicePrompt === 'string' ? data.aiServicePrompt : '')
+          setSlaGoalMinutes(data.conversationSla?.goalMinutes ?? 15)
+          setMetaTokenConfigured(data.metaConfig?.accessToken === '__configured__')
+          setMetaToken(data.metaConfig?.accessToken === '__configured__' ? '' : data.metaConfig?.accessToken || '')
+          setMetaPhoneId(data.metaConfig?.phoneNumberId || '')
+          setMetaWabaId(data.metaConfig?.wabaId || '')
+          setMetaAppSecretConfigured(data.metaConfig?.appSecret === '__configured__')
+          setSettingsLoaded(true)
+        }
       })
-      .catch(() => setSettingsLoadFailed(true))
-
-    fetch('/api/users', { headers: { Authorization: `Bearer ${localStorage.getItem('yr_crm_token') || ''}` } })
-      .then((res) => (res.ok ? res.json() : []))
-      .then((data: User[]) => setUsers(Array.isArray(data) ? data : []))
-      .catch(() => {})
+      .catch((error: unknown) => {
+        setSettingsLoadError(error instanceof Error ? error.message : 'Não foi possível carregar as configurações.')
+      })
   }, [])
 
-  const enableDesktopNotifications = async () => {
-    if (typeof Notification === 'undefined') {
-      showToast({ tone: 'alert', message: 'Este navegador não oferece notificações do sistema.' })
+  useEffect(() => {
+    if (!('serviceWorker' in navigator) || !('PushManager' in window) || !('Notification' in window)) {
+      setPushState('unsupported')
       return
     }
+    if (Notification.permission === 'denied') {
+      setPushState('denied')
+      return
+    }
+    navigator.serviceWorker.ready
+      .then((registration) => registration.pushManager.getSubscription())
+      .then((subscription) => setPushState(subscription ? 'enabled' : 'disabled'))
+      .catch(() => setPushState('disabled'))
+  }, [])
+
+  const enablePush = async () => {
+    setPushBusy(true)
+    setPushMessage('')
     try {
-      const permission = Notification.permission === 'default'
-        ? await Notification.requestPermission()
-        : Notification.permission
-      setNotificationPermission(permission)
-      if (permission === 'granted') {
-        localStorage.setItem('yr_crm_windows_notifications', 'enabled')
-        showToast({ tone: 'ok', message: 'Notificações do computador ativadas neste navegador.' })
-      } else {
-        localStorage.removeItem('yr_crm_windows_notifications')
-        showToast({ tone: 'alert', message: 'Permita notificações para o CRM nas configurações do navegador.' })
+      if (!('serviceWorker' in navigator) || !('PushManager' in window) || !('Notification' in window)) {
+        setPushState('unsupported')
+        return
       }
-    } catch {
-      showToast({ tone: 'alert', message: 'Não foi possível ativar as notificações neste navegador.' })
+      const permission = Notification.permission === 'granted'
+        ? 'granted'
+        : await Notification.requestPermission()
+      if (permission !== 'granted') {
+        setPushState('denied')
+        setPushMessage('Permissão não concedida. Você pode liberá-la nas permissões do site no navegador.')
+        return
+      }
+
+      const registration = await navigator.serviceWorker.register('/sw.js', { scope: '/' })
+      const keyResponse = await fetch('/api/push/public-key', {
+        headers: { Authorization: `Bearer ${localStorage.getItem('yr_crm_token') || ''}` },
+      })
+      const keyData = await keyResponse.json().catch(() => null)
+      if (!keyResponse.ok || !keyData?.publicKey) throw new Error(keyData?.error || 'Servidor de notificações indisponível.')
+
+      const subscription = await registration.pushManager.getSubscription()
+        || await registration.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: toApplicationServerKey(keyData.publicKey) })
+      const response = await fetch('/api/push/subscribe', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${localStorage.getItem('yr_crm_token') || ''}`,
+        },
+        body: JSON.stringify({ subscription: subscription.toJSON() }),
+      })
+      const data = await response.json().catch(() => null)
+      if (!response.ok) throw new Error(data?.error || 'Não foi possível salvar este dispositivo.')
+      setPushState('enabled')
+      setPushMessage('Notificações ativadas neste dispositivo.')
+    } catch (error) {
+      console.error('Erro ao ativar notificações push:', error)
+      setPushMessage(error instanceof Error ? error.message : 'Não foi possível ativar as notificações.')
+    } finally {
+      setPushBusy(false)
+    }
+  }
+
+  const disablePush = async () => {
+    setPushBusy(true)
+    setPushMessage('')
+    try {
+      const registration = await navigator.serviceWorker.ready
+      const subscription = await registration.pushManager.getSubscription()
+      if (subscription) {
+        const response = await fetch('/api/push/subscribe', {
+          method: 'DELETE',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${localStorage.getItem('yr_crm_token') || ''}`,
+          },
+          body: JSON.stringify({ endpoint: subscription.endpoint }),
+        })
+        if (!response.ok) throw new Error('Não foi possível remover o dispositivo no servidor.')
+        await subscription.unsubscribe()
+      }
+      setPushState('disabled')
+      setPushMessage('Notificações desativadas neste dispositivo.')
+    } catch (error) {
+      console.error('Erro ao desativar notificações push:', error)
+      setPushMessage(error instanceof Error ? error.message : 'Não foi possível desativar as notificações.')
+    } finally {
+      setPushBusy(false)
+    }
+  }
+
+  const sendPushTest = async () => {
+    setPushBusy(true)
+    setPushMessage('')
+    try {
+      const response = await fetch('/api/push/test', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${localStorage.getItem('yr_crm_token') || ''}` },
+      })
+      const data = await response.json().catch(() => null)
+      if (!response.ok) throw new Error(data?.error || 'Não foi possível enviar o teste.')
+      setPushMessage('Notificação de teste enviada. Confira o Windows ou o celular.')
+    } catch (error) {
+      console.error('Erro ao testar notificação:', error)
+      setPushMessage(error instanceof Error ? error.message : 'Não foi possível enviar o teste.')
+    } finally {
+      setPushBusy(false)
     }
   }
 
   const handleSaveSettings = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!settingsLoaded) {
-      showToast({ tone: 'alert', message: 'As configurações não foram carregadas; recarregue antes de salvar para preservar o texto da YRIA.' })
+      showToast({ tone: 'alert', message: 'Aguarde o carregamento das configurações antes de salvar.' })
       return
     }
     try {
@@ -107,7 +197,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onOpenQr }) => {
         body: JSON.stringify({
           geminiApiKey,
           aiServicePrompt,
-          defaultLeadAssigneeId,
+          conversationSla: { goalMinutes: slaGoalMinutes },
           metaConfig: {
             accessToken: metaToken,
             phoneNumberId: metaPhoneId,
@@ -120,6 +210,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onOpenQr }) => {
       if (res.ok) {
         // Campos de segredo voltam a ficar vazios: o valor ja esta guardado.
         if (metaAppSecret) { setMetaAppSecret(''); setMetaAppSecretConfigured(true) }
+        setSettingsLoadError('')
         showToast({ tone: 'ok', message: 'Configurações salvas e aplicadas.' })
       } else {
         // Antes, um erro ao salvar passava calado e parecia que tinha dado certo.
@@ -140,10 +231,24 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onOpenQr }) => {
         icon={<Settings className="h-5 w-5" />}
         eyebrow="Ajustes"
         title="Configurações"
-        description="Provedor de WhatsApp, credenciais da Meta Cloud API e a chave da IA."
+        description="Provedor de WhatsApp, credenciais e orientações de atendimento da YRIA."
       />
+      {settingsLoadError && (
+        <p className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-xs text-rose-800 dark:border-rose-900 dark:bg-rose-950/30 dark:text-rose-200" role="alert">
+          {settingsLoadError} O texto salvo da YRIA não será substituído enquanto as configurações não carregarem.
+        </p>
+      )}
 
+      <PwaInstallPanel />
+      <ContractEmailSettings />
       <form onSubmit={handleSaveSettings} className="grid items-start gap-6 xl:grid-cols-2">
+        <section className="card p-5 xl:col-span-2" aria-labelledby="sla-settings-title">
+          <h3 id="sla-settings-title" className="text-sm font-bold">SLA de atendimento humano</h3>
+          <div className="mt-3 flex flex-col gap-3 sm:flex-row sm:items-end">
+            <label className="sheet-field max-w-xs"><span>Meta de resposta do vendedor (minutos)</span><input type="number" className="field-control" min={1} max={1440} step={1} required value={slaGoalMinutes} onChange={event => setSlaGoalMinutes(Number(event.target.value))} /></label>
+            <p className="text-xs leading-relaxed" style={{ color: 'var(--ink-muted)' }}>Conta tempo corrido desde a mensagem mais antiga ainda sem resposta humana. A YRIA não encerra o SLA. Conversas encerradas não ficam em atraso. Salve abaixo para aplicar.</p>
+          </div>
+        </section>
         {/* WhatsApp Provider Switcher Card */}
         <div className="p-6 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm space-y-4">
           <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800">
@@ -317,47 +422,6 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onOpenQr }) => {
             </p>
           </div>
 
-          <div className="grid gap-4 sm:grid-cols-2">
-            <label className="block min-w-0 text-xs font-semibold text-slate-700 dark:text-slate-300">
-              <span className="mb-1 flex items-center gap-1.5"><UserRound className="h-3.5 w-3.5 text-blue-600" />Vendedor que recebe leads novos</span>
-              <select
-                value={defaultLeadAssigneeId}
-                onChange={(event) => setDefaultLeadAssigneeId(event.target.value)}
-                className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-xs text-slate-900 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
-              >
-                <option value="">Responsável padrão da equipe</option>
-                {users.map((user) => <option key={user.id} value={user.id}>{user.name} · {user.role}</option>)}
-              </select>
-              <span className="mt-1 block font-normal text-slate-500">A qualificação concluída será encaminhada para esta pessoa.</span>
-            </label>
-
-            <div className="min-w-0 rounded-xl border border-blue-100 bg-blue-50/70 p-3 dark:border-blue-900/60 dark:bg-blue-950/30">
-              <p className="flex items-center gap-1.5 text-xs font-bold text-slate-800 dark:text-slate-100"><BellRing className="h-3.5 w-3.5 text-blue-600" />Avisos no Windows</p>
-              <p className="mt-1 text-[11px] leading-relaxed text-slate-600 dark:text-slate-300">
-                {notificationPermission === 'granted' ? 'Permissão concedida neste navegador.' : notificationPermission === 'denied' ? 'Permissão bloqueada. Altere nas configurações do site no navegador.' : notificationPermission === 'unsupported' ? 'Este navegador não oferece notificações.' : 'Ative para receber um aviso nativo quando a IA encaminhar um lead.'}
-              </p>
-              <button type="button" onClick={enableDesktopNotifications} className="mt-2 rounded-lg border border-blue-200 bg-white px-3 py-1.5 text-[11px] font-bold text-blue-800 dark:border-blue-800 dark:bg-slate-900 dark:text-blue-200">
-                {notificationPermission === 'granted' ? 'Permissão ativa' : 'Ativar notificações'}
-              </button>
-            </div>
-          </div>
-
-          <div>
-            <label htmlFor="ai-service-prompt" className="mb-1 block text-xs font-semibold text-slate-700 dark:text-slate-300">Como a YRIA deve agir</label>
-            {settingsLoadFailed && <p className="mb-2 rounded-lg border border-amber-200 bg-amber-50 p-2 text-[11px] text-amber-900 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-200">Não foi possível carregar suas configurações. Recarregue a tela antes de salvar; o texto salvo da YRIA será preservado.</p>}
-            <textarea
-              id="ai-service-prompt"
-              rows={5}
-              maxLength={5000}
-              value={aiServicePrompt}
-              onChange={(event) => setAiServicePrompt(event.target.value)}
-              placeholder="Ex.: fale com cordialidade e objetividade; priorize entender o equipamento, cidade, prazo e condições de entrega."
-              disabled={!settingsLoaded}
-              className="w-full resize-y rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-xs leading-relaxed text-slate-900 placeholder:text-slate-400 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 disabled:cursor-wait disabled:opacity-60 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
-            />
-            <p className="mt-1 text-[11px] leading-relaxed text-slate-500">{aiServicePrompt.length}/5000 caracteres. A IA faz somente a triagem comercial, escreve em texto simples sem asteriscos e para após qualificar, avisando o responsável. Essas regras não podem ser substituídas pelo texto personalizado.</p>
-          </div>
-
           {/* Cascade visual representation */}
           <div>
             <span className="text-xs font-semibold text-slate-700 dark:text-slate-300 block mb-2">
@@ -387,15 +451,89 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onOpenQr }) => {
           </div>
         </div>
 
+        <section className="p-6 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm space-y-4 xl:col-span-2" aria-labelledby="yria-prompt-title">
+          <div className="flex items-start gap-3 border-b border-slate-100 pb-3 dark:border-slate-800">
+            <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-purple-50 text-purple-700 dark:bg-purple-950/50 dark:text-purple-300">
+              <Bot className="h-4 w-4" />
+            </span>
+            <div>
+              <h3 id="yria-prompt-title" className="text-sm font-bold text-slate-900 dark:text-white">Como a YRIA deve agir</h3>
+              <p className="mt-1 text-xs leading-relaxed text-slate-500">
+                Instruções da equipe para o tom e as prioridades do atendimento. O texto que já estava salvo foi preservado e é carregado neste campo.
+              </p>
+            </div>
+          </div>
+          <div>
+            <label htmlFor="yria-service-prompt" className="mb-1.5 block text-xs font-semibold text-slate-700 dark:text-slate-300">
+              Instruções personalizadas
+            </label>
+            <p id="yria-settings-note" className="mb-3 text-xs leading-relaxed text-slate-500">Seu texto foi preservado. Edite instruções e personas, teste e publique na nova área YRIA.</p>
+            <button type="button" onClick={onOpenYria} className="mb-3 rounded-xl bg-blue-700 px-4 py-3 text-xs font-bold text-white">Abrir YRIA e laboratório</button>
+            <textarea
+              id="ai-service-prompt"
+              value={aiServicePrompt}
+              aria-describedby="yria-settings-note"
+              readOnly
+              maxLength={5000}
+              rows={12}
+              spellCheck
+              disabled={!settingsLoaded}
+              placeholder={settingsLoaded ? 'Escreva aqui como a YRIA deve atender…' : 'Carregando o texto salvo…'}
+              className="w-full resize-y rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-3 text-xs leading-5 text-slate-900 outline-none transition focus:border-purple-400 focus:ring-2 focus:ring-purple-100 disabled:cursor-wait disabled:opacity-70 dark:border-slate-700 dark:bg-slate-800 dark:text-white dark:focus:ring-purple-950"
+            />
+            <div className="mt-2 flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+              <p className="text-[11px] leading-relaxed text-slate-500">
+                A YRIA continua limitada à qualificação comercial e ao encaminhamento para o vendedor; estas instruções complementam esse protocolo.
+              </p>
+              <span className="shrink-0 text-[11px] tabular-nums text-slate-400">{aiServicePrompt.length}/5000 caracteres</span>
+            </div>
+          </div>
+        </section>
+
+        <section className="p-6 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm space-y-4 xl:col-span-2" aria-labelledby="push-notifications-title">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+            <div className="flex items-start gap-3">
+              <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-blue-50 text-blue-700 dark:bg-blue-950/50 dark:text-blue-300">
+                {pushState === 'enabled' ? <BellRing className="h-5 w-5" /> : <Bell className="h-5 w-5" />}
+              </span>
+              <div>
+                <h3 id="push-notifications-title" className="text-sm font-bold text-slate-900 dark:text-white">Avisos no Windows e celular</h3>
+                <p className="mt-1 max-w-2xl text-xs leading-relaxed text-slate-500">
+                  Receba um aviso quando a IA concluir a qualificação ou precisar passar a conversa para um vendedor. A permissão é salva separadamente em cada dispositivo.
+                </p>
+                {pushMessage && <p className="mt-2 text-xs font-semibold text-blue-700 dark:text-blue-300" role="status">{pushMessage}</p>}
+                {pushState === 'unsupported' && <p className="mt-2 text-xs text-amber-700 dark:text-amber-300">Este navegador não oferece notificações push para o CRM.</p>}
+                {pushState === 'denied' && <p className="mt-2 text-xs text-amber-700 dark:text-amber-300">O navegador bloqueou as notificações. Libere-as nas permissões do site e tente novamente.</p>}
+              </div>
+            </div>
+            <div className="flex shrink-0 flex-wrap gap-2 sm:justify-end">
+              {pushState === 'enabled' ? (
+                <>
+                  <button type="button" onClick={sendPushTest} disabled={pushBusy} className="rounded-xl border border-blue-200 px-3 py-2 text-xs font-bold text-blue-700 hover:bg-blue-50 disabled:opacity-50 dark:border-blue-900 dark:text-blue-300 dark:hover:bg-blue-950/40">
+                    {pushBusy ? 'Aguarde…' : 'Enviar teste'}
+                  </button>
+                  <button type="button" onClick={disablePush} disabled={pushBusy} className="rounded-xl border border-slate-200 px-3 py-2 text-xs font-bold text-slate-600 hover:bg-slate-50 disabled:opacity-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800">
+                    Desativar
+                  </button>
+                </>
+              ) : (
+                <button type="button" onClick={enablePush} disabled={pushBusy || pushState === 'unsupported' || pushState === 'checking'} className="rounded-xl bg-blue-700 px-3.5 py-2 text-xs font-extrabold text-white hover:bg-blue-800 disabled:opacity-50">
+                  {pushBusy ? 'Ativando…' : pushState === 'checking' ? 'Verificando…' : 'Ativar neste dispositivo'}
+                </button>
+              )}
+            </div>
+          </div>
+        </section>
+
         {/* Submit button */}
         <div className="flex justify-end xl:col-span-2">
           <button
             type="submit"
             disabled={!settingsLoaded}
-            className="px-6 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs shadow-md shadow-blue-500/20 flex items-center gap-2 transition-all disabled:cursor-not-allowed disabled:opacity-50"
+            className="px-6 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs shadow-md shadow-blue-500/20 flex items-center gap-2 transition-all"
           >
             <Save className="w-4 h-4" />
-            Salvar Configurações
+            {settingsLoaded ? 'Salvar Configurações' : 'Carregando configurações…'}
           </button>
         </div>
       </form>

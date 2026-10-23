@@ -1,15 +1,13 @@
-import React from 'react'
-import { Sun, Moon, QrCode, Radio, LogOut, ShieldCheck, Menu, ExternalLink } from 'lucide-react'
+import React, { useEffect, useState } from 'react'
+import { Sun, Moon, QrCode, Radio, LogOut, ShieldCheck, Menu, ExternalLink, MoreHorizontal } from 'lucide-react'
 import { useTheme } from '../contexts/ThemeContext'
 import { useAuth } from '../contexts/AuthContext'
 import { useSocket } from '../contexts/SocketContext'
-import { useIsMobile } from '../hooks/useMediaQuery'
+import { useIsMobile, useMediaQuery } from '../hooks/useMediaQuery'
 import { SiteLinkActions } from './SiteLinkActions'
-import { NotificationCenter } from './NotificationCenter'
 
 interface NavbarProps {
   onOpenQr: () => void
-  onOpenLead: (leadId: string) => void
   onToggleMobileMenu?: () => void
 }
 
@@ -17,11 +15,18 @@ interface NavbarProps {
  * Barra superior em azul-marinho: e o contraste forte da tela, o mesmo papel
  * que a faixa azul faz no site. O resto do app fica na base pastel.
  */
-export const Navbar: React.FC<NavbarProps> = ({ onOpenQr, onOpenLead, onToggleMobileMenu }) => {
+export const Navbar: React.FC<NavbarProps> = ({ onOpenQr, onToggleMobileMenu }) => {
   const { theme, toggleTheme } = useTheme()
   const { user, logout } = useAuth()
   const { whatsappStatus, switchWhatsAppProvider } = useSocket()
   const isMobile = useIsMobile()
+  const compactActions = useMediaQuery('(max-width: 1180px)')
+  const [moreOpen, setMoreOpen] = useState(false)
+  useEffect(() => {
+    const close = (e: KeyboardEvent) => { if (e.key === 'Escape') setMoreOpen(false) }
+    window.addEventListener('keydown', close)
+    return () => window.removeEventListener('keydown', close)
+  }, [])
 
   const isBaileys = whatsappStatus.provider === 'baileys'
   const isConnected =
@@ -78,9 +83,8 @@ export const Navbar: React.FC<NavbarProps> = ({ onOpenQr, onOpenLead, onToggleMo
       </div>
 
       <div className="flex shrink-0 items-center gap-2">
-        <NotificationCenter onOpenLead={onOpenLead} />
         {/* O seletor de provedor so cabe no desktop; no mobile fica em Configuracoes. */}
-        {!isMobile && (
+        {!compactActions && (
           /* Controle segmentado com "polegar" deslizante. As duas metades tem
              a MESMA largura (grid), entao nada contrai ao alternar. */
           <div
@@ -139,6 +143,8 @@ export const Navbar: React.FC<NavbarProps> = ({ onOpenQr, onOpenLead, onToggleMo
           {!isConnected && <QrCode className="h-3.5 w-3.5" />}
         </button>
 
+        {compactActions?<button type="button" aria-label="Mais ações" aria-expanded={moreOpen} aria-controls="navbar-utility-actions" onClick={()=>setMoreOpen(v=>!v)} className="grid h-11 w-11 shrink-0 place-items-center rounded-[12px]" style={ghost}><MoreHorizontal size={22}/></button>:null}
+        <div id="navbar-utility-actions" className={compactActions ? `navbar-mobile-actions ${moreOpen?'is-open':''}` : 'contents'}>
         <button
           onClick={onToggleTheme}
           aria-label={theme === 'dark' ? 'Mudar para o modo claro' : 'Mudar para o modo escuro'}
@@ -146,23 +152,22 @@ export const Navbar: React.FC<NavbarProps> = ({ onOpenQr, onOpenLead, onToggleMo
           style={ghost}
         >
           {theme === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+          {compactActions?<span>{theme === 'dark'?'Modo claro':'Modo escuro'}</span>:null}
         </button>
 
         <a
           href="https://dcfoundrydigital.com/admin"
           target="_blank"
           rel="noreferrer"
-          className="hidden items-center gap-1.5 rounded-[12px] px-3 py-2 text-[11.5px] font-extrabold sm:inline-flex"
+          className="inline-flex items-center gap-1.5 rounded-[12px] px-3 py-2 text-[11.5px] font-extrabold"
           style={ghost}
           title="Abrir o painel administrativo da DC Foundry Digital"
         >
           <ExternalLink className="h-3.5 w-3.5" />
-          <span className="hidden lg:inline">Painel DC</span>
+          <span className={compactActions?'':'hidden lg:inline'}>Painel DC</span>
         </a>
 
-        <div className="hidden sm:block">
-          <SiteLinkActions compact />
-        </div>
+        <SiteLinkActions compact={!compactActions} />
 
         {user && (
           <div className="flex items-center gap-2 pl-1">
@@ -189,6 +194,7 @@ export const Navbar: React.FC<NavbarProps> = ({ onOpenQr, onOpenLead, onToggleMo
             </button>
           </div>
         )}
+        </div>
       </div>
     </header>
   )
