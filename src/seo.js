@@ -21,7 +21,8 @@ export function structuredData(path) {
     { '@type': 'ItemList', name: 'Equipamentos hospitalares para compra e locação', itemListElement: products.map((p,i) => ({ '@type': 'ListItem', position: i + 1, name: p.name, url: siteConfig.url + productPath(p) })) },
     { '@type': 'FAQPage', '@id': url + '#faq', mainEntity: faqs.map(item => ({ '@type': 'Question', name: item.q, acceptedAnswer: { '@type': 'Answer', text: item.a } })) },
   )
-  if (meta.product) graph.push({ '@type': 'Product', '@id': url + '#product', name: meta.product.name, description: meta.product.description, category: meta.product.category, image: siteConfig.url + meta.product.image, url })
+  // Quote-based items (price on request): described as a Service, not Product, so no product-snippet offers/review/rating are expected.
+  if (meta.product) graph.push({ '@type': 'Service', '@id': url + '#service', name: meta.product.name, description: meta.product.description, serviceType: meta.product.rent ? 'Venda e locação de equipamento hospitalar' : 'Venda de equipamento hospitalar', category: meta.product.category, image: siteConfig.url + meta.product.image, url, provider: { '@id': orgId }, areaServed: 'Curitiba e região' })
   if (path !== '/' && !meta.noindex) graph.push({ '@type': 'BreadcrumbList', itemListElement: [ { '@type': 'ListItem', position: 1, name: 'Início', item: siteConfig.url + '/' }, { '@type': 'ListItem', position: 2, name: meta.product?.name || 'Comprar ou alugar', item: url } ] })
   return { '@context': 'https://schema.org', '@graph': graph }
 }

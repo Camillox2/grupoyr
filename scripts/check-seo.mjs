@@ -22,7 +22,8 @@ for (const path of [...paths, '/404']) {
   } else assert(html.includes('content="noindex,follow"'), '404 must not be indexed')
   const json = JSON.parse(html.match(/<script type="application\/ld\+json">(.*?)<\/script>/s)?.[1] || 'null')
   assert(json?.['@graph']?.length >= 3, `Missing structured data: ${path}`)
-  if(metadata.product) assert(json['@graph'].some(node => node['@type'] === 'Product' && node.name === metadata.product.name), `Wrong product data: ${path}`)
+  if(metadata.product) assert(json['@graph'].some(node => node['@type'] === 'Service' && node.name === metadata.product.name), `Wrong product data: ${path}`)
+  assert(!JSON.stringify(json).includes('"Product"'), `Product without offers must not be emitted: ${path}`)
   for(const [,imageTag] of html.matchAll(/(<img\s[^>]*>)/g)) {
     assert(/\salt="[^"]*"/.test(imageTag),`Image without alt: ${path}`)
   }
