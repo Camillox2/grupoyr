@@ -27,7 +27,8 @@ import { registerFunnelRoutes, isInFunnel, FUNNEL_STAGES } from './funnel.js'
 import { createContractPdf, createDeliveryChecklistPdf } from './documents.js'
 import { createEmailStore, createContractEmail, registerContractEmailRoutes } from './contractEmail.js'
 import { deliverPushToUser, getPushPublicKey, pushIsConfigured, subscriptionId } from './push.js'
-import { loginUser, requireAuth } from './auth.js'
+import { loginUser, requireAuth, verifyToken } from './auth.js'
+import { createScreenGuard, registerUserAdminRoutes, publicUser } from './screenAccess.js'
 import { isMetaMediaTypeSupported, whatsappService } from './whatsapp.js'
 import { serializeWhatsAppMessage } from './whatsappMessages.js'
 import { createContactPhotoService } from './contactPhotos.js'
@@ -193,6 +194,8 @@ app.use(express.json({
   },
 }))
 app.use(express.urlencoded({ extended: true, limit: '25mb' }))
+// Bloqueia, no servidor, as rotas das telas que o usuário não pode ver.
+app.use(createScreenGuard({ db, verifyToken }))
 registerContractEmailRoutes(app, { service: contractEmail, db, requireAuth })
 app.use('/uploads/blog', express.static(BLOG_UPLOAD_DIR, { maxAge: '7d', index: false }))
 
@@ -231,8 +234,10 @@ app.post('/api/auth/login', async (req, res) => {
 })
 
 app.get('/api/auth/me', requireAuth(), (req, res) => {
-  res.json({ user: req.user })
+  const stored = db.find('users', (u) => u.id === req.user.id)
+  res.json({ user: stored ? publicUser(stored) : req.user })
 })
+registerUserAdminRoutes(app, { db, requireAuth })
 
 registerRetentionInsightRoute(app, {
   db,

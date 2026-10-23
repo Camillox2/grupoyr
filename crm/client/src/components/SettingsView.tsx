@@ -15,6 +15,8 @@ import { Toast, useToast } from './ui/Toast'
 import { useSocket } from '../contexts/SocketContext'
 import { PwaInstallPanel } from './PwaStatus'
 import { ContractEmailSettings } from './ContractEmailPanel'
+import { UsersSettingsPanel } from './UsersSettingsPanel'
+import { useAuth } from '../contexts/AuthContext'
 
 interface SettingsViewProps {
   onOpenQr: () => void
@@ -46,6 +48,11 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onOpenQr, onOpenYria
   const [pushBusy, setPushBusy] = useState(false)
   const [pushMessage, setPushMessage] = useState('')
   const { toast, show: showToast, dismiss: dismissToast } = useToast()
+  const { user } = useAuth()
+  const isAdmin = user?.role === 'admin'
+  const [section, setSection] = useState<'geral' | 'usuarios'>(() => (
+    new URLSearchParams(window.location.search).get('section') === 'usuarios' ? 'usuarios' : 'geral'
+  ))
 
   useEffect(() => {
     fetch('/api/settings', {
@@ -231,8 +238,29 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onOpenQr, onOpenYria
         icon={<Settings className="h-5 w-5" />}
         eyebrow="Ajustes"
         title="Configurações"
-        description="Provedor de WhatsApp, credenciais e orientações de atendimento da YRIA."
+        description="Provedor de WhatsApp, credenciais, orientações da YRIA e usuários do CRM."
       />
+      {isAdmin && (
+        <div role="tablist" aria-label="Seções das configurações" className="inline-flex gap-1 rounded-2xl p-1" style={{ background: 'var(--surface-sunken)', border: '1px solid var(--border-subtle)' }}>
+          {([['geral', 'Geral'], ['usuarios', 'Usuários']] as const).map(([id, label]) => (
+            <button
+              key={id}
+              type="button"
+              role="tab"
+              aria-selected={section === id}
+              onClick={() => setSection(id)}
+              className={`rounded-xl px-4 py-2 text-xs font-extrabold transition-colors ${section === id ? 'bg-blue-600 text-white shadow-sm' : 'hover:bg-blue-100/70 dark:hover:bg-slate-800'}`}
+              style={section === id ? undefined : { color: 'var(--ink-muted)' }}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      )}
+      {isAdmin && section === 'usuarios' && (
+        <UsersSettingsPanel notify={(tone, message) => showToast({ tone, message })} />
+      )}
+      <div hidden={isAdmin && section === 'usuarios'} className="space-y-6">
       {settingsLoadError && (
         <p className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-xs text-rose-800 dark:border-rose-900 dark:bg-rose-950/30 dark:text-rose-200" role="alert">
           {settingsLoadError} O texto salvo da YRIA não será substituído enquanto as configurações não carregarem.
@@ -537,6 +565,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onOpenQr, onOpenYria
           </button>
         </div>
       </form>
+      </div>
       <Toast toast={toast} onDismiss={dismissToast} />
     </div>
   )

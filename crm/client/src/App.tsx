@@ -27,11 +27,19 @@ const PublicCustomerView = React.lazy(() => import('./components/PublicCustomerV
 const InspectionsView = React.lazy(() => import('./components/InspectionsView').then(m => ({ default: m.InspectionsView })))
 const ClientOperationsView = React.lazy(() => import('./components/ClientOperationsView').then(m => ({ default: m.ClientOperationsView })))
 import { Lead, Equipment, Contract, Invoice, Stage } from './types'
+import { canSeeScreen, firstAllowedScreen, SCREEN_IDS } from './lib/screens'
 
 function MainContent() {
   const { user, loading } = useAuth()
   const { socket } = useSocket()
-  const [activeTab, setActiveTab] = useState<TabType>(() => new URLSearchParams(window.location.search).get('view') === 'insights' ? 'insights' : 'dashboard')
+  const [activeTab, setRequestedTab] = useState<TabType>(() => {
+    const view = new URLSearchParams(window.location.search).get('view') || ''
+    return (SCREEN_IDS.includes(view) ? view : 'dashboard') as TabType
+  })
+  // Só troca para telas liberadas; o efeito abaixo cobre o link direto (?view=).
+  const setActiveTab = (tab: TabType) => {
+    if (canSeeScreen(user, tab)) setRequestedTab(tab)
+  }
   const [leads, setLeads] = useState<Lead[]>([])
   const [equipments, setEquipments] = useState<Equipment[]>([])
   const [contracts, setContracts] = useState<Contract[]>([])
@@ -67,7 +75,7 @@ function MainContent() {
         readCollection('/api/leads'),
         readCollection('/api/equipments'),
         readCollection('/api/contracts'),
-        readCollection('/api/finance/invoices'),
+        canSeeScreen(user, 'finance') ? readCollection('/api/finance/invoices') : Promise.resolve([]),
       ])
 
       const failedCollections: string[] = []
@@ -103,6 +111,14 @@ function MainContent() {
       fetchAllData()
     }
   }, [user])
+
+  // Tela sem permissão (link direto, favorito ou permissão retirada):
+  // vai para a primeira tela liberada.
+  useEffect(() => {
+    if (!user || canSeeScreen(user, activeTab)) return
+    const fallback = firstAllowedScreen(user)
+    if (fallback) setRequestedTab(fallback as TabType)
+  }, [user, activeTab])
 
   // Notificações do service worker apontam direto para a conversa que precisa
   // de atendimento. O parâmetro só é removido depois que o lead está carregado.
@@ -285,6 +301,12 @@ function MainContent() {
               </div>
             )}
 
+            {!canSeeScreen(user, activeTab) && !firstAllowedScreen(user) && (
+              <div className="card p-6 text-sm" role="status" style={{ color: 'var(--ink-muted)' }}>
+                Nenhuma tela foi liberada para o seu usuário. Fale com o administrador do CRM.
+              </div>
+            )}
+            {canSeeScreen(user, activeTab) && (
             <React.Suspense fallback={<p role="status" className="p-6 text-sm text-slate-500">Carregando…</p>}>
             {activeTab === 'dashboard' && (
               <DashboardView
@@ -378,6 +400,7 @@ function MainContent() {
               <SettingsView onOpenQr={() => setQrModalOpen(true)} onOpenYria={() => setActiveTab('yria')} />
             )}
             </React.Suspense>
+            )}
           </div>
         </main>
       </div>

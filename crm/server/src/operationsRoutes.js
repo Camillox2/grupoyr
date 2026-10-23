@@ -115,7 +115,7 @@ function normalizeExpense(body, db) {
 
 export function registerOperationsRoutes(app, { db, requireAuth, idFactory = () => randomUUID() }) {
   app.get('/api/team', requireAuth(), (_req, res) => {
-    res.json(db.get('users').map(({ id, name, role }) => ({ id, name, role })))
+    res.json(db.get('users').filter((user) => user.active !== false).map(({ id, name, role }) => ({ id, name, role })))
   })
 
   app.get('/api/calendar/events', requireAuth(), (_req, res) => {

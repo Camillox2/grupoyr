@@ -19,6 +19,7 @@ import {
 } from 'lucide-react'
 import { useIsMobile } from '../hooks/useMediaQuery'
 import { useAuth } from '../contexts/AuthContext'
+import { canSeeScreen } from '../lib/screens'
 
 export type TabType =
   | 'dashboard'
@@ -72,7 +73,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
   // O menu ja conta onde esta o problema antes de voce clicar: a metrica mora
   // dentro do proprio item, em vez de um numero solto.
-  const groups: {
+  const allGroups: {
     label: string
     items: { id: TabType; label: string; icon: typeof Bed; note?: string; tone?: Tone }[]
   }[] = [
@@ -127,6 +128,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
       ],
     },
   ]
+  // Telas desmarcadas em Configurações > Usuários somem do menu.
+  const groups = allGroups
+    .map((group) => ({ ...group, items: group.items.filter((item) => canSeeScreen(user, item.id)) }))
+    .filter((group) => group.items.length > 0)
 
   // Indicador deslizante: uma pilula azul que VIAJA ate o item clicado, em vez
   // de o fundo simplesmente trocar de lugar. A posicao vem do proprio botao.

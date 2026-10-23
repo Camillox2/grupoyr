@@ -266,6 +266,9 @@ export interface User {
   name: string
   email: string
   role: 'admin' | 'vendedor' | 'tecnico'
+  /** Telas liberadas para o usuário (vem do servidor). Ausente = todas. */
+  screens?: string[]
+  active?: boolean
 }
 
 export interface WhatsAppHistorySync {
