@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react'
 import {
+  PackagePlus,
   FileSignature,
   Plus,
   CheckCircle2,
@@ -27,6 +28,7 @@ import { brl } from './ui/Feedback'
 import { Toast, useToast } from './ui/Toast'
 import { authHeaders } from '../lib/conversation'
 import { ContractStatusModal } from './ContractStatusModal'
+import { ContractItemsEditor } from './ContractItemsEditor'
 import { Modal } from './ui/Modal'
 import { freightAmounts } from '../lib/freight'
 
@@ -102,6 +104,8 @@ interface ContractsViewProps {
   onOpenNewContractModal: () => void
   /** Abre a conversa do lead no atendimento. */
   onOpenLead?: (leadId: string) => void
+  /** Admin pode editar os itens de contratos existentes. */
+  canEditItems?: boolean
 }
 
 export const ContractsView: React.FC<ContractsViewProps> = ({
@@ -110,7 +114,9 @@ export const ContractsView: React.FC<ContractsViewProps> = ({
   onRefreshContracts,
   onOpenNewContractModal,
   onOpenLead,
+  canEditItems = false,
 }) => {
+  const [editContract, setEditContract] = useState<Contract | null>(null)
   const { toast, show: showToast, dismiss: dismissToast } = useToast()
   const [sendingLinkId, setSendingLinkId] = useState<string | null>(null)
   const [statusContract, setStatusContract] = useState<Contract | null>(null)
@@ -485,6 +491,18 @@ export const ContractsView: React.FC<ContractsViewProps> = ({
               Compartilhar
             </button>
 
+            {canEditItems && ['rascunho', 'pendente_assinatura', 'assinado'].includes(contract.status) && (
+              <button
+                onClick={() => setEditContract(contract)}
+                className="inline-flex items-center gap-1.5 rounded-[8px] px-2.5 py-2 text-[11px] font-bold transition-colors"
+                style={{ background: 'var(--yr-050)', color: 'var(--yr-700)', border: '1px solid var(--yr-100)' }}
+                title="Adicionar ou remover produtos deste contrato"
+              >
+                <PackagePlus className="h-3.5 w-3.5" />
+                Editar
+              </button>
+            )}
+
             <button
               onClick={() => setPreviewContract(contract)}
               className="inline-flex items-center gap-1.5 rounded-[8px] px-2.5 py-2 text-[11px] font-bold transition-colors"
@@ -550,6 +568,14 @@ export const ContractsView: React.FC<ContractsViewProps> = ({
         onClose={() => setStatusContract(null)}
         onChanged={(summary) => {
           showToast({ tone: 'ok', message: summary })
+          onRefreshContracts()
+        }}
+      />
+      <ContractItemsEditor
+        contract={editContract}
+        onClose={() => setEditContract(null)}
+        onChanged={(message) => {
+          showToast({ tone: 'ok', message })
           onRefreshContracts()
         }}
       />

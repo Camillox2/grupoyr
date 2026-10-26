@@ -369,6 +369,7 @@ function MainContent() {
                 leads={leads}
                 onRefreshContracts={fetchAllData}
                 onOpenLead={openLeadConversation}
+                canEditItems={user.role === 'admin'}
                 onOpenNewContractModal={() => {
                   setContractLead(leads[0] || null)
                   setNewContractModalOpen(true)

@@ -173,7 +173,7 @@ export interface Contract {
   clientEmail?: string
   emailRecipient?: string
   itemDetailsVersion?: number
-  itemsSnapshot?: { product: string; productCode: string; qty: number; unitPrice: number; modality: 'locacao' | 'compra'; equipmentIds: string[]; patrimonies: string[] }[]
+  itemsSnapshot?: { product: string; productCode: string; qty: number; unitPrice: number | null; modality: 'locacao' | 'compra'; equipmentIds: string[]; patrimonies: string[]; addedAt?: string; addedAfterSignature?: boolean }[]
   oneTimePurchaseTotal?: number
   deliveryFreight?: number
   pickupFreight?: number

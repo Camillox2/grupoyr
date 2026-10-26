@@ -46,6 +46,7 @@ import {
   changeContractStatus,
   allowedContractStatuses,
 } from './contracts.js'
+import { contractItemCatalog, addContractItem, removeContractItem } from './contractAmendments.js'
 import { sanitizeLeadDetails } from './leadDetails.js'
 import { listTemplates, sendTemplate, windowState, backfillLastInbound, MetaError } from './metaTemplates.js'
 import { normalizePhone, phoneKey } from './phone.js'
@@ -1184,6 +1185,30 @@ app.post('/api/contracts/:id/send-link', requireAuth(), async (req, res) => {
     res.json({ ok: true, delivered, leadId: lead.id, message })
   } catch (err) {
     sendBlockedOr500(res, err, 'Não foi possível enviar o link do contrato.')
+  }
+})
+
+app.get('/api/contracts/:id/items/catalog', requireAuth(['admin']), (req, res) => {
+  res.json(contractItemCatalog())
+})
+
+app.post('/api/contracts/:id/items', requireAuth(['admin']), (req, res) => {
+  try {
+    const contract = addContractItem(req.params.id, req.body || {}, req.user)
+    io.emit('contract:updated', contract)
+    res.status(201).json(contract)
+  } catch (err) {
+    res.status(err.status || 400).json({ error: err.message })
+  }
+})
+
+app.delete('/api/contracts/:id/items/:index', requireAuth(['admin']), (req, res) => {
+  try {
+    const contract = removeContractItem(req.params.id, req.params.index, req.user)
+    io.emit('contract:updated', contract)
+    res.json(contract)
+  } catch (err) {
+    res.status(err.status || 400).json({ error: err.message })
   }
 })
 
