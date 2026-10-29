@@ -63,7 +63,7 @@ const RULES = [
   { re: /^\/api\/equipments(\/|$)/, methods: ['POST', 'PUT', 'PATCH', 'DELETE'], screens: ['equipments', 'dashboard'] },
   { re: /^\/api\/contracts\/signing(\/|$)/, screens: null },
   { re: /^\/api\/contracts\/?$/, methods: ['POST'], screens: ['contracts', 'kanban', 'whatsapp', 'dashboard'] },
-  { re: /^\/api\/contracts\/[^/]+\/items(\/|$)/, screens: ['contracts'] },
+  { re: /^\/api\/contracts\/[^/]+\/(items|archive|unarchive)(\/|$)/, screens: ['contracts'] },
   { re: /^\/api\/contracts\/[^/]+(\/|$)/, screens: ['contracts', 'clients', 'whatsapp'] },
   { re: /^\/api\/conversations(\/|$)/, screens: ['whatsapp'] },
   { re: /^\/api\/whatsapp\/(send|send-media|send-template|contacts|templates)\/?$/, screens: ['whatsapp', 'clients', 'inspections'] },

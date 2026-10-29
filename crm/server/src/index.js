@@ -46,7 +46,7 @@ import {
   changeContractStatus,
   allowedContractStatuses,
 } from './contracts.js'
-import { contractItemCatalog, addContractItem, removeContractItem } from './contractAmendments.js'
+import { contractItemCatalog, addContractItem, removeContractItem, setContractArchived } from './contractAmendments.js'
 import { sanitizeLeadDetails } from './leadDetails.js'
 import { listTemplates, sendTemplate, windowState, backfillLastInbound, MetaError } from './metaTemplates.js'
 import { normalizePhone, phoneKey } from './phone.js'
@@ -1211,6 +1211,18 @@ app.delete('/api/contracts/:id/items/:index', requireAuth(['admin']), (req, res)
     res.status(err.status || 400).json({ error: err.message })
   }
 })
+
+for (const [action, flag] of [['archive', true], ['unarchive', false]]) {
+  app.post(`/api/contracts/:id/${action}`, requireAuth(['admin']), (req, res) => {
+    try {
+      const contract = setContractArchived(req.params.id, flag, req.user)
+      io.emit('contract:updated', contract)
+      res.json(contract)
+    } catch (err) {
+      res.status(err.status || 400).json({ error: err.message })
+    }
+  })
+}
 
 app.post('/api/contracts', requireAuth(), (req, res) => {
   try {

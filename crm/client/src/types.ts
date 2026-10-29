@@ -169,6 +169,9 @@ export interface Equipment {
 }
 
 export interface Contract {
+  archived?: boolean
+  archivedAt?: string
+  archivedByName?: string | null
   closingNotes?: string
   clientEmail?: string
   emailRecipient?: string

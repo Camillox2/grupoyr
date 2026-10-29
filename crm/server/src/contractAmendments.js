@@ -119,3 +119,16 @@ export function removeContractItem(contractId, index, user) {
     updatedAt: now,
   })
 }
+
+// Arquivar só esconde o contrato da lista principal. Não toca em cobranças,
+// equipamentos, status nem itens; nada é apagado.
+export function setContractArchived(contractId, archived, user) {
+  const contract = db.find('contracts', (c) => c.id === contractId)
+  if (!contract) throw Object.assign(new Error('Contrato não encontrado.'), { status: 404 })
+  const now = new Date().toISOString()
+  if (Boolean(contract.archived) === Boolean(archived)) return contract
+  const log = { at: now, by: user?.id || null, byName: user?.name || null, action: archived ? 'archive' : 'unarchive' }
+  return db.update('contracts', contract.id, archived
+    ? { archived: true, archivedAt: now, archivedBy: user?.id || null, archivedByName: user?.name || null, archiveLog: [...(contract.archiveLog || []), log] }
+    : { archived: false, unarchivedAt: now, unarchivedBy: user?.id || null, archiveLog: [...(contract.archiveLog || []), log] })
+}

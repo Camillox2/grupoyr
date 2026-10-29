@@ -1,6 +1,8 @@
 import React, { useState, useRef, useEffect } from 'react'
 import {
   PackagePlus,
+  Archive,
+  ArchiveRestore,
   FileSignature,
   Plus,
   CheckCircle2,
@@ -117,6 +119,25 @@ export const ContractsView: React.FC<ContractsViewProps> = ({
   canEditItems = false,
 }) => {
   const [editContract, setEditContract] = useState<Contract | null>(null)
+  const [showArchived, setShowArchived] = useState(false)
+  const [archivingId, setArchivingId] = useState<string | null>(null)
+  const archivedCount = contracts.filter((c) => c.archived).length
+  const visibleContracts = contracts.filter((c) => Boolean(c.archived) === showArchived)
+  const handleArchive = async (contract: Contract, archive: boolean) => {
+    if (archive && !window.confirm(`Arquivar o contrato ${contract.number} (${contract.clientName})?\n\nEle sai da lista principal e fica na aba Arquivados. Nada é apagado: cobranças, equipamentos e status continuam como estão.`)) return
+    setArchivingId(contract.id)
+    try {
+      const res = await fetch(`/api/contracts/${contract.id}/${archive ? 'archive' : 'unarchive'}`, { method: 'POST', headers: authHeaders() })
+      const body = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(body.error || 'Não foi possível concluir.')
+      showToast({ tone: 'ok', message: archive ? `Contrato ${contract.number} arquivado.` : `Contrato ${contract.number} voltou para a lista.` })
+      onRefreshContracts()
+    } catch (err) {
+      showToast({ tone: 'alert', message: (err as Error).message })
+    } finally {
+      setArchivingId(null)
+    }
+  }
   const { toast, show: showToast, dismiss: dismissToast } = useToast()
   const [sendingLinkId, setSendingLinkId] = useState<string | null>(null)
   const [statusContract, setStatusContract] = useState<Contract | null>(null)
@@ -367,11 +388,32 @@ export const ContractsView: React.FC<ContractsViewProps> = ({
 
       {linkError && <Notice tone="alert">{linkError}</Notice>}
 
+      <div className="mb-3 flex gap-2" role="tablist" aria-label="Filtro de contratos">
+        {[{ key: false, label: `Ativos (${contracts.length - archivedCount})` }, { key: true, label: `Arquivados (${archivedCount})` }].map((tab) => (
+          <button
+            key={String(tab.key)}
+            role="tab"
+            aria-selected={showArchived === tab.key}
+            onClick={() => setShowArchived(tab.key)}
+            className="rounded-[8px] px-3 py-1.5 text-[12px] font-bold transition-colors"
+            style={showArchived === tab.key ? { background: 'var(--yr-700)', color: 'var(--ink-on-brand)' } : { background: 'var(--surface-sunken)', color: 'var(--ink-muted)', border: '1px solid var(--border-subtle)' }}
+          >
+            {tab.label}
+          </button>
+        ))}
+      </div>
+
       <ResponsiveTable
-        items={contracts}
+        items={visibleContracts}
         getKey={(contract) => contract.id}
         caption="Contratos gerados"
-        empty={
+        empty={showArchived ? (
+          <EmptyState
+            icon={<Archive className="h-5 w-5" />}
+            title="Nenhum contrato arquivado"
+            description="Contratos arquivados aparecem aqui e podem voltar para a lista a qualquer momento."
+          />
+        ) : (
           <EmptyState
             icon={<FileSignature className="h-5 w-5" />}
             title="Nenhum contrato ainda"
@@ -383,7 +425,7 @@ export const ContractsView: React.FC<ContractsViewProps> = ({
               </ActionButton>
             }
           />
-        }
+        )}
         columns={[
           {
             header: 'Contrato',
@@ -491,7 +533,7 @@ export const ContractsView: React.FC<ContractsViewProps> = ({
               Compartilhar
             </button>
 
-            {canEditItems && ['rascunho', 'pendente_assinatura', 'assinado'].includes(contract.status) && (
+            {canEditItems && !contract.archived && ['rascunho', 'pendente_assinatura', 'assinado'].includes(contract.status) && (
               <button
                 onClick={() => setEditContract(contract)}
                 className="inline-flex items-center gap-1.5 rounded-[8px] px-2.5 py-2 text-[11px] font-bold transition-colors"
@@ -500,6 +542,19 @@ export const ContractsView: React.FC<ContractsViewProps> = ({
               >
                 <PackagePlus className="h-3.5 w-3.5" />
                 Editar
+              </button>
+            )}
+
+            {canEditItems && (
+              <button
+                onClick={() => handleArchive(contract, !contract.archived)}
+                disabled={archivingId === contract.id}
+                className="inline-flex items-center gap-1.5 rounded-[8px] px-2.5 py-2 text-[11px] font-bold transition-colors disabled:opacity-50"
+                style={{ background: 'var(--surface-sunken)', color: 'var(--ink-muted)', border: '1px solid var(--border-subtle)' }}
+                title={contract.archived ? 'Voltar este contrato para a lista principal' : 'Esconder da lista principal (nada é apagado)'}
+              >
+                {contract.archived ? <ArchiveRestore className="h-3.5 w-3.5" /> : <Archive className="h-3.5 w-3.5" />}
+                {contract.archived ? 'Desarquivar' : 'Arquivar'}
               </button>
             )}
 
