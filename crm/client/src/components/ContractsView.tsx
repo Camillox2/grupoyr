@@ -32,6 +32,7 @@ import { authHeaders } from '../lib/conversation'
 import { ContractStatusModal } from './ContractStatusModal'
 import { ContractItemsEditor } from './ContractItemsEditor'
 import { Modal } from './ui/Modal'
+import { VigenciaBar } from './ui/VigenciaBar'
 import { freightAmounts } from '../lib/freight'
 
 /** dd/mm sem o ano, que ocupa espaco e raramente muda dentro da lista. */
@@ -461,9 +462,17 @@ export const ContractsView: React.FC<ContractsViewProps> = ({
           {
             header: 'Vigência',
             cell: (contract) => (
+              contract.status === 'assinado' ? (
+                <VigenciaBar
+                  start={contract.startDate}
+                  end={contract.endDate}
+                  fallback={<span className="tnum whitespace-nowrap" style={{ color: 'var(--ink-muted)' }}>{formatDate(contract.startDate)} a {formatDate(contract.endDate)}</span>}
+                />
+              ) : (
               <span className="tnum whitespace-nowrap" style={{ color: 'var(--ink-muted)' }}>
                 {formatDate(contract.startDate)} a {formatDate(contract.endDate)}
               </span>
+              )
             ),
           },
           {
