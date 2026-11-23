@@ -228,6 +228,57 @@ export default function HospitalBedCanvas({
 
     apiRef.current = { bed, overlays }
 
+    // Camada HTML dos rotulos de medidas (px fixos, legiveis no celular)
+    const labelLayer = document.createElement('div')
+    labelLayer.className = 'herobed-dim-layer'
+    labelLayer.setAttribute('aria-hidden', 'true')
+    container.appendChild(labelLayer)
+    const labelEls = overlays.labels.map((lb) => {
+      const el = document.createElement('div')
+      el.className = `herobed-dim-label is-${lb.tone}`
+      el.innerHTML = '<strong></strong><small></small>'
+      labelLayer.appendChild(el)
+      return { lb, el, strong: el.firstChild, small: el.lastChild, w: 0, h: 0 }
+    })
+    const projV = new THREE.Vector3()
+    const updateLabels = () => {
+      const show = overlays.isDimensionsVisible()
+      labelLayer.style.display = show ? '' : 'none'
+      if (!show) return
+      const cw = container.clientWidth
+      const ch = container.clientHeight
+      const pad = 8
+      const placed = []
+      for (const item of labelEls) {
+        const { lb, el } = item
+        if (lb.dirty || !item.w) {
+          item.strong.textContent = lb.main
+          item.small.textContent = lb.sub
+          lb.dirty = false
+          item.w = el.offsetWidth
+          item.h = el.offsetHeight
+        }
+        projV.copy(lb.anchor).project(camera)
+        if (projV.z > 1) {
+          el.style.visibility = 'hidden'
+          continue
+        }
+        el.style.visibility = ''
+        let x = (projV.x * 0.5 + 0.5) * cw - item.w / 2
+        let y = (-projV.y * 0.5 + 0.5) * ch - item.h - 10
+        x = Math.min(Math.max(pad, x), cw - item.w - pad)
+        y = Math.min(Math.max(pad + 40, y), ch - item.h - pad)
+        // Evita sobreposicao: empurra para baixo/cima ate achar espaco livre
+        for (let guard = 0; guard < 6; guard += 1) {
+          const hit = placed.find((r) => x < r.x + r.w + 4 && x + item.w + 4 > r.x && y < r.y + r.h + 4 && y + item.h + 4 > r.y)
+          if (!hit) break
+          y = hit.y + hit.h + 6 > ch - item.h - pad ? hit.y - item.h - 6 : hit.y + hit.h + 6
+        }
+        placed.push({ x, y, w: item.w, h: item.h })
+        el.style.transform = `translate3d(${Math.round(x)}px, ${Math.round(y)}px, 0)`
+      }
+    }
+
     const resize = () => {
       const w = Math.max(container.clientWidth, 260)
       const h = Math.max(container.clientHeight, 240)
@@ -291,6 +342,7 @@ export default function HospitalBedCanvas({
       controls.update()
       bedroom.updateVisibility(camera)
       renderer.render(scene, camera)
+      updateLabels()
 
       if (!notifiedReady) {
         notifiedReady = true
@@ -355,6 +407,7 @@ export default function HospitalBedCanvas({
 
       renderer.dispose()
       renderer.domElement.remove()
+      labelLayer.remove()
       apiRef.current = null
       controlsRef.current = null
       cameraRef.current = null

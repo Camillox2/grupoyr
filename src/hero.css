@@ -939,3 +939,54 @@
   pointer-events: auto;
   z-index: 2147483000;
 }
+
+/* Rotulos de medidas 3D: tamanho fixo, alto contraste, legiveis no celular */
+.herobed-dim-layer {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+  z-index: 3;
+}
+.herobed-dim-label {
+  position: absolute;
+  left: 0;
+  top: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 6px 12px 7px;
+  border-radius: 12px;
+  background: #0f2a5c;
+  color: #ffffff;
+  border: 2px solid #ffffff;
+  box-shadow: 0 6px 18px -4px rgba(7, 20, 45, 0.55);
+  white-space: nowrap;
+  line-height: 1.15;
+  will-change: transform;
+}
+.herobed-dim-label.is-green {
+  background: #0a5c49;
+}
+.herobed-dim-label strong {
+  font-size: 16px;
+  font-weight: 800;
+  letter-spacing: 0.01em;
+}
+.herobed-dim-label small {
+  margin-top: 2px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #dbe7ff;
+}
+@media (max-width: 600px) {
+  .herobed-dim-label {
+    padding: 5px 10px 6px;
+  }
+  .herobed-dim-label strong {
+    font-size: 15px;
+  }
+  .herobed-dim-label small {
+    font-size: 11px;
+  }
+}
