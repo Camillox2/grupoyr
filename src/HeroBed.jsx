@@ -1,122 +1,23 @@
-import { useEffect, useRef, useState } from 'react'
+import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react'
+import { imageSources } from './responsiveImages.js'
+import ArModal, { detectArPlatform } from './bed3d/ArModal.jsx'
+import {
+  AR_MODELS,
+  BED_SPECS,
+  CLINICAL_PRESETS,
+  liftToHeightMeters,
+  REST_POSE,
+} from './bed3d/specs.js'
+
+const HospitalBedCanvas = lazy(() => import('./bed3d/HospitalBedCanvas.jsx'))
 
 /**
- * Hero da home: a cama hospitalar em vetor, articulando de verdade.
- *
- * A ilustracao nao e enfeite: ela demonstra o produto. Os tres movimentos
- * (encosto, pernas, altura) sao os mesmos do equipamento real, e o visitante
- * mexe neles pelo controle ao lado. Ate alguem tocar, a cama roda sozinha em
- * demonstracao.
- *
- * As transformacoes vao como atributo SVG `rotate(angulo cx cy)`, calculadas
- * aqui, e nao por CSS transform-origin: em SVG o atributo se comporta igual
- * em todo navegador, e o eixo de giro (quadril, joelho) precisa ser exato.
+ * Hero da home: cama hospitalar 3D real em um quarto residencial aconchegante,
+ * articulando a 60fps sem re-renders do React na demonstracao automatica +
+ * Realidade Aumentada (AR) em escala 1:1.
  */
 
-const clamp01 = (v) => Math.min(1, Math.max(0, v))
-const ease = (t) => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2)
-const span = (t, from, to) => ease(clamp01((t - from) / (to - from)))
-
-/** Roteiro da demonstracao: devolve {back, legs, lift} (0..1) para t em 0..1. */
-function demoPose(t) {
-  const up = (a, b) => span(t, a, b)
-  const down = span(t, 0.8, 0.95)
-  return {
-    back: up(0.04, 0.22) * (1 - down),
-    legs: up(0.3, 0.44) * (1 - down),
-    lift: up(0.52, 0.68) * (1 - down),
-  }
-}
-
-const DEMO_MS = 9000
-// Pose inicial: e o que aparece no HTML pre-renderizado e sem JavaScript.
-const REST = { back: 0.62, legs: 0.3, lift: 0.35 }
-
-function Bed({ back, legs, lift }) {
-  const backDeg = back * 62
-  const legsDeg = legs * 30
-  const rise = lift * 58
-  const py = 300 - rise // topo do estrado
-
-  return (
-    <svg className="herobed-svg" viewBox="78 40 484 372" role="img" aria-label="Ilustração de cama hospitalar com encosto, pernas e altura ajustáveis">
-      {/* sombra no piso encolhe quando a cama sobe */}
-      <ellipse cx="320" cy="396" rx={236 - rise * 0.5} ry="9" fill="#102a4c" opacity={0.1 - lift * 0.03} />
-
-      {/* base com rodizios */}
-      <rect x="150" y="346" width="340" height="12" rx="6" fill="#102a4c" />
-      {[176, 464].map((cx) => (
-        <g key={cx}>
-          <rect x={cx - 4} y="356" width="8" height="10" fill="#102a4c" />
-          <circle cx={cx} cy="378" r="13" fill="#102a4c" />
-          <circle cx={cx} cy="378" r="5" fill="#dce9f8" />
-        </g>
-      ))}
-
-      {/* elevacao em tesoura */}
-      <g stroke="#8fa6c4" strokeWidth="9" strokeLinecap="round">
-        <line x1="206" y1="346" x2="434" y2={py + 16} />
-        <line x1="434" y1="346" x2="206" y2={py + 16} />
-      </g>
-      <circle cx="320" cy={(346 + py + 16) / 2} r="7" fill="#102a4c" />
-
-      {/* estrado */}
-      <rect x="118" y={py + 8} width="404" height="10" rx="5" fill="#5d7696" />
-
-      {/* cabeceira e peseira, presas ao estrado */}
-      <rect x="100" y={py - 84} width="18" height="104" rx="9" fill="#ffffff" stroke="#c4d3e6" strokeWidth="3" />
-      <rect x="522" y={py - 54} width="18" height="74" rx="9" fill="#ffffff" stroke="#c4d3e6" strokeWidth="3" />
-
-      {/* assento (fixo) */}
-      <rect x="292" y={py - 28} width="80" height="28" fill="#1d5fae" />
-      <rect x="292" y={py} width="80" height="7" fill="#c4d3e6" />
-
-      {/* pernas: coxa sobe girando no quadril, panturrilha compensa no joelho */}
-      <g transform={`rotate(${-legsDeg} 373 ${py})`}>
-        <rect x="374" y={py - 28} width="72" height="28" fill="#2b74c9" />
-        <rect x="374" y={py} width="72" height="7" fill="#c4d3e6" />
-        <g transform={`rotate(${legsDeg * 0.9} 447 ${py})`}>
-          <rect x="448" y={py - 28} width="72" height="28" rx="0" fill="#1d5fae" />
-          <path d={`M506 ${py - 28} h4 a10 10 0 0 1 10 10 v18 h-14 z`} fill="#1d5fae" />
-          <rect x="448" y={py} width="72" height="7" fill="#c4d3e6" />
-        </g>
-      </g>
-
-      {/* encosto: gira no quadril, leva travesseiro e grade junto */}
-      <g transform={`rotate(${backDeg} 291 ${py})`}>
-        <rect x="124" y={py} width="166" height="7" fill="#c4d3e6" />
-        <path d={`M134 ${py - 28} h156 v28 h-166 v-18 a10 10 0 0 1 10 -10 z`} fill="#2b74c9" />
-        <rect x="136" y={py - 46} width="78" height="22" rx="11" fill="#ffffff" stroke="#c4d3e6" strokeWidth="3" />
-        <g fill="none" stroke="#8fa6c4" strokeWidth="6" strokeLinecap="round">
-          <rect x="178" y={py - 78} width="100" height="40" rx="12" />
-          <line x1="212" y1={py - 78} x2="212" y2={py - 38} />
-          <line x1="244" y1={py - 78} x2="244" y2={py - 38} />
-        </g>
-      </g>
-    </svg>
-  )
-}
-
-function Slider({ label, hint, value, onChange, icon }) {
-  return (
-    <label className="herobed-slider">
-      <span className="herobed-slider-icon" aria-hidden="true">{icon}</span>
-      <span className="herobed-slider-copy">
-        <strong>{label}</strong>
-        <em>{hint}</em>
-      </span>
-      <input
-        type="range"
-        min="0"
-        max="100"
-        value={Math.round(value * 100)}
-        onChange={(event) => onChange(Number(event.target.value) / 100)}
-        aria-label={label}
-        style={{ '--fill': `${Math.round(value * 100)}%` }}
-      />
-    </label>
-  )
-}
+const SLIDER_STEPS = 1000
 
 const ICONS = {
   back: (
@@ -134,82 +35,391 @@ const ICONS = {
       <path d="M4 9h16M12 21v-8M8.5 16.5 12 13l3.5 3.5M4 5h16" />
     </svg>
   ),
+  ar: (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M4 8V6a2 2 0 0 1 2-2h2" />
+      <path d="M16 4h2a2 2 0 0 1 2 2v2" />
+      <path d="M20 16v2a2 2 0 0 1-2 2h-2" />
+      <path d="M8 20H6a2 2 0 0 1-2-2v-2" />
+      <path d="m12 7 4.5 2.6v5.2L12 17.4l-4.5-2.6V9.6L12 7Z" />
+      <path d="M12 12.2 16.5 9.6M12 12.2v5.2M12 12.2 7.5 9.6" />
+    </svg>
+  ),
 }
 
-function BedControls() {
-  const [pose, setPose] = useState(REST)
+function Slider({ label, hint, inputRef, defaultValue, onChange, onDragStart, onDragEnd, icon }) {
+  const initialPct = `${(defaultValue * 100).toFixed(1)}%`
+  return (
+    <label className="herobed-slider">
+      <span className="herobed-slider-icon" aria-hidden="true">{icon}</span>
+      <span className="herobed-slider-copy">
+        <strong>{label}</strong>
+        <em>{hint}</em>
+      </span>
+      <input
+        ref={inputRef}
+        type="range"
+        min="0"
+        max={SLIDER_STEPS}
+        defaultValue={Math.round(defaultValue * SLIDER_STEPS)}
+        onPointerDown={onDragStart}
+        onPointerUp={onDragEnd}
+        onPointerCancel={onDragEnd}
+        onBlur={onDragEnd}
+        onInput={(event) => {
+          const v = Number(event.target.value) / SLIDER_STEPS
+          event.target.style.setProperty('--fill', `${(v * 100).toFixed(2)}%`)
+          onChange(v)
+        }}
+        aria-label={label}
+        style={{ '--fill': initialPct }}
+      />
+    </label>
+  )
+}
+
+function BedStage3D({ onContact }) {
+  const [pose, setPose] = useState(REST_POSE)
+  const [activePreset, setActivePreset] = useState(null)
   const [auto, setAuto] = useState(true)
-  const rootRef = useRef(null)
+  const [bedMode, setBedMode] = useState('eletrica')
+  const [showDimensions, setShowDimensions] = useState(false)
+  const [showCaregiverZone, setShowCaregiverZone] = useState(false)
+  const [railsDown, setRailsDown] = useState(false)
+  const [showPneumatic, setShowPneumatic] = useState(false)
+  const [clientMounted, setClientMounted] = useState(false)
+  const [sceneReady, setSceneReady] = useState(false)
+  const [webglFailed, setWebglFailed] = useState(false)
+  const [hasOrbited, setHasOrbited] = useState(false)
+  const [resetSignal, setResetSignal] = useState(0)
+  const [arModalOpen, setArModalOpen] = useState(false)
+  const [arPromptHighlight, setArPromptHighlight] = useState(false)
 
-  // Demonstracao automatica: roda so com o hero na tela e so ate alguem tocar.
+  const iosArLinkRef = useRef(null)
+  const livePoseRef = useRef({ ...REST_POSE })
+  const draggingKeyRef = useRef(null)
+  const backInputRef = useRef(null)
+  const legsInputRef = useRef(null)
+  const liftInputRef = useRef(null)
+  const heightPillRef = useRef(null)
+  const lastHeightCmRef = useRef(Math.round(liftToHeightMeters(REST_POSE.lift) * 100))
+
+  const currentModel = AR_MODELS[bedMode] || AR_MODELS.eletrica
+
+  // Monta o motor 3D apenas no cliente (mantem SSR/prerender instantaneo)
   useEffect(() => {
-    if (!auto) return undefined
-    if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) return undefined
+    setClientMounted(true)
+    const params = new URLSearchParams(window.location.search)
+    const arParam = params.get('ar')
+    if (arParam === 'manual' || arParam === 'eletrica') {
+      setBedMode(arParam)
+      setArPromptHighlight(true)
+    }
+  }, [])
 
-    let frame = 0
-    let visible = !('IntersectionObserver' in window)
-    let lastFrame = 0
-    const started = performance.now()
+  /**
+   * Atualiza os 3 sliders e o badge de altura direto no DOM a 60fps
+   * (zero re-renders do React -> animacao completamente lisa!).
+   */
+  const syncSliderDom = useCallback((inputEl, value) => {
+    if (!inputEl) return
+    const nextVal = String(Math.round(value * SLIDER_STEPS))
+    if (inputEl.value !== nextVal) inputEl.value = nextVal
+    inputEl.style.setProperty('--fill', `${(value * 100).toFixed(2)}%`)
+  }, [])
 
-    const tick = (now) => {
-      frame = 0
-      if (!visible || document.hidden) return
-      if (now - lastFrame >= 1000 / 30) {
-        setPose(demoPose(((now - started) % DEMO_MS) / DEMO_MS))
-        lastFrame = now
+  const handleLivePose = useCallback(
+    (livePose, heightCm) => {
+      livePoseRef.current.back = livePose.back
+      livePoseRef.current.legs = livePose.legs
+      livePoseRef.current.lift = livePose.lift
+
+      if (draggingKeyRef.current !== 'back') syncSliderDom(backInputRef.current, livePose.back)
+      if (draggingKeyRef.current !== 'legs') syncSliderDom(legsInputRef.current, livePose.legs)
+      if (draggingKeyRef.current !== 'lift') syncSliderDom(liftInputRef.current, livePose.lift)
+
+      if (heightPillRef.current && heightCm !== lastHeightCmRef.current) {
+        lastHeightCmRef.current = heightCm
+        heightPillRef.current.textContent = `Altura ${heightCm} cm`
       }
-      frame = requestAnimationFrame(tick)
-    }
-    const stop = () => { cancelAnimationFrame(frame); frame = 0 }
-    const start = () => { if (visible && !document.hidden && !frame) frame = requestAnimationFrame(tick) }
-    const visibilityChanged = () => document.hidden ? stop() : start()
-
-    const observer =
-      'IntersectionObserver' in window
-        ? new IntersectionObserver(([entry]) => {
-            visible = entry.isIntersecting
-            if (visible) start()
-            else stop()
-          })
-        : null
-    if (observer && rootRef.current) observer.observe(rootRef.current)
-
-    document.addEventListener('visibilitychange', visibilityChanged)
-    start()
-    return () => {
-      stop()
-      observer?.disconnect()
-      document.removeEventListener('visibilitychange', visibilityChanged)
-    }
-  }, [auto])
+    },
+    [syncSliderDom],
+  )
 
   const drive = (key) => (value) => {
     setAuto(false)
-    setPose((current) => ({ ...current, [key]: value }))
+    setActivePreset(null)
+    // Parte exatamente da pose visivel atual (sem pulo ao assumir o controle!)
+    const next = { ...livePoseRef.current, [key]: value }
+    livePoseRef.current = next
+    setPose(next)
   }
 
-  return (
-        <div className="herobed-play" ref={rootRef}>
-          <div className="herobed-scene">
-            <span className="herobed-plus herobed-plus--a" aria-hidden="true" />
-            <span className="herobed-plus herobed-plus--b" aria-hidden="true" />
-            <span className="herobed-plus herobed-plus--c" aria-hidden="true" />
-            <Bed {...pose} />
-          </div>
+  const applyPreset = (preset) => {
+    setAuto(false)
+    setActivePreset(preset.id)
+    setPose({ ...preset.pose })
+  }
 
-          <div className="herobed-remote">
-            <div className="herobed-remote-head">
-              <strong>Mexa na cama</strong>
-              <button type="button" onClick={() => setAuto((value) => !value)} aria-pressed={auto}>
-                {auto ? 'Pausar' : 'Demonstração'}
-              </button>
-            </div>
-            <Slider label="Encosto" hint="para comer, ler, respirar melhor" value={pose.back} onChange={drive('back')} icon={ICONS.back} />
-            <Slider label="Pernas" hint="alivia a lombar e o inchaço" value={pose.legs} onChange={drive('legs')} icon={ICONS.legs} />
-            <Slider label="Altura" hint="poupa a coluna de quem cuida" value={pose.lift} onChange={drive('lift')} icon={ICONS.lift} />
-            <p className="herobed-note">Ilustração. Os movimentos variam conforme o modelo cotado.</p>
-          </div>
+  const toggleAuto = () => {
+    setActivePreset(null)
+    setAuto((currentlyAuto) => {
+      if (currentlyAuto) {
+        // Ao pausar, fixa na pose exata onde a cama esta naquele milissegundo
+        setPose({ ...livePoseRef.current })
+      }
+      return !currentlyAuto
+    })
+  }
+
+  const handleOrbitInteract = useCallback(() => {
+    setHasOrbited(true)
+  }, [])
+
+  const handleSceneReady = useCallback(() => {
+    setSceneReady(true)
+  }, [])
+
+  const handleWebGLError = useCallback(() => {
+    setWebglFailed(true)
+  }, [])
+
+  const launchAR = () => {
+    setArPromptHighlight(false)
+    const platform = detectArPlatform()
+    if (platform === 'ios' && iosArLinkRef.current) {
+      iosArLinkRef.current.click()
+      return
+    }
+    if (platform === 'android' && typeof window !== 'undefined') {
+      const origin = window.location.origin
+      const isLocal = ['localhost', '127.0.0.1'].includes(window.location.hostname)
+      if (!isLocal) {
+        const glbUrl = encodeURIComponent(`${origin}${currentModel.glb}`)
+        const title = encodeURIComponent(currentModel.title)
+        const fallback = encodeURIComponent(window.location.href)
+        window.location.href = `intent://arvr.google.com/scene-viewer/1.0?file=${glbUrl}&mode=ar_preferred&resizable=false&title=${title}#Intent;scheme=https;package=com.google.ar.core;action=android.intent.action.VIEW;S.browser_fallback_url=${fallback};end;`
+        return
+      }
+    }
+    setArModalOpen(true)
+  }
+
+  const posterSrc = bedMode === 'manual' ? '/products/cama-manual-yr-04.jpg' : '/products/cama-yr-02.jpg'
+  const initialHeightCm = Math.round(liftToHeightMeters(REST_POSE.lift) * 100)
+
+  return (
+    <div className="herobed-play">
+      <div className={`herobed-scene ${sceneReady ? 'is-3d-ready' : ''}`}>
+        {/* Poster imediato para SSR/LCP rapido e fallback sem WebGL */}
+        <img
+          className="herobed-poster"
+          src={posterSrc}
+          {...imageSources(posterSrc, '(max-width: 900px) calc(100vw - 36px), 600px')}
+          width="1280"
+          height="960"
+          fetchPriority="high"
+          alt="Cama hospitalar articulada Grupo YR Hospitalar"
+        />
+
+        {/* Motor 3D em quarto residencial carregado sob demanda */}
+        {clientMounted && !webglFailed && (
+          <Suspense fallback={null}>
+            <HospitalBedCanvas
+              pose={pose}
+              auto={auto}
+              mode={bedMode}
+              showPneumatic={showPneumatic}
+              railsDown={railsDown}
+              showDimensions={showDimensions}
+              showCaregiverZone={showCaregiverZone}
+              resetSignal={resetSignal}
+              onLivePose={handleLivePose}
+              onInteract={handleOrbitInteract}
+              onReady={handleSceneReady}
+              onWebGLError={handleWebGLError}
+            />
+          </Suspense>
+        )}
+
+        {/* Canto superior esquerdo: dica 360° ou botao centralizar */}
+        <div className="herobed-badge-left">
+          {hasOrbited ? (
+            <button
+              type="button"
+              className="herobed-hud-pill"
+              onClick={() => {
+                setResetSignal((n) => n + 1)
+                setHasOrbited(false)
+              }}
+            >
+              ↻ Centralizar visão
+            </button>
+          ) : (
+            <span className="herobed-hud-pill herobed-hud-pill--static">
+              360° · Arraste para girar
+            </span>
+          )}
         </div>
+
+        {/* Canto superior direito: Botao AR em escala real 1:1 */}
+        <button
+          type="button"
+          className={`herobed-ar-btn ${arPromptHighlight ? 'is-pulsing' : ''}`}
+          onClick={launchAR}
+          aria-label="Ver cama hospitalar em tamanho real no seu quarto com Realidade Aumentada"
+        >
+          {ICONS.ar}
+          <span>
+            <strong>AR</strong>
+            <small>Ver no quarto</small>
+          </span>
+        </button>
+
+        {/* Link nativo oculto para Apple AR Quick Look (iOS exige <a rel="ar"> com <img>) */}
+        <a
+          ref={iosArLinkRef}
+          className="sr-only"
+          rel="ar"
+          href={`${currentModel.usdz}#allowsContentScaling=0`}
+          aria-hidden="true"
+          tabIndex={-1}
+        >
+          <img src="/products/cama-yr-02.jpg" alt="" width="1" height="1" />
+        </a>
+      </div>
+
+      {/* Barra de opcoes do 3D: flutuante no desktop e encaixada abaixo do 3D no celular */}
+      <div className="herobed-stage-bar" role="toolbar" aria-label="Opções do modelo 3D">
+        <div className="herobed-mode-switch" role="group" aria-label="Modelo da cama">
+          <button
+            type="button"
+            aria-pressed={bedMode === 'eletrica'}
+            className={bedMode === 'eletrica' ? 'is-active' : ''}
+            onClick={() => setBedMode('eletrica')}
+          >
+            Elétrica
+          </button>
+          <button
+            type="button"
+            aria-pressed={bedMode === 'manual'}
+            className={bedMode === 'manual' ? 'is-active' : ''}
+            onClick={() => setBedMode('manual')}
+          >
+            Manual
+          </button>
+        </div>
+
+        <button
+          type="button"
+          className={`herobed-chip ${showDimensions ? 'is-active' : ''}`}
+          aria-pressed={showDimensions}
+          onClick={() => setShowDimensions((v) => !v)}
+        >
+          Medidas
+        </button>
+
+        <button
+          type="button"
+          className={`herobed-chip ${showCaregiverZone ? 'is-active' : ''}`}
+          aria-pressed={showCaregiverZone}
+          onClick={() => setShowCaregiverZone((v) => !v)}
+        >
+          Espaço cuidador
+        </button>
+
+        <button
+          type="button"
+          className={`herobed-chip ${railsDown ? 'is-active' : ''}`}
+          aria-pressed={railsDown}
+          onClick={() => setRailsDown((v) => !v)}
+        >
+          {railsDown ? 'Subir grade' : 'Abaixar grade'}
+        </button>
+
+        <button
+          type="button"
+          className={`herobed-chip ${showPneumatic ? 'is-active' : ''}`}
+          aria-pressed={showPneumatic}
+          onClick={() => setShowPneumatic((v) => !v)}
+        >
+          + Pneumático
+        </button>
+      </div>
+
+      {/* Controle tatil integrado logo abaixo do quarto 3D */}
+      <div className="herobed-remote">
+        <div className="herobed-remote-head">
+          <div className="herobed-remote-title">
+            <strong>Mexa na cama em 3D</strong>
+            <span className="herobed-height-pill" ref={heightPillRef} aria-live="polite">
+              Altura {initialHeightCm} cm
+            </span>
+          </div>
+          <button type="button" onClick={toggleAuto} aria-pressed={auto}>
+            {auto ? 'Pausar' : 'Demonstração'}
+          </button>
+        </div>
+
+        <div className="herobed-presets" role="group" aria-label="Posições prontas da cama">
+          {CLINICAL_PRESETS.map((preset) => (
+            <button
+              key={preset.id}
+              type="button"
+              aria-pressed={activePreset === preset.id}
+              className={activePreset === preset.id ? 'is-active' : ''}
+              onClick={() => applyPreset(preset)}
+            >
+              {preset.label}
+            </button>
+          ))}
+        </div>
+
+        <Slider
+          label="Encosto"
+          hint="para comer, ler, respirar melhor"
+          inputRef={backInputRef}
+          defaultValue={REST_POSE.back}
+          onChange={drive('back')}
+          onDragStart={() => { draggingKeyRef.current = 'back' }}
+          onDragEnd={() => { draggingKeyRef.current = null }}
+          icon={ICONS.back}
+        />
+        <Slider
+          label="Pernas"
+          hint="alivia a lombar e o inchaço"
+          inputRef={legsInputRef}
+          defaultValue={REST_POSE.legs}
+          onChange={drive('legs')}
+          onDragStart={() => { draggingKeyRef.current = 'legs' }}
+          onDragEnd={() => { draggingKeyRef.current = null }}
+          icon={ICONS.legs}
+        />
+        <Slider
+          label="Altura"
+          hint="poupa a coluna de quem cuida"
+          inputRef={liftInputRef}
+          defaultValue={REST_POSE.lift}
+          onChange={drive('lift')}
+          onDragStart={() => { draggingKeyRef.current = 'lift' }}
+          onDragEnd={() => { draggingKeyRef.current = null }}
+          icon={ICONS.lift}
+        />
+
+        <p className="herobed-note">
+          Leito interno {BED_SPECS.internalLength.toFixed(2).replace('.', ',')} m ×{' '}
+          {BED_SPECS.internalWidth.toFixed(2).replace('.', ',')} m · altura padrão 66 cm (ajustável).
+          Confirme o modelo exato na cotação.
+        </p>
+      </div>
+
+      <ArModal
+        open={arModalOpen}
+        onClose={() => setArModalOpen(false)}
+        mode={bedMode}
+        onQuote={() => onContact?.('Orientação')}
+      />
+    </div>
   )
 }
 
@@ -233,7 +443,8 @@ export default function HeroBed({ onContact }) {
           </h1>
           <p className="herobed-lede">
             Alugue ou compre cama hospitalar, colchão pneumático e cadeira de banho. A equipe leva,
-            monta no quarto e explica o uso. A cotação é feita pelo WhatsApp.
+            monta no quarto e explica o uso. Teste a cama em 3D ou projete em tamanho real no seu
+            quarto pelo botão AR.
           </p>
           <div className="herobed-actions">
             <button className="yr3-button herobed-cta" onClick={() => onContact?.('Orientação')}>
@@ -247,7 +458,7 @@ export default function HeroBed({ onContact }) {
             <li>Retirada no fim do uso</li>
           </ul>
         </div>
-        <BedControls />
+        <BedStage3D onContact={onContact} />
       </div>
     </section>
   )

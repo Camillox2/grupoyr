@@ -1,8 +1,8 @@
 /* ===========================================================================
-   Hero da home: titulo direto + cama vetorial interativa
+   Hero da home: titulo direto + quarto 3D interativo + AR em escala real 1:1
 
-   Base pastel (creme) com o AZUL da marca como cor de contraste: botao
-   principal, sublinhado do titulo, colchao da ilustracao e controles.
+   Base pastel (creme) com o AZUL da marca como cor de contraste, enquadrando
+   o quarto residencial 3D acolhedor e o controle tatil logo abaixo.
    =========================================================================== */
 
 .herobed {
@@ -14,14 +14,19 @@
 }
 
 .herobed-inner {
-  width: min(1240px, calc(100% - 48px));
+  width: min(1280px, calc(100% - 56px));
   margin: 0 auto;
   min-height: calc(100svh - var(--yr-header-h, 70px));
   display: grid;
-  grid-template-columns: minmax(0, 1.02fr) minmax(0, 1fr);
+  grid-template-columns: minmax(0, 0.96fr) minmax(0, 1.04fr);
   align-items: center;
-  gap: clamp(24px, 4vw, 64px);
-  padding: 40px 0 48px;
+  gap: clamp(36px, 5vw, 78px);
+  padding: 36px 0 48px;
+}
+
+.herobed-copy {
+  min-width: 0;
+  padding-right: clamp(0px, 1vw, 14px);
 }
 
 /* ------------------------------------------------------------------ texto */
@@ -59,9 +64,9 @@
   margin: 0;
   font-family: Georgia, 'Times New Roman', serif;
   font-weight: 400;
-  font-size: clamp(38px, 5.2vw, 76px);
-  line-height: 1.02;
-  letter-spacing: -0.04em;
+  font-size: clamp(34px, 4.1vw, 62px);
+  line-height: 1.05;
+  letter-spacing: -0.035em;
   color: var(--azul-900, #102a4c);
   text-wrap: balance;
 }
@@ -70,8 +75,14 @@
 .herobed-mark {
   position: relative;
   display: inline-block;
+  max-width: 100%;
   color: var(--azul-600, #1d5fae);
   white-space: nowrap;
+}
+@media (max-width: 1140px) {
+  .herobed-mark {
+    white-space: normal;
+  }
 }
 .herobed-mark svg {
   position: absolute;
@@ -96,10 +107,9 @@
 }
 
 .herobed .herobed-lede {
-  /* folga para o sublinhado desenhado, que desce abaixo da linha do titulo */
-  margin: 40px 0 0;
-  max-width: 50ch;
-  font-size: clamp(16px, 1.3vw, 19px);
+  margin: 38px 0 0;
+  max-width: 48ch;
+  font-size: clamp(16px, 1.28vw, 18.5px);
   line-height: 1.65;
   color: #44546a;
 }
@@ -108,7 +118,7 @@
   display: flex;
   flex-wrap: wrap;
   gap: 12px;
-  margin-top: 30px;
+  margin-top: 28px;
 }
 .herobed .herobed-cta {
   background: var(--azul-600, #1d5fae);
@@ -130,7 +140,7 @@
 
 .herobed-proof {
   list-style: none;
-  margin: 28px 0 0;
+  margin: 26px 0 0;
   padding: 0;
   display: flex;
   flex-wrap: wrap;
@@ -155,7 +165,7 @@
     #dce9f8;
 }
 
-/* -------------------------------------------------------------- ilustracao */
+/* ----------------------------------------------------------- palco quarto 3D */
 .herobed-play {
   position: relative;
   display: grid;
@@ -164,47 +174,202 @@
 
 .herobed-scene {
   position: relative;
-  border-radius: 36px 36px 0 0;
-  padding: 26px 18px 0;
-  background: linear-gradient(180deg, #dce9f8 0%, #eaf2fc 100%);
-  border: 1px solid #cfe0f4;
+  aspect-ratio: 4 / 3;
+  min-height: 340px;
+  border-radius: 32px 32px 0 0;
+  background: linear-gradient(160deg, #ede4d6 0%, #e1d4c1 100%);
+  border: 1px solid #d9cfbe;
   border-bottom: 0;
   overflow: hidden;
-}
-/* "piso" da cena */
-.herobed-scene::after {
-  content: '';
-  position: absolute;
-  inset: auto 0 0 0;
-  height: 13%;
-  background: #cfe0f4;
-}
-.herobed-svg {
-  position: relative;
-  z-index: 1;
-  display: block;
-  width: 100%;
-  height: auto;
+  contain: layout style paint;
 }
 
-/* O "+" do logo da YR, flutuando devagar ao fundo. */
-.herobed-plus {
+.herobed-poster {
   position: absolute;
-  width: 26px;
-  height: 26px;
-  opacity: 0.5;
-  background:
-    linear-gradient(#1d5fae, #1d5fae) center / 100% 30% no-repeat,
-    linear-gradient(#1d5fae, #1d5fae) center / 30% 100% no-repeat;
-  border-radius: 3px;
-  animation: herobed-float 7s ease-in-out infinite;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  opacity: 1;
+  transition: opacity 360ms ease;
+  pointer-events: none;
 }
-.herobed-plus--a { left: 9%; top: 14%; }
-.herobed-plus--b { right: 12%; top: 22%; width: 18px; height: 18px; opacity: 0.35; animation-delay: -2.4s; }
-.herobed-plus--c { right: 30%; top: 9%; width: 14px; height: 14px; opacity: 0.28; animation-delay: -4.6s; }
-@keyframes herobed-float {
-  0%, 100% { transform: translateY(0) rotate(0deg); }
-  50% { transform: translateY(-12px) rotate(12deg); }
+
+.herobed-scene.is-3d-ready .herobed-poster {
+  opacity: 0;
+}
+
+.herobed-canvas-host {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.herobed-webgl {
+  display: block;
+  width: 100% !important;
+  height: 100% !important;
+  cursor: grab;
+  touch-action: none;
+}
+.herobed-webgl:active {
+  cursor: grabbing;
+}
+
+/* HUD superior esquerdo (dica 360° / centralizar) */
+.herobed-badge-left {
+  position: absolute;
+  top: 14px;
+  left: 14px;
+  z-index: 4;
+}
+
+.herobed-hud-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 36px;
+  padding: 6px 13px;
+  border-radius: 999px;
+  border: 1px solid rgba(16, 42, 76, 0.14);
+  background: rgba(255, 252, 247, 0.86);
+  backdrop-filter: blur(10px);
+  color: var(--azul-900, #102a4c);
+  font: inherit;
+  font-size: 11.5px;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  box-shadow: 0 8px 20px -10px rgba(16, 42, 76, 0.35);
+  cursor: pointer;
+}
+.herobed-hud-pill:hover {
+  background: #ffffff;
+}
+.herobed-hud-pill--static {
+  cursor: default;
+  pointer-events: none;
+}
+
+/* Botao AR fixo no canto superior direito */
+.herobed-ar-btn {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  z-index: 5;
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  min-height: 44px;
+  padding: 7px 14px 7px 11px;
+  border-radius: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  background: linear-gradient(135deg, #102a4c 0%, #1d5fae 100%);
+  color: #ffffff;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  box-shadow: 0 14px 28px -10px rgba(16, 42, 76, 0.65);
+  transition: transform 180ms ease, box-shadow 180ms ease, filter 180ms ease;
+}
+.herobed-ar-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 18px 34px -10px rgba(16, 42, 76, 0.72);
+  filter: brightness(1.06);
+}
+.herobed-ar-btn:active {
+  transform: translateY(0);
+}
+.herobed-ar-btn svg {
+  width: 22px;
+  height: 22px;
+  flex-shrink: 0;
+}
+.herobed-ar-btn span {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.08;
+}
+.herobed-ar-btn strong {
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+}
+.herobed-ar-btn small {
+  font-size: 10.5px;
+  font-weight: 600;
+  color: #dce9f8;
+}
+.herobed-ar-btn.is-pulsing {
+  animation: herobed-ar-pulse 1.8s ease-in-out infinite;
+}
+@keyframes herobed-ar-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(29, 95, 174, 0.55), 0 14px 28px -10px rgba(16, 42, 76, 0.65); }
+  50% { box-shadow: 0 0 0 10px rgba(29, 95, 174, 0), 0 14px 28px -10px rgba(16, 42, 76, 0.65); }
+}
+
+/* Barra de opcoes do 3D encaixada entre o quarto e o controle (0% sobreposicao no 3D) */
+.herobed-stage-bar {
+  position: relative;
+  z-index: 3;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 7px;
+  padding: 10px 14px;
+  background: #f7f3eb;
+  border-inline: 1px solid #d9cfbe;
+  border-top: 1px solid #e5ddd0;
+}
+
+.herobed-mode-switch {
+  display: inline-flex;
+  padding: 3px;
+  border-radius: 999px;
+  background: #ffffff;
+  border: 1px solid rgba(16, 42, 76, 0.14);
+}
+.herobed-mode-switch button {
+  border: 0;
+  background: transparent;
+  color: #44546a;
+  font: inherit;
+  font-size: 11.5px;
+  font-weight: 800;
+  padding: 5px 11px;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: background 150ms ease, color 150ms ease;
+}
+.herobed-mode-switch button.is-active {
+  background: var(--azul-600, #1d5fae);
+  color: #ffffff;
+}
+
+.herobed-chip {
+  border: 1px solid rgba(16, 42, 76, 0.14);
+  background: #ffffff;
+  color: var(--azul-900, #102a4c);
+  font: inherit;
+  font-size: 11.5px;
+  font-weight: 700;
+  padding: 6px 11px;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: background 150ms ease, color 150ms ease, border-color 150ms ease;
+}
+.herobed-chip:hover {
+  background: #eef4fc;
+}
+.herobed-chip.is-active {
+  background: var(--azul-900, #102a4c);
+  border-color: var(--azul-900, #102a4c);
+  color: #ffffff;
+}
+.herobed-chip.is-active:hover {
+  background: var(--azul-600, #1d5fae);
+  border-color: var(--azul-600, #1d5fae);
+  color: #ffffff;
 }
 
 /* ---------------------------------------------------------------- controle */
@@ -213,21 +378,38 @@
   z-index: 2;
   border-radius: 0 0 28px 28px;
   background: #ffffff;
-  border: 1px solid #cfe0f4;
-  padding: 16px 20px 14px;
-  box-shadow: 0 30px 60px -28px rgba(16, 42, 76, 0.4);
+  border: 1px solid #d9cfbe;
+  border-top: 1px solid #e6dfd3;
+  padding: 15px 20px 14px;
+  box-shadow: 0 30px 60px -28px rgba(16, 42, 76, 0.36);
 }
 .herobed-remote-head {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  margin-bottom: 6px;
+  margin-bottom: 10px;
+}
+.herobed-remote-title {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  flex-wrap: wrap;
 }
 .herobed-remote-head strong {
   font-size: 14px;
   letter-spacing: -0.01em;
   color: var(--azul-900, #102a4c);
+}
+.herobed-height-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 9px;
+  border-radius: 999px;
+  background: #e9f5f1;
+  color: #155c4e;
+  font-size: 11px;
+  font-weight: 800;
 }
 .herobed-remote-head button {
   border: 1px solid #cfe0f4;
@@ -245,12 +427,41 @@
   background: #dce9f8;
 }
 
+/* Presets clinicos de 1 toque */
+.herobed-presets {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 6px;
+  margin-bottom: 10px;
+}
+.herobed-presets button {
+  border: 1px solid #dde6f0;
+  background: #f8fafc;
+  color: #364b63;
+  font: inherit;
+  font-size: 11.5px;
+  font-weight: 700;
+  padding: 7px 6px;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: background 150ms ease, color 150ms ease, border-color 150ms ease;
+}
+.herobed-presets button:hover {
+  background: #eaf2fc;
+  color: var(--azul-900, #102a4c);
+}
+.herobed-presets button.is-active {
+  background: var(--azul-600, #1d5fae);
+  border-color: var(--azul-600, #1d5fae);
+  color: #ffffff;
+}
+
 .herobed-slider {
   display: grid;
   grid-template-columns: 34px minmax(0, 1fr) minmax(90px, 42%);
   align-items: center;
   gap: 12px;
-  padding: 9px 0;
+  padding: 8px 0;
   border-top: 1px solid #edf2f8;
   cursor: pointer;
 }
@@ -334,52 +545,372 @@
 
 .herobed .herobed-note {
   margin: 8px 0 0;
-  font-size: 10.5px;
-  color: #8b9ab0;
+  font-size: 10.8px;
+  line-height: 1.45;
+  color: #6f8096;
 }
 
-/* ----------------------------------------------------------------- celular */
-@media (max-width: 900px) {
+/* ----------------------------------------------------- modal nativo <dialog> AR */
+.ar-dialog {
+  width: min(680px, calc(100vw - 32px));
+  max-height: calc(100dvh - 32px);
+  padding: 0;
+  border: 1px solid #d5e1ef;
+  border-radius: 26px;
+  background: #ffffff;
+  color: var(--azul-900, #102a4c);
+  box-shadow: 0 32px 72px -18px rgba(7, 29, 53, 0.45);
+  overflow: auto;
+}
+.ar-dialog:modal {
+  overscroll-behavior: contain;
+}
+.ar-dialog::backdrop {
+  background: rgba(7, 29, 53, 0.56);
+  backdrop-filter: blur(4px);
+  overflow: hidden;
+  overscroll-behavior: contain;
+}
+
+.ar-dialog-inner {
+  padding: 24px 26px 22px;
+  display: grid;
+  gap: 20px;
+}
+
+.ar-dialog-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+.ar-dialog-kicker {
+  display: inline-block;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--azul-600, #1d5fae);
+  margin-bottom: 4px;
+}
+.herobed .ar-dialog-title {
+  margin: 0;
+  font-family: Georgia, 'Times New Roman', serif;
+  font-weight: 400;
+  font-size: clamp(24px, 2.6vw, 30px);
+  line-height: 1.12;
+  letter-spacing: -0.02em;
+  color: var(--azul-900, #102a4c);
+}
+.ar-dialog-close {
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  border: 1px solid #d5e1ef;
+  background: #f4f8fd;
+  color: var(--azul-900, #102a4c);
+  font-size: 22px;
+  line-height: 1;
+  cursor: pointer;
+}
+.ar-dialog-close:hover {
+  background: #dce9f8;
+}
+
+.ar-dialog-body {
+  display: grid;
+  grid-template-columns: 224px minmax(0, 1fr);
+  gap: 22px;
+  align-items: start;
+}
+
+.ar-dialog-qr-box {
+  display: grid;
+  gap: 10px;
+  justify-items: center;
+  padding: 14px;
+  border-radius: 20px;
+  background: #f6f1e8;
+  border: 1px solid #e5dccb;
+  text-align: center;
+}
+.ar-dialog-qr {
+  width: 196px;
+  height: 196px;
+  padding: 10px;
+  border-radius: 14px;
+  background: #ffffff;
+  box-shadow: 0 10px 24px -14px rgba(16, 42, 76, 0.35);
+  display: grid;
+  place-items: center;
+}
+.ar-dialog-qr svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+.ar-dialog-qr--loading {
+  font-size: 12px;
+  color: #5b6d82;
+}
+.ar-dialog-qr-caption {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.45;
+  color: #44546a;
+}
+
+.ar-dialog-info h2 {
+  margin: 0 0 10px;
+  font-size: 14px;
+  font-weight: 800;
+  color: var(--azul-900, #102a4c);
+}
+.ar-dialog-specs {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+.ar-dialog-specs li {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 11px;
+  border-radius: 11px;
+  background: #f5f9fe;
+  font-size: 12.5px;
+}
+.ar-dialog-specs span {
+  color: #53667c;
+}
+.ar-dialog-specs strong {
+  color: var(--azul-900, #102a4c);
+  text-align: right;
+}
+
+.ar-dialog-local-note {
+  margin: 12px 0 0;
+  padding: 9px 11px;
+  border-radius: 10px;
+  background: #fff7e6;
+  border: 1px solid #f0d8a8;
+  font-size: 11.5px;
+  line-height: 1.45;
+  color: #6b4e16;
+}
+.ar-dialog-local-note code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-weight: 700;
+}
+
+.ar-dialog-files {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  margin-top: 12px;
+}
+.ar-dialog-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 6px 11px;
+  border-radius: 999px;
+  border: 1px solid #cfe0f4;
+  background: #ffffff;
+  color: var(--azul-600, #1d5fae);
+  font: inherit;
+  font-size: 11.5px;
+  font-weight: 700;
+  text-decoration: none;
+  cursor: pointer;
+}
+.ar-dialog-chip:hover {
+  background: #eaf2fc;
+}
+
+.ar-dialog-foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding-top: 14px;
+  border-top: 1px solid #edf2f8;
+}
+.ar-dialog-foot p {
+  margin: 0;
+  font-size: 12px;
+  color: #5c6f85;
+}
+
+/* ----------------------------------------------------------------- tablet / celular */
+@media (max-width: 960px) {
   .herobed-inner {
     grid-template-columns: 1fr;
     min-height: 0;
-    padding: 26px 0 34px;
-    gap: 26px;
-    width: calc(100% - 36px);
+    padding: 22px 0 36px;
+    gap: 24px;
+    width: calc(100% - 32px);
+  }
+  .herobed-copy {
+    padding-right: 0;
+  }
+  .herobed .herobed-eyebrow {
+    margin-bottom: 16px;
+    font-size: 11.5px;
   }
   .herobed h1 {
-    font-size: clamp(36px, 10.4vw, 52px);
+    font-size: clamp(34px, 9.2vw, 48px);
+    line-height: 1.06;
   }
   .herobed-mark {
     white-space: normal;
   }
   .herobed .herobed-lede {
-    margin-top: 30px;
+    margin-top: 24px;
+    font-size: 15.5px;
   }
   .herobed-actions {
-    margin-top: 22px;
+    margin-top: 20px;
   }
   .herobed-actions .yr3-button {
-    flex: 1 1 auto;
+    flex: 1 1 160px;
     justify-content: center;
     text-align: center;
+    padding: 14px 18px;
+    font-size: 14.5px;
+  }
+  .herobed-proof {
+    margin-top: 18px;
+    gap: 8px 14px;
   }
   .herobed-scene {
-    border-radius: 26px 26px 0 0;
-    padding: 16px 8px 0;
+    aspect-ratio: 5 / 4;
+    min-height: 270px;
+    max-height: 390px;
+    border-radius: 24px 24px 0 0;
+  }
+  .herobed-presets {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
   .herobed-slider {
-    grid-template-columns: 34px minmax(0, 1fr) 44%;
+    grid-template-columns: 32px minmax(0, 1fr) minmax(112px, 46%);
     gap: 10px;
   }
   .herobed-slider-copy em {
     display: none;
   }
+  .ar-dialog-body {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Celular estreito: tira a barra de chips de cima do 3D para 0% de obstrucao */
+@media (max-width: 680px) {
+  .herobed-inner {
+    width: calc(100% - 24px);
+    padding: 18px 0 28px;
+    gap: 20px;
+  }
+  .herobed-scene {
+    aspect-ratio: 11 / 10;
+    min-height: 280px;
+    max-height: 360px;
+    border-radius: 22px 22px 0 0;
+  }
+  .herobed-badge-left {
+    top: 10px;
+    left: 10px;
+  }
+  .herobed-hud-pill {
+    min-height: 32px;
+    padding: 5px 10px;
+    font-size: 10.5px;
+  }
+  .herobed-ar-btn {
+    top: 10px;
+    right: 10px;
+    min-height: 40px;
+    padding: 6px 11px 6px 9px;
+    gap: 7px;
+    border-radius: 13px;
+  }
+  .herobed-ar-btn svg {
+    width: 19px;
+    height: 19px;
+  }
+  .herobed-ar-btn strong {
+    font-size: 12px;
+  }
+  .herobed-ar-btn small {
+    font-size: 9.5px;
+  }
+  .herobed-stage-bar {
+    position: static;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    padding: 9px 10px;
+    gap: 6px;
+    background: #f8f4ec;
+    border-inline: 1px solid #d9cfbe;
+    border-top: 1px solid #e5ddd0;
+  }
+  .herobed-stage-bar::-webkit-scrollbar {
+    display: none;
+  }
+  .herobed-stage-bar > * {
+    flex: 0 0 auto;
+  }
+  .herobed-chip {
+    min-height: 34px;
+    padding: 6px 11px;
+    font-size: 11.5px;
+    box-shadow: none;
+  }
+  .herobed-mode-switch {
+    box-shadow: none;
+  }
+  .herobed-remote {
+    padding: 13px 14px 12px;
+    border-radius: 0 0 22px 22px;
+  }
+  .herobed-presets {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 5px;
+  }
+  .herobed-presets button {
+    font-size: 11px;
+    padding: 8px 4px;
+    min-height: 36px;
+  }
+  .ar-dialog {
+    width: calc(100vw - 20px);
+    border-radius: 20px;
+  }
+  .ar-dialog-inner {
+    padding: 18px 16px 16px;
+    gap: 14px;
+  }
+  .ar-dialog-qr {
+    width: 164px;
+    height: 164px;
+  }
+  .ar-dialog-foot {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .ar-dialog-foot .yr3-button {
+    justify-content: center;
+    text-align: center;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
   .herobed-dot,
-  .herobed-plus {
+  .herobed-ar-btn.is-pulsing {
     animation: none;
   }
   .herobed-mark path {
