@@ -409,56 +409,257 @@ function makePanoramicWindowViewTexture() {
 }
 
 /**
- * Bando pequeno de passaros (5) voando devagar pelo ceu da janela.
- * Cada passaro = 2 asas triangulares que batem; tudo MeshBasic (custo minimo).
- * Somem suavemente nas bordas da janela (escala -> 0) para nunca "sair" pela parede.
+ * Passaro 3D estilizado (bem-te-vi / sabia-laranjeira / cambacica), ~20 cm.
+ * Frente em +X local. Retorna partes moveis (cabeca, asas, cauda) para animar.
  */
-function createBirdFlock(minX, maxX, minY, maxY, z) {
+function createBird(palette, flying = false) {
   const group = new THREE.Group()
-  group.name = 'Passaros'
-  const mat = new THREE.MeshBasicMaterial({ color: 0x3a3f45, side: THREE.DoubleSide, fog: false })
-  const wingGeo = new THREE.BufferGeometry()
-  // Asa: triangulo levemente curvo (raiz no corpo, ponta para fora em +X)
-  wingGeo.setAttribute(
-    'position',
-    new THREE.Float32BufferAttribute([0, 0, 0, 0.034, 0.006, 0, 0.012, -0.007, 0, 0.034, 0.006, 0, 0.05, -0.004, 0, 0.012, -0.007, 0], 3),
-  )
-  const bodyGeo = new THREE.SphereGeometry(0.006, 6, 4)
-  bodyGeo.scale(1.8, 0.8, 0.8)
+  const m = (color, rough = 0.7) => new THREE.MeshStandardMaterial({ color, roughness: rough })
+  const backMat = m(palette.back)
+  const bellyMat = m(palette.belly)
+  const headMat = m(palette.head)
+  const wingMat = m(palette.wing)
+  const beakMat = m(palette.beak, 0.4)
+  const eyeMat = new THREE.MeshStandardMaterial({ color: 0x111111, roughness: 0.2 })
 
-  const birds = []
-  for (let i = 0; i < 5; i += 1) {
-    const bird = new THREE.Group()
-    const body = new THREE.Mesh(bodyGeo, mat)
-    const left = new THREE.Mesh(wingGeo, mat)
-    const right = new THREE.Mesh(wingGeo, mat)
-    right.scale.x = -1
-    bird.add(body, left, right)
-    group.add(bird)
-    birds.push({
-      bird,
-      left,
-      right,
-      speed: 0.07 + i * 0.012,
-      phase: i * 0.21,
-      y: minY + ((i * 0.37) % 1) * (maxY - minY),
-      flap: 8 + i * 1.3,
-      size: 1.15 + (i % 3) * 0.25,
-    })
+  // Corpo: costas + barriga (duas meias-elipsoides levemente sobrepostas em cores diferentes)
+  const bodyGeo = new THREE.SphereGeometry(0.05, 16, 12)
+  bodyGeo.scale(1.45, 0.95, 0.9)
+  const body = new THREE.Mesh(bodyGeo, backMat)
+  group.add(body)
+  const bellyGeo = new THREE.SphereGeometry(0.047, 16, 12, 0, Math.PI * 2, Math.PI * 0.45, Math.PI * 0.55)
+  bellyGeo.scale(1.38, 0.95, 0.92)
+  const belly = new THREE.Mesh(bellyGeo, bellyMat)
+  belly.position.set(0.008, -0.004, 0)
+  belly.rotation.z = 0.25
+  group.add(belly)
+  // Peito colorido saltado para a frente
+  const chestGeo = new THREE.SphereGeometry(0.036, 14, 10)
+  chestGeo.scale(1.0, 1.05, 1.1)
+  const chest = new THREE.Mesh(chestGeo, bellyMat)
+  chest.position.set(0.045, 0.0, 0)
+  group.add(chest)
+
+  // Cabeca (grupo movel)
+  const head = new THREE.Group()
+  head.position.set(0.075, 0.04, 0)
+  group.add(head)
+  const skull = new THREE.Mesh(new THREE.SphereGeometry(0.032, 16, 12), headMat)
+  head.add(skull)
+  if (palette.stripe) {
+    // Sobrancelha branca larga do bem-te-vi
+    const stripeGeo = new THREE.TorusGeometry(0.03, 0.0065, 6, 18, Math.PI * 1.1)
+    for (const side of [-1, 1]) {
+      const stripe = new THREE.Mesh(stripeGeo, m(palette.stripe))
+      stripe.rotation.set(0, 0, Math.PI * 0.95)
+      stripe.position.set(-0.004, 0.006, side * 0.012)
+      stripe.scale.set(1, 0.65, 1)
+      stripe.rotation.y = side * 0.35
+      head.add(stripe)
+    }
   }
+  if (palette.throat) {
+    const throat = new THREE.Mesh(new THREE.SphereGeometry(0.02, 10, 8), m(palette.throat))
+    throat.position.set(0.016, -0.016, 0)
+    head.add(throat)
+  }
+  for (const side of [-1, 1]) {
+    const eye = new THREE.Mesh(new THREE.SphereGeometry(0.0065, 8, 6), eyeMat)
+    eye.position.set(0.018, 0.008, side * 0.026)
+    head.add(eye)
+  }
+  const beakGeo = new THREE.ConeGeometry(0.009, palette.beakLen || 0.034, 8)
+  beakGeo.rotateZ(-Math.PI / 2)
+  const beak = new THREE.Mesh(beakGeo, beakMat)
+  beak.position.set(0.042, -0.002, 0)
+  head.add(beak)
+
+  // Cauda
+  const tail = new THREE.Group()
+  tail.position.set(-0.065, 0.006, 0)
+  group.add(tail)
+  const tailGeo = new THREE.BoxGeometry(0.08, 0.006, 0.04)
+  tailGeo.translate(-0.04, 0, 0)
+  const tailMesh = new THREE.Mesh(tailGeo, wingMat)
+  tailMesh.rotation.z = flying ? 0.05 : 0.45
+  tail.add(tailMesh)
+
+  // Asas: dobradas no corpo quando pousado, abertas e batendo quando voando
+  const wingShape = new THREE.Shape()
+  wingShape.moveTo(0.03, 0)
+  wingShape.bezierCurveTo(0.03, 0.05, -0.02, 0.11, -0.07, 0.12)
+  wingShape.bezierCurveTo(-0.06, 0.07, -0.05, 0.03, -0.045, 0)
+  wingShape.lineTo(0.03, 0)
+  const wingGeo = new THREE.ShapeGeometry(wingShape, 8)
+  const wings = []
+  for (const side of [-1, 1]) {
+    const pivot = new THREE.Group()
+    pivot.position.set(0.0, 0.03, side * 0.03)
+    const wing = new THREE.Mesh(wingGeo, new THREE.MeshStandardMaterial({ color: palette.wing, roughness: 0.75, side: THREE.DoubleSide }))
+    // Asa no plano XZ apontando para fora (side)
+    wing.rotation.x = side * -Math.PI / 2
+    pivot.add(wing)
+    if (!flying) {
+      pivot.rotation.x = side * -1.35 // dobrada rente ao corpo
+      pivot.rotation.z = -0.25
+    }
+    group.add(pivot)
+    wings.push({ pivot, side })
+  }
+
+  // Patinhas (so pousado)
+  if (!flying) {
+    for (const side of [-1, 1]) {
+      const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.0025, 0.0025, 0.03, 5), m(0x4a3a2c))
+      leg.position.set(0.01, -0.058, side * 0.014)
+      group.add(leg)
+    }
+  }
+
+  group.traverse((o) => {
+    if (o.isMesh) o.castShadow = false
+  })
+  return { group, head, tail, wings }
+}
+
+const BIRD_PALETTES = {
+  bemtevi: { back: 0x7a6248, belly: 0xf3cf2a, head: 0x1d1b1a, stripe: 0xf7f4ec, throat: 0xf7f4ec, wing: 0x6f5a43, beak: 0x1a1a1a, beakLen: 0.036 },
+  sabia: { back: 0x8b7a66, belly: 0xd9813a, head: 0x857462, wing: 0x7a6a58, beak: 0xc9a23a, throat: 0xcbbca6, beakLen: 0.03 },
+  cambacica: { back: 0x3c3f44, belly: 0xf2cc2f, head: 0x2a2c30, stripe: 0xf5f3ee, wing: 0x34373b, beak: 0x222222, beakLen: 0.026 },
+}
+
+/**
+ * Exterior real atras da janela (a parede agora tem um vao de verdade):
+ * - painel de fundo distante (ceu, jardim, arvores) com paralaxe natural
+ * - galho 3D proximo com folhas entrando pelo alto
+ * - passaros pousados no galho (olham em volta, mexem a cauda) + passaros voando
+ */
+function createOutdoorScene({ winCenterX, winCenterY, winW, winH, wallZ }) {
+  const group = new THREE.Group()
+  group.name = 'Exterior'
+
+  const backdrop = new THREE.Mesh(
+    new THREE.PlaneGeometry(5.6, 4.4),
+    new THREE.MeshBasicMaterial({ map: makePanoramicWindowViewTexture(), fog: false }),
+  )
+  backdrop.position.set(winCenterX + 0.3, winCenterY + 0.3, wallZ - 1.6)
+  group.add(backdrop)
+
+  // Galho 3D proximo (entra pelo canto superior direito da janela)
+  const barkMat = new THREE.MeshStandardMaterial({ color: 0x5a4636, roughness: 0.95 })
+  const zB = wallZ - 0.32
+  const right = winCenterX + winW / 2
+  const top = winCenterY + winH / 2
+  const mainCurve = new THREE.CatmullRomCurve3([
+    new THREE.Vector3(winCenterX + 0.55, 1.76, zB - 0.12),
+    new THREE.Vector3(winCenterX + 0.1, 1.46, zB),
+    new THREE.Vector3(winCenterX - 0.35, 1.36, zB + 0.04),
+    new THREE.Vector3(winCenterX - 0.8, 1.42, zB + 0.02),
+  ])
+  const subCurve = new THREE.CatmullRomCurve3([
+    mainCurve.getPoint(0.45),
+    new THREE.Vector3(winCenterX - 0.15, 1.7, zB - 0.06),
+    new THREE.Vector3(winCenterX - 0.35, 1.84, zB - 0.1),
+  ])
+  const lowCurve = new THREE.CatmullRomCurve3([
+    new THREE.Vector3(right + 0.4, top - 0.2, zB - 0.2),
+    new THREE.Vector3(right - 0.2, top - 0.32, zB - 0.15),
+    new THREE.Vector3(right - 0.6, top - 0.3, zB - 0.12),
+  ])
+  const branchParts = [
+    new THREE.TubeGeometry(mainCurve, 24, 0.022, 8, false),
+    new THREE.TubeGeometry(subCurve, 12, 0.012, 6, false),
+    new THREE.TubeGeometry(lowCurve, 14, 0.016, 7, false),
+  ]
+  const branchMesh = new THREE.Mesh(mergeGeometries(branchParts.map((g) => g.toNonIndexed()), false), barkMat)
+  group.add(branchMesh)
+
+  // Tufos de folhas ao longo dos galhos (uma unica malha com vertex colors)
+  const leafGeo = new THREE.SphereGeometry(0.032, 6, 4)
+  leafGeo.scale(1.6, 0.25, 0.8)
+  const leafParts = []
+  const tones = [0x3f6b35, 0x4f7d3f, 0x5d8f47, 0x6fa154, 0x36602f]
+  const mtx = new THREE.Matrix4()
+  const q = new THREE.Quaternion()
+  const e = new THREE.Euler()
+  let seed = 23
+  const rnd = () => {
+    seed = (seed * 16807) % 2147483647
+    return seed / 2147483647
+  }
+  const addLeaves = (curve, count, from = 0.15) => {
+    for (let i = 0; i < count; i += 1) {
+      const p = curve.getPoint(from + rnd() * (1 - from))
+      p.x += (rnd() - 0.5) * 0.16
+      p.y += (rnd() - 0.3) * 0.14
+      p.z += (rnd() - 0.5) * 0.14
+      e.set(rnd() * 1.2 - 0.6, rnd() * Math.PI * 2, rnd() * 1.2 - 0.6)
+      q.setFromEuler(e)
+      const s = 0.8 + rnd() * 0.6
+      mtx.compose(p, q, new THREE.Vector3(s, s, s))
+      const g = paintGeometry(leafGeo.clone(), tones[(rnd() * tones.length) | 0])
+      g.applyMatrix4(mtx)
+      leafParts.push(g)
+    }
+  }
+  addLeaves(mainCurve, 60, 0.05)
+  addLeaves(subCurve, 26)
+  addLeaves(lowCurve, 30)
+  const foliage = new THREE.Mesh(
+    mergeGeometries(leafParts, false),
+    new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.6, side: THREE.DoubleSide }),
+  )
+  group.add(foliage)
+
+  // Passaros pousados (olham para dentro do quarto, levemente de lado)
+  const perched = []
+  const perch = (palette, curve, t, yaw, scale = 1.25) => {
+    const b = createBird(BIRD_PALETTES[palette], false)
+    const p = curve.getPoint(t)
+    b.group.position.set(p.x, p.y + 0.075 * scale, p.z)
+    b.group.rotation.y = yaw
+    b.group.scale.setScalar(scale)
+    group.add(b.group)
+    perched.push({ ...b, seed: perched.length * 1.7 + 0.4 })
+  }
+  perch('bemtevi', mainCurve, 0.5, -2.0, 1.55)
+  perch('sabia', mainCurve, 0.82, -1.1, 1.5)
+  perch('cambacica', subCurve, 0.75, -2.5, 1.3)
+
+  // Passaros voando atravessando o ceu (atras do galho, na frente do fundo)
+  const flyers = []
+  const flyerDefs = [
+    ['bemtevi', 0.16, 2.0, wallZ - 0.9, 0],
+    ['sabia', 0.12, 1.78, wallZ - 1.15, 0.45],
+    ['cambacica', 0.2, 2.2, wallZ - 0.7, 0.7],
+  ]
+  for (const [palette, speed, y, z, phase] of flyerDefs) {
+    const b = createBird(BIRD_PALETTES[palette], true)
+    b.group.scale.setScalar(1.45)
+    group.add(b.group)
+    flyers.push({ ...b, speed, y, z, phase })
+  }
+  const minX = winCenterX - winW / 2 - 0.8
+  const maxX = winCenterX + winW / 2 + 0.8
   const span = maxX - minX
 
   function update(time) {
-    for (const b of birds) {
-      const u = ((time * b.speed) / span + b.phase) % 1 // 0..1 atravessando a janela
-      const x = minX + u * span
-      const edge = Math.min(1, u / 0.08, (1 - u) / 0.08)
-      const s = b.size * Math.max(0.001, edge)
-      b.bird.position.set(x, b.y + Math.sin(time * 0.7 + b.phase * 9) * 0.04, z)
-      b.bird.scale.setScalar(s)
-      const flapA = Math.sin(time * b.flap) * 0.5
-      b.left.rotation.z = flapA
-      b.right.rotation.z = -flapA
+    for (const b of perched) {
+      // Cabeca: olha em volta em pequenos "tiques" (como passaro de verdade)
+      const step = Math.floor(time * 1.3 + b.seed * 3)
+      const look = Math.sin(step * 12.9898 + b.seed) * 0.8
+      b.head.rotation.y += (look - b.head.rotation.y) * 0.25
+      b.head.rotation.z = Math.sin(time * 2.1 + b.seed) * 0.12
+      b.tail.rotation.z = Math.max(0, Math.sin(time * 3 + b.seed * 5)) ** 8 * 0.35
+      b.group.position.y += Math.sin(time * 5 + b.seed) * 0.00012
+    }
+    for (const f of flyers) {
+      const u = ((time * f.speed) / span + f.phase) % 1
+      f.group.position.set(minX + u * span, f.y + Math.sin(time * 1.4 + f.phase * 8) * 0.06, f.z)
+      // Direcao de voo +X (corpo ja aponta +X); leve inclinacao
+      f.group.rotation.z = Math.sin(time * 1.4 + f.phase * 8) * 0.12
+      const flap = Math.sin(time * (14 + f.phase * 4))
+      for (const w of f.wings) w.pivot.rotation.x = w.side * flap * 0.9
     }
   }
   update(0)
@@ -1362,8 +1563,37 @@ export function buildCozyBedroom() {
   room.add(windowWallGroup)
 
   const winWallW = 5.4
+  // Parede com vao real para a janela (o exterior 3D fica atras, com paralaxe)
+  const winWallShape = new THREE.Shape()
+  winWallShape.moveTo(-winWallW / 2, -wallH / 2)
+  winWallShape.lineTo(winWallW / 2, -wallH / 2)
+  winWallShape.lineTo(winWallW / 2, wallH / 2)
+  winWallShape.lineTo(-winWallW / 2, wallH / 2)
+  winWallShape.lineTo(-winWallW / 2, -wallH / 2)
+  {
+    // Mesmas medidas da janela definidas abaixo (centro 0.56/1.41, 2.08 x 2.66)
+    const hx0 = 0.56 - 1.04 - 1.25
+    const hx1 = 0.56 + 1.04 - 1.25
+    const hy0 = 1.41 - 1.33 - wallH / 2
+    const hy1 = 1.41 + 1.33 - wallH / 2
+    const hole = new THREE.Path()
+    hole.moveTo(hx0, hy0)
+    hole.lineTo(hx0, hy1)
+    hole.lineTo(hx1, hy1)
+    hole.lineTo(hx1, hy0)
+    hole.lineTo(hx0, hy0)
+    winWallShape.holes.push(hole)
+  }
+  const winWallGeo = new THREE.ShapeGeometry(winWallShape)
+  {
+    const pos = winWallGeo.attributes.position
+    const uv = winWallGeo.attributes.uv
+    for (let i = 0; i < pos.count; i += 1) {
+      uv.setXY(i, pos.getX(i) / winWallW + 0.5, pos.getY(i) / wallH + 0.5)
+    }
+  }
   const winWall = new THREE.Mesh(
-    new THREE.PlaneGeometry(winWallW, wallH),
+    winWallGeo,
     new THREE.MeshStandardMaterial({
       map: makeArchWallTexture(false),
       roughness: 0.88,
@@ -1390,12 +1620,23 @@ export function buildCozyBedroom() {
   const winH = 2.66
   const winCenterY = 1.41
 
-  const outdoorView = new THREE.Mesh(
-    new THREE.PlaneGeometry(winW - 0.04, winH - 0.04),
-    new THREE.MeshBasicMaterial({ map: makePanoramicWindowViewTexture(), fog: false }),
-  )
-  outdoorView.position.set(winCenterX, winCenterY, wallZ + 0.01)
-  windowWallGroup.add(outdoorView)
+  // Exterior 3D: jardim ao fundo, galho com folhas e passaros (pousados e voando)
+  const outdoor = createOutdoorScene({ winCenterX, winCenterY, winW, winH, wallZ })
+  windowWallGroup.add(outdoor.group)
+
+  // Batentes (espessura da parede) para o vao nao parecer recortado no papel
+  const jambDepth = 0.14
+  for (const sx of [-1, 1]) {
+    const jamb = new THREE.Mesh(new THREE.BoxGeometry(0.02, winH, jambDepth), trimMat)
+    jamb.position.set(winCenterX + sx * (winW / 2 + 0.01), winCenterY, wallZ - jambDepth / 2)
+    windowWallGroup.add(jamb)
+  }
+  const lintel = new THREE.Mesh(new THREE.BoxGeometry(winW + 0.04, 0.02, jambDepth), trimMat)
+  lintel.position.set(winCenterX, winCenterY + winH / 2 + 0.01, wallZ - jambDepth / 2)
+  windowWallGroup.add(lintel)
+  const sill = new THREE.Mesh(new THREE.BoxGeometry(winW + 0.04, 0.02, jambDepth), trimMat)
+  sill.position.set(winCenterX, winCenterY - winH / 2 - 0.01, wallZ - jambDepth / 2)
+  windowWallGroup.add(sill)
 
   // Vidro discreto com reflexo sutil
   const glassPane = new THREE.Mesh(
@@ -1408,7 +1649,7 @@ export function buildCozyBedroom() {
       opacity: 0.1,
     }),
   )
-  glassPane.position.set(winCenterX, winCenterY, wallZ + 0.042)
+  glassPane.position.set(winCenterX, winCenterY, wallZ + 0.026)
   windowWallGroup.add(glassPane)
 
   // Esquadria slim contemporanea em aluminio fosco
@@ -1473,15 +1714,6 @@ export function buildCozyBedroom() {
   airConditioner.position.set(wallX + 0.002, 1.92, -0.62)
   headWallGroup.add(airConditioner)
 
-  // Passaros voando no ceu da janela (entre a vista e o vidro)
-  const flock = createBirdFlock(
-    winCenterX - winW / 2 + 0.06,
-    winCenterX + winW / 2 - 0.06,
-    1.6,
-    2.25,
-    wallZ + 0.024,
-  )
-  windowWallGroup.add(flock.group)
 
   // Relogio de parede no trecho livre da parede da janela (acima da poltrona)
   const clock = createWallClock(walnutMat)
@@ -1500,7 +1732,7 @@ export function buildCozyBedroom() {
 
   let lastClock = 0
   function updateAmbient(time) {
-    flock.update(time)
+    outdoor.update(time)
     if (time - lastClock > 0.25) {
       lastClock = time
       clock.update()
