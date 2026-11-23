@@ -424,14 +424,15 @@ export function buildHospitalBed({
   mode = 'eletrica',
   pose = REST_POSE,
   showPneumatic = false,
-  showPillow = true,
+  showPillow = false,
   railsDown = 0,
 } = {}) {
   const root = new THREE.Group()
   root.name = 'CamaHospitalarGrupoYR'
 
   const mattressTex = createMattressTexture()
-  const pillowTex = createPillowTexture()
+  // Travesseiro removido por padrao (pedido do cliente): nao gera textura/malha sem necessidade
+  const pillowTex = showPillow ? createPillowTexture() : null
 
   const materials = {
     whiteSteel: new THREE.MeshStandardMaterial({
@@ -763,11 +764,12 @@ export function buildHospitalBed({
   backMattress.receiveShadow = true
   backPivot.add(backMattress)
 
-  // Travesseiro branco fofo pousado no encosto (deixa a cama acolhedora no quarto!)
-  const pillow = createSoftPillow(materials.pillow)
-  pillow.position.set(-L_BACK + 0.25, 0.018 + mattT + 0.056, 0)
-  pillow.visible = showPillow
-  backPivot.add(pillow)
+  // Travesseiro opcional (desligado por padrao: a cama aparece limpa, sem almofada branca)
+  const pillow = showPillow ? createSoftPillow(materials.pillow) : null
+  if (pillow) {
+    pillow.position.set(-L_BACK + 0.25, 0.018 + mattT + 0.056, 0)
+    backPivot.add(pillow)
+  }
 
   const backPneumatic = createPneumaticStrip(L_BACK - 0.03, mattW, materials)
   backPneumatic.position.set(-L_BACK / 2, 0.018 + mattT + 0.003, 0)
@@ -899,7 +901,7 @@ export function buildHospitalBed({
     const on = Boolean(enabled)
     for (const strip of pneumaticStrips) strip.visible = on
     // Sobe levemente o travesseiro quando o colchao pneumatico entra por cima
-    pillow.position.y = 0.018 + mattT + (on ? 0.098 : 0.056)
+    if (pillow) pillow.position.y = 0.018 + mattT + (on ? 0.098 : 0.056)
   }
 
   function setPose({ back = 0, legs = 0, lift = 0.667, railsDown: drop = 0 } = {}) {

@@ -211,7 +211,8 @@
   width: 100% !important;
   height: 100% !important;
   cursor: grab;
-  touch-action: none;
+  /* Deslize vertical rola a pagina; arrastar na horizontal gira o quarto */
+  touch-action: pan-y !important;
 }
 .herobed-webgl:active {
   cursor: grabbing;
@@ -917,4 +918,24 @@
     animation: none;
     stroke-dashoffset: 0;
   }
+}
+
+/* model-viewer (AR Android): 1px invisivel fora da sessao, tela cheia durante o AR */
+.herobed-ar-viewer {
+  position: fixed;
+  left: 0;
+  bottom: 0;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+  z-index: -1;
+}
+.herobed-ar-viewer.is-presenting {
+  inset: 0;
+  width: 100vw;
+  height: 100vh;
+  opacity: 1;
+  pointer-events: auto;
+  z-index: 2147483000;
 }

@@ -7,8 +7,8 @@ import { buildCozyBedroom } from './buildCozyBedroom.js'
 import { buildOverlays3d } from './buildOverlays3d.js'
 import { REST_POSE } from './specs.js'
 
-const DEFAULT_CAMERA_POS = new THREE.Vector3(2.74, 1.56, 2.66)
-const DEFAULT_TARGET = new THREE.Vector3(-0.04, 0.72, -0.08)
+const DEFAULT_CAMERA_POS = new THREE.Vector3(2.74, 1.68, 2.66)
+const DEFAULT_TARGET = new THREE.Vector3(-0.04, 0.84, -0.08)
 const DEMO_CYCLE_SEC = 12
 
 const clamp01 = (v) => Math.min(1, Math.max(0, v))
@@ -146,7 +146,7 @@ export default function HospitalBedCanvas({
     const pmrem = new THREE.PMREMGenerator(renderer)
     const envTex = pmrem.fromScene(new RoomEnvironment(), 0.04).texture
     scene.environment = envTex
-    scene.environmentIntensity = 0.34
+    scene.environmentIntensity = 0.42
 
     const width = Math.max(container.clientWidth, 320)
     const height = Math.max(container.clientHeight, 300)
@@ -167,18 +167,27 @@ export default function HospitalBedCanvas({
     controls.update()
     controlsRef.current = controls
 
+    // Celular: o OrbitControls forca touch-action 'none' (prende a rolagem da pagina).
+    // Com 'pan-y' o navegador rola a pagina no deslize vertical (pointercancel encerra o giro)
+    // e o arraste horizontal com 1 dedo continua girando o quarto. Pinca fica com o navegador.
+    renderer.domElement.style.touchAction = 'pan-y'
+    controls.touches = { ONE: THREE.TOUCH.ROTATE, TWO: THREE.TOUCH.ROTATE }
+
     const handleControlStart = () => onInteract?.()
     controls.addEventListener('start', handleControlStart)
 
     // Iluminacao cinematografica com contraste quente/frio e zero shadow-acne
-    const hemi = new THREE.HemisphereLight(0xf6f8fc, 0x9c8266, 0.62)
+    const hemi = new THREE.HemisphereLight(0xfbf6ef, 0xa08a70, 0.6)
     scene.add(hemi)
 
     const sunLight = new THREE.DirectionalLight(0xffe9c7, 2.05)
     sunLight.position.set(1.5, 3.3, -2.8)
     sunLight.castShadow = true
-    sunLight.shadow.mapSize.set(1024, 1024)
-    sunLight.shadow.radius = 2.8
+    // Sombras mais nitidas/suaves no desktop; 1024 no celular para manter o FPS
+    const bigScreen = Math.min(window.innerWidth, window.innerHeight) >= 700
+    const shadowRes = bigScreen ? 2048 : 1024
+    sunLight.shadow.mapSize.set(shadowRes, shadowRes)
+    sunLight.shadow.radius = bigScreen ? 4 : 2.8
     sunLight.shadow.camera.near = 0.5
     sunLight.shadow.camera.far = 11
     sunLight.shadow.camera.left = -2.9
@@ -195,7 +204,7 @@ export default function HospitalBedCanvas({
 
     // Brilho ambar quente vindo do painel horizontal de LED atras da cabeceira
     const headLedGlow = new THREE.PointLight(0xffc978, 1.45, 4.2, 1.7)
-    headLedGlow.position.set(-1.05, 1.56, 0.12)
+    headLedGlow.position.set(-1.05, 1.46, 0.12)
     scene.add(headLedGlow)
 
     // Monta quarto + cama real + guias 3D
@@ -273,6 +282,7 @@ export default function HospitalBedCanvas({
         railsDown: st.currentDrop,
       })
       bedroom.updateBedShadow(st.currentPose.lift)
+      if (!prefersReducedMotion) bedroom.updateAmbient(now / 1000)
       overlays.updateHeight(mattressTopY)
 
       // Atualiza sliders e pill de altura direto via DOM refs (0 re-renders do React!)

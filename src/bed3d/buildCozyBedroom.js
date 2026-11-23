@@ -1,4 +1,5 @@
 import * as THREE from 'three'
+import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
 
 /**
  * Quarto residencial 3D de alto padrao inspirado diretamente na estetica real
@@ -257,170 +258,351 @@ function makeBoucleRugTexture() {
 
 /** Vista panoramica desfocada (efeito bokeh fotografico) pela janela piso-teto. */
 function makePanoramicWindowViewTexture() {
+  const W = 1024
+  const H = 1312
   const canvas = document.createElement('canvas')
-  canvas.width = 768
-  canvas.height = 1024
+  canvas.width = W
+  canvas.height = H
   const ctx = canvas.getContext('2d')
+  let seed = 11
+  const rnd = () => {
+    seed = (seed * 16807) % 2147483647
+    return seed / 2147483647
+  }
 
-  // Ceu de manha luminoso e sereno
-  const sky = ctx.createLinearGradient(0, 0, 0, 1024)
-  sky.addColorStop(0, '#c6dff2')
-  sky.addColorStop(0.36, '#e3eff8')
-  sky.addColorStop(0.62, '#f4f6f0')
-  sky.addColorStop(1, '#dce3d5')
+  // Ceu azul limpo de manha, clareando no horizonte
+  const sky = ctx.createLinearGradient(0, 0, 0, H)
+  sky.addColorStop(0, '#7fb6e6')
+  sky.addColorStop(0.3, '#a9d0f0')
+  sky.addColorStop(0.55, '#dcecf6')
+  sky.addColorStop(0.7, '#eef3ea')
+  sky.addColorStop(1, '#e3ead9')
   ctx.fillStyle = sky
-  ctx.fillRect(0, 0, 768, 1024)
+  ctx.fillRect(0, 0, W, H)
 
-  // Predios residenciais distantes bem desfocados no horizonte (estilo Curitiba / cena real)
+  // Sol suave fora do quadro (brilho quente no canto superior direito)
+  const sun = ctx.createRadialGradient(W * 0.86, H * 0.08, 10, W * 0.86, H * 0.08, W * 0.7)
+  sun.addColorStop(0, 'rgba(255, 249, 226, 0.95)')
+  sun.addColorStop(0.25, 'rgba(255, 246, 220, 0.45)')
+  sun.addColorStop(1, 'rgba(255, 246, 220, 0)')
+  ctx.fillStyle = sun
+  ctx.fillRect(0, 0, W, H)
+
+  // Nuvens fofas
   ctx.save()
-  ctx.filter = 'blur(8px)'
-  const buildings = [
-    [90, 410, 96, 360, '#dce2e6'],
-    [195, 470, 82, 300, '#e4e8eb'],
-    [435, 365, 118, 410, '#d8dfe4'],
-    [570, 435, 92, 340, '#e0e5e8'],
-  ]
-  for (const [bx, by, bw, bh, col] of buildings) {
-    ctx.fillStyle = col
-    ctx.fillRect(bx, by, bw, bh)
-    ctx.fillStyle = 'rgba(155, 170, 182, 0.35)'
-    for (let wy = by + 18; wy < by + bh - 40; wy += 24) {
-      for (let wx = bx + 12; wx < bx + bw - 16; wx += 22) {
-        ctx.fillRect(wx, wy, 12, 12)
+  ctx.filter = 'blur(14px)'
+  for (const [cx, cy, s] of [
+    [210, 250, 1.1],
+    [640, 170, 0.9],
+    [470, 420, 0.75],
+    [860, 360, 0.7],
+  ]) {
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.85)'
+    for (let i = 0; i < 6; i += 1) {
+      ctx.beginPath()
+      ctx.ellipse(cx + (i - 2.5) * 46 * s, cy + Math.sin(i * 1.9) * 14 * s, 70 * s, 38 * s, 0, 0, Math.PI * 2)
+      ctx.fill()
+    }
+  }
+  ctx.restore()
+
+  // Morros distantes azulados + linha de arvores desfocada (profundidade atmosferica)
+  ctx.save()
+  ctx.filter = 'blur(6px)'
+  ctx.fillStyle = '#b7c9cf'
+  ctx.beginPath()
+  ctx.moveTo(0, 860)
+  for (let x = 0; x <= W; x += 32) ctx.lineTo(x, 800 - Math.sin(x / 170) * 40 - Math.sin(x / 61) * 12)
+  ctx.lineTo(W, H)
+  ctx.lineTo(0, H)
+  ctx.fill()
+  ctx.restore()
+
+  ctx.save()
+  ctx.filter = 'blur(4px)'
+  for (let i = 0; i < 26; i += 1) {
+    const x = i * 42 + rnd() * 20
+    const y = 880 + rnd() * 30
+    const r = 46 + rnd() * 36
+    ctx.fillStyle = ['#7f9d78', '#8aa67f', '#728f6b'][i % 3]
+    ctx.beginPath()
+    ctx.arc(x, y, r, 0, Math.PI * 2)
+    ctx.fill()
+  }
+  ctx.restore()
+
+  // Gramado ensolarado + cerca viva
+  const lawn = ctx.createLinearGradient(0, 940, 0, H)
+  lawn.addColorStop(0, '#9dbb7c')
+  lawn.addColorStop(1, '#7da35f')
+  ctx.fillStyle = lawn
+  ctx.fillRect(0, 950, W, H - 950)
+  ctx.save()
+  ctx.filter = 'blur(2px)'
+  for (let x = -20; x < W + 40; x += 34) {
+    ctx.fillStyle = x % 68 === 0 ? '#5d8448' : '#668f50'
+    ctx.beginPath()
+    ctx.arc(x, 1030 + Math.sin(x / 40) * 6, 40, 0, Math.PI * 2)
+    ctx.fill()
+  }
+  ctx.fillStyle = '#5a7f45'
+  ctx.fillRect(0, 1030, W, 70)
+  ctx.restore()
+
+  // Galhos de arvore em primeiro plano entrando pelo alto (nitidos) com folhagem
+  const drawBranch = (x0, y0, x1, y1, width, depth) => {
+    ctx.strokeStyle = '#4a3a2c'
+    ctx.lineCap = 'round'
+    ctx.lineWidth = width
+    const mx = (x0 + x1) / 2 + (rnd() - 0.5) * 60
+    const my = (y0 + y1) / 2 + (rnd() - 0.5) * 40
+    ctx.beginPath()
+    ctx.moveTo(x0, y0)
+    ctx.quadraticCurveTo(mx, my, x1, y1)
+    ctx.stroke()
+    if (depth > 0) {
+      for (let k = 0; k < 2; k += 1) {
+        const t = 0.45 + rnd() * 0.45
+        const bx = x0 + (x1 - x0) * t
+        const by = y0 + (y1 - y0) * t
+        const ang = Math.atan2(y1 - y0, x1 - x0) + (k ? 0.7 : -0.7) * (0.6 + rnd() * 0.6)
+        const len = Math.hypot(x1 - x0, y1 - y0) * (0.45 + rnd() * 0.2)
+        drawBranch(bx, by, bx + Math.cos(ang) * len, by + Math.sin(ang) * len, width * 0.58, depth - 1)
+      }
+    }
+    // Folhas ao longo das pontas
+    if (depth <= 1) {
+      for (let i = 0; i < 16; i += 1) {
+        const t = rnd()
+        const lx = x0 + (x1 - x0) * t + (rnd() - 0.5) * 50
+        const ly = y0 + (y1 - y0) * t + (rnd() - 0.5) * 44
+        const rot = rnd() * Math.PI * 2
+        const s = 12 + rnd() * 10
+        ctx.fillStyle = ['#3f6b35', '#4f7d3f', '#5d8f47', '#6fa154', '#36602f'][(rnd() * 5) | 0]
+        ctx.beginPath()
+        ctx.ellipse(lx, ly, s, s * 0.48, rot, 0, Math.PI * 2)
+        ctx.fill()
+        // Realce de luz na folha
+        ctx.fillStyle = 'rgba(214, 240, 170, 0.22)'
+        ctx.beginPath()
+        ctx.ellipse(lx - 2, ly - 2, s * 0.55, s * 0.2, rot, 0, Math.PI * 2)
+        ctx.fill()
       }
     }
   }
-  ctx.restore()
+  drawBranch(W + 30, -40, 560, 260, 34, 3)
+  drawBranch(-30, 120, 300, 300, 22, 2)
+  drawBranch(W + 20, 420, 760, 560, 16, 2)
 
-  // Camadas de copas de arvores com bokeh organico e luz solar filtrada
-  ctx.save()
-  ctx.filter = 'blur(12px)'
-  const treeLayers = [
-    [80, 680, 145, '#89a87e'],
-    [240, 720, 165, '#78986e'],
-    [430, 700, 150, '#8ca982'],
-    [620, 665, 180, '#6e8f66'],
-    [140, 840, 190, '#5a7b53'],
-    [390, 865, 210, '#63845b'],
-    [660, 845, 200, '#50704a'],
-    [290, 975, 240, '#496844'],
-    [580, 985, 220, '#54734d'],
-  ]
-  for (const [cx, cy, r, col] of treeLayers) {
-    ctx.fillStyle = col
-    ctx.beginPath()
-    ctx.arc(cx, cy, r, 0, Math.PI * 2)
-    ctx.fill()
-  }
-
-  // Pontos de luz solar filtrados pelas folhas (bokeh quente)
-  ctx.fillStyle = 'rgba(255, 250, 224, 0.55)'
-  for (const [bx, by, br] of [
-    [160, 650, 38],
-    [350, 670, 44],
-    [540, 630, 52],
-    [250, 790, 32],
-    [490, 780, 36],
-  ]) {
-    ctx.beginPath()
-    ctx.arc(bx, by, br, 0, Math.PI * 2)
-    ctx.fill()
-  }
-  ctx.restore()
-
-  // Leve brilho atmosferico de manha vindo de cima
-  const haze = ctx.createLinearGradient(0, 0, 0, 520)
-  haze.addColorStop(0, 'rgba(255, 252, 245, 0.35)')
-  haze.addColorStop(1, 'rgba(255, 252, 245, 0)')
+  // Neblina luminosa suave por cima de tudo
+  const haze = ctx.createLinearGradient(0, 0, 0, H)
+  haze.addColorStop(0, 'rgba(255, 252, 245, 0.08)')
+  haze.addColorStop(0.6, 'rgba(255, 252, 245, 0.12)')
+  haze.addColorStop(1, 'rgba(255, 252, 245, 0.04)')
   ctx.fillStyle = haze
-  ctx.fillRect(0, 0, 768, 520)
+  ctx.fillRect(0, 0, W, H)
 
   const tex = new THREE.CanvasTexture(canvas)
   tex.colorSpace = THREE.SRGBColorSpace
+  tex.anisotropy = 4
   return tex
 }
 
-/** Textura de folha botanica real (Ficus Lyrata) com nervura central, laterais e canal alfa. */
-function makeBotanicalLeafTexture() {
-  const canvas = document.createElement('canvas')
-  canvas.width = 256
-  canvas.height = 384
-  const ctx = canvas.getContext('2d')
-  ctx.clearRect(0, 0, 256, 384)
+/**
+ * Bando pequeno de passaros (5) voando devagar pelo ceu da janela.
+ * Cada passaro = 2 asas triangulares que batem; tudo MeshBasic (custo minimo).
+ * Somem suavemente nas bordas da janela (escala -> 0) para nunca "sair" pela parede.
+ */
+function createBirdFlock(minX, maxX, minY, maxY, z) {
+  const group = new THREE.Group()
+  group.name = 'Passaros'
+  const mat = new THREE.MeshBasicMaterial({ color: 0x3a3f45, side: THREE.DoubleSide, fog: false })
+  const wingGeo = new THREE.BufferGeometry()
+  // Asa: triangulo levemente curvo (raiz no corpo, ponta para fora em +X)
+  wingGeo.setAttribute(
+    'position',
+    new THREE.Float32BufferAttribute([0, 0, 0, 0.034, 0.006, 0, 0.012, -0.007, 0, 0.034, 0.006, 0, 0.05, -0.004, 0, 0.012, -0.007, 0], 3),
+  )
+  const bodyGeo = new THREE.SphereGeometry(0.006, 6, 4)
+  bodyGeo.scale(1.8, 0.8, 0.8)
 
-  // Silhueta organica da folha de Ficus / Oliveira
-  ctx.save()
-  ctx.beginPath()
-  ctx.moveTo(128, 372)
-  ctx.bezierCurveTo(106, 330, 40, 265, 34, 178)
-  ctx.bezierCurveTo(28, 92, 82, 28, 128, 12)
-  ctx.bezierCurveTo(174, 28, 228, 92, 222, 178)
-  ctx.bezierCurveTo(216, 265, 150, 330, 128, 372)
-  ctx.closePath()
+  const birds = []
+  for (let i = 0; i < 5; i += 1) {
+    const bird = new THREE.Group()
+    const body = new THREE.Mesh(bodyGeo, mat)
+    const left = new THREE.Mesh(wingGeo, mat)
+    const right = new THREE.Mesh(wingGeo, mat)
+    right.scale.x = -1
+    bird.add(body, left, right)
+    group.add(bird)
+    birds.push({
+      bird,
+      left,
+      right,
+      speed: 0.07 + i * 0.012,
+      phase: i * 0.21,
+      y: minY + ((i * 0.37) % 1) * (maxY - minY),
+      flap: 8 + i * 1.3,
+      size: 1.15 + (i % 3) * 0.25,
+    })
+  }
+  const span = maxX - minX
 
-  const grad = ctx.createLinearGradient(0, 372, 0, 12)
-  grad.addColorStop(0, '#2c4f33')
-  grad.addColorStop(0.45, '#3b6742')
-  grad.addColorStop(0.85, '#4e7d53')
-  grad.addColorStop(1, '#5e8e62')
-  ctx.fillStyle = grad
-  ctx.fill()
-  ctx.clip()
-
-  // Brilho suave de luz na metade da folha
-  const sheen = ctx.createRadialGradient(96, 150, 10, 128, 180, 160)
-  sheen.addColorStop(0, 'rgba(176, 214, 156, 0.25)')
-  sheen.addColorStop(1, 'rgba(20, 40, 24, 0.14)')
-  ctx.fillStyle = sheen
-  ctx.fillRect(0, 0, 256, 384)
-
-  // Nervura central + nervuras laterais delicadas
-  ctx.strokeStyle = 'rgba(175, 208, 152, 0.65)'
-  ctx.lineWidth = 4.5
-  ctx.lineCap = 'round'
-  ctx.beginPath()
-  ctx.moveTo(128, 368)
-  ctx.lineTo(128, 28)
-  ctx.stroke()
-
-  ctx.lineWidth = 2.2
-  ctx.strokeStyle = 'rgba(165, 200, 144, 0.48)'
-  for (let i = 0; i < 6; i += 1) {
-    const y = 310 - i * 44
-    const reach = 74 - Math.abs(i - 2.5) * 14
-    for (const dir of [-1, 1]) {
-      ctx.beginPath()
-      ctx.moveTo(128, y)
-      ctx.quadraticCurveTo(128 + dir * reach * 0.55, y - 10, 128 + dir * reach, y - 34)
-      ctx.stroke()
+  function update(time) {
+    for (const b of birds) {
+      const u = ((time * b.speed) / span + b.phase) % 1 // 0..1 atravessando a janela
+      const x = minX + u * span
+      const edge = Math.min(1, u / 0.08, (1 - u) / 0.08)
+      const s = b.size * Math.max(0.001, edge)
+      b.bird.position.set(x, b.y + Math.sin(time * 0.7 + b.phase * 9) * 0.04, z)
+      b.bird.scale.setScalar(s)
+      const flapA = Math.sin(time * b.flap) * 0.5
+      b.left.rotation.z = flapA
+      b.right.rotation.z = -flapA
     }
   }
-  ctx.restore()
-
-  const tex = new THREE.CanvasTexture(canvas)
-  tex.colorSpace = THREE.SRGBColorSpace
-  return tex
+  update(0)
+  return { group, update }
 }
 
-/** Cria uma folha 3D realmente curvada (arco natural + leve concha em V), nao um papel plano! */
-function createCurvedLeafGeometry() {
-  const geo = new THREE.PlaneGeometry(0.15, 0.23, 6, 8)
-  // Desloca o pivo para a base do peciolo (y = 0..0.23)
-  geo.translate(0, 0.115, 0)
-  const pos = geo.attributes.position
-  for (let i = 0; i < pos.count; i += 1) {
-    const x = pos.getX(i)
-    const y = pos.getY(i)
-    const u = x / 0.075 // -1..1
-    const v = y / 0.23 // 0..1
-    // Caimento gracioso ao longo do comprimento + leve dobra em V nas laterais
-    const droop = -Math.pow(v, 1.85) * 0.068
-    const cup = Math.abs(u) * 0.016 * Math.sin(v * Math.PI)
-    const wave = Math.sin(v * Math.PI * 3) * 0.004 * Math.abs(u)
-    pos.setZ(i, droop + cup + wave)
+/** Relogio de parede minimalista (aro de nogueira, mostrador creme, ponteiros reais). */
+function createWallClock(walnutMat) {
+  const group = new THREE.Group()
+  group.name = 'RelogioParede'
+  const rim = new THREE.Mesh(new THREE.TorusGeometry(0.15, 0.014, 10, 40), walnutMat)
+  group.add(rim)
+  const face = new THREE.Mesh(
+    new THREE.CircleGeometry(0.146, 40),
+    new THREE.MeshStandardMaterial({ color: 0xfbf7f0, roughness: 0.6 }),
+  )
+  face.position.z = -0.004
+  group.add(face)
+  const markMat = new THREE.MeshStandardMaterial({ color: 0x3b342e, roughness: 0.5 })
+  for (let i = 0; i < 12; i += 1) {
+    const a = (i / 12) * Math.PI * 2
+    const big = i % 3 === 0
+    const mark = new THREE.Mesh(new THREE.BoxGeometry(big ? 0.008 : 0.005, big ? 0.026 : 0.014, 0.003), markMat)
+    mark.position.set(Math.sin(a) * 0.122, Math.cos(a) * 0.122, 0.0)
+    mark.rotation.z = -a
+    group.add(mark)
   }
-  geo.computeVertexNormals()
-  return geo
+  const hand = (len, w, color) => {
+    const g = new THREE.BoxGeometry(w, len, 0.003)
+    g.translate(0, len / 2 - 0.012, 0)
+    return new THREE.Mesh(g, new THREE.MeshStandardMaterial({ color, roughness: 0.4 }))
+  }
+  const hour = hand(0.075, 0.009, 0x2e2925)
+  const minute = hand(0.108, 0.006, 0x2e2925)
+  const second = hand(0.118, 0.0025, 0xc0533a)
+  hour.position.z = 0.003
+  minute.position.z = 0.006
+  second.position.z = 0.009
+  group.add(hour, minute, second)
+  const cap = new THREE.Mesh(new THREE.CylinderGeometry(0.008, 0.008, 0.006, 12), markMat)
+  cap.rotation.x = Math.PI / 2
+  cap.position.z = 0.011
+  group.add(cap)
+
+  function update() {
+    const d = new Date()
+    const sec = d.getSeconds() + d.getMilliseconds() / 1000
+    const min = d.getMinutes() + sec / 60
+    const hr = (d.getHours() % 12) + min / 60
+    second.rotation.z = -(sec / 60) * Math.PI * 2
+    minute.rotation.z = -(min / 60) * Math.PI * 2
+    hour.rotation.z = -(hr / 12) * Math.PI * 2
+  }
+  update()
+  return { group, update }
+}
+
+/** Quadro com moldura de nogueira e arte botanica abstrata em tons terrosos. */
+function createFramedArt(walnutMat, w = 0.56, h = 0.72) {
+  const group = new THREE.Group()
+  group.name = 'QuadroDecorativo'
+  const canvas = document.createElement('canvas')
+  canvas.width = 256
+  canvas.height = 330
+  const ctx = canvas.getContext('2d')
+  ctx.fillStyle = '#f3ede3'
+  ctx.fillRect(0, 0, 256, 330)
+  ctx.fillStyle = '#d9b99a'
+  ctx.beginPath()
+  ctx.arc(150, 120, 70, 0, Math.PI * 2)
+  ctx.fill()
+  ctx.fillStyle = '#9fb59a'
+  ctx.beginPath()
+  ctx.ellipse(95, 205, 62, 92, -0.35, 0, Math.PI * 2)
+  ctx.fill()
+  ctx.strokeStyle = '#5f6f58'
+  ctx.lineWidth = 3
+  ctx.beginPath()
+  ctx.moveTo(110, 300)
+  ctx.quadraticCurveTo(100, 210, 70, 130)
+  ctx.stroke()
+  for (let i = 0; i < 6; i += 1) {
+    const y = 270 - i * 24
+    ctx.beginPath()
+    ctx.moveTo(100 - i * 4, y)
+    ctx.quadraticCurveTo(70 - i * 3, y - 10, 58 - i * 2, y - 26)
+    ctx.stroke()
+  }
+  ctx.fillStyle = '#c98f6a'
+  ctx.fillRect(170, 230, 46, 46)
+  const tex = new THREE.CanvasTexture(canvas)
+  tex.colorSpace = THREE.SRGBColorSpace
+
+  const frame = new THREE.Mesh(new THREE.BoxGeometry(w, h, 0.03), walnutMat)
+  frame.castShadow = true
+  group.add(frame)
+  const mat = new THREE.Mesh(
+    new THREE.PlaneGeometry(w - 0.05, h - 0.05),
+    new THREE.MeshStandardMaterial({ color: 0xfbf8f2, roughness: 0.85 }),
+  )
+  mat.position.z = 0.0155
+  group.add(mat)
+  const art = new THREE.Mesh(new THREE.PlaneGeometry(w - 0.14, h - 0.14), new THREE.MeshStandardMaterial({ map: tex, roughness: 0.8 }))
+  art.position.z = 0.017
+  group.add(art)
+  return group
+}
+
+/** Suporte de soro (haste inox, base de 5 rodizios, ganchos) — discreto, home care. */
+function createIvStand() {
+  const group = new THREE.Group()
+  group.name = 'SuporteSoro'
+  const steel = new THREE.MeshStandardMaterial({ color: 0xd9dde2, roughness: 0.25, metalness: 0.85 })
+  const dark = new THREE.MeshStandardMaterial({ color: 0x2f3236, roughness: 0.6 })
+  const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.011, 0.011, 1.78, 12), steel)
+  pole.position.y = 0.95
+  pole.castShadow = true
+  group.add(pole)
+  const hub = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.036, 0.05, 14), steel)
+  hub.position.y = 0.075
+  group.add(hub)
+  for (let i = 0; i < 5; i += 1) {
+    const a = (i / 5) * Math.PI * 2
+    const leg = new THREE.Mesh(new THREE.BoxGeometry(0.25, 0.016, 0.024), steel)
+    leg.position.set(Math.cos(a) * 0.125, 0.06, Math.sin(a) * 0.125)
+    leg.rotation.y = -a
+    leg.castShadow = true
+    group.add(leg)
+    const wheel = new THREE.Mesh(new THREE.CylinderGeometry(0.022, 0.022, 0.018, 12), dark)
+    wheel.rotation.x = Math.PI / 2
+    wheel.position.set(Math.cos(a) * 0.235, 0.024, Math.sin(a) * 0.235)
+    wheel.rotation.y = -a
+    group.add(wheel)
+  }
+  for (const a of [0, Math.PI / 2, Math.PI, -Math.PI / 2]) {
+    const hook = new THREE.Mesh(new THREE.TorusGeometry(0.03, 0.005, 6, 12, Math.PI * 1.2), steel)
+    hook.position.set(Math.cos(a) * 0.04, 1.82, Math.sin(a) * 0.04)
+    hook.rotation.y = -a
+    group.add(hook)
+  }
+  const top = new THREE.Mesh(new THREE.SphereGeometry(0.016, 10, 8), steel)
+  top.position.y = 1.85
+  group.add(top)
+  return group
 }
 
 /** Cria cortina de tecido 3D com pregas wave continuas e caimento organico ate o chao. */
@@ -457,8 +639,9 @@ function createSculptedArmchair(walnutMat, shadowTex) {
     color: 0xb4a99c,
     roughness: 0.92,
   })
+  // Almofada da poltrona em verde-salvia (nada de almofada branca na cena)
   const pillowMat = new THREE.MeshStandardMaterial({
-    color: 0xe9e1d5,
+    color: 0x9aa98f,
     roughness: 0.9,
   })
 
@@ -691,10 +874,60 @@ function createModernNightstand(walnutMat, creamMat, brassMat, shadowTex) {
 }
 
 /**
- * Planta Ficus Lyrata escultural de alto padrao:
- * - Vaso UNICO em ceramica fosca torneada (LatheGeometry — zero sobreposicao/piscamento!)
- * - Suporte de madeira nogueira com 4 pes elevados (zero Z-fighting com o piso!)
- * - Galhos curvos organicos (TubeGeometry) + 34 folhas 3D curvadas com textura nervurada real!
+ * Folha de Ficus Lyrata em geometria real (ShapeGeometry), sem textura com alpha:
+ * nada de alphaTest serrilhado nem bordas "piscando" com a camera em movimento.
+ * Pivo na base do peciolo, folha crescendo em +Y, curvatura em Z.
+ */
+function createFiddleLeafGeometry() {
+  const s = new THREE.Shape()
+  // Silhueta de violino tipica do Ficus Lyrata (larga no topo, cintura no meio)
+  s.moveTo(0, 0)
+  s.bezierCurveTo(0.03, 0.02, 0.05, 0.06, 0.046, 0.1)
+  s.bezierCurveTo(0.042, 0.13, 0.072, 0.17, 0.07, 0.21)
+  s.bezierCurveTo(0.068, 0.25, 0.03, 0.27, 0, 0.262)
+  s.bezierCurveTo(-0.03, 0.27, -0.068, 0.25, -0.07, 0.21)
+  s.bezierCurveTo(-0.072, 0.17, -0.042, 0.13, -0.046, 0.1)
+  s.bezierCurveTo(-0.05, 0.06, -0.03, 0.02, 0, 0)
+  const geo = new THREE.ShapeGeometry(s, 10)
+  const pos = geo.attributes.position
+  for (let i = 0; i < pos.count; i += 1) {
+    const x = pos.getX(i)
+    const v = Math.min(1, Math.max(0, pos.getY(i) / 0.262)) // clamp: evita NaN em Math.pow
+    const u = x / 0.07
+    // Caimento ao longo do comprimento + dobra em V suave na nervura central + ondulacao
+    const droop = -Math.pow(v, 1.7) * 0.06
+    const fold = Math.abs(u) * 0.018 * Math.sin(v * Math.PI)
+    const wave = Math.sin(v * Math.PI * 4 + u * 2) * 0.0035 * Math.abs(u)
+    pos.setZ(i, droop + fold + wave)
+  }
+  geo.computeVertexNormals()
+  return geo
+}
+
+/** Pinta a geometria com uma cor solida (vertex colors) para mesclar tudo em 1 draw call. */
+function paintGeometry(geo, color) {
+  const g = geo.index ? geo.toNonIndexed() : geo
+  const c = new THREE.Color(color)
+  const arr = new Float32Array(g.attributes.position.count * 3)
+  for (let i = 0; i < arr.length; i += 3) {
+    arr[i] = c.r
+    arr[i + 1] = c.g
+    arr[i + 2] = c.b
+  }
+  g.setAttribute('color', new THREE.BufferAttribute(arr, 3))
+  // Mantem apenas atributos comuns para o merge
+  for (const key of Object.keys(g.attributes)) {
+    if (!['position', 'normal', 'color'].includes(key)) g.deleteAttribute(key)
+  }
+  return g
+}
+
+/**
+ * Planta Ficus Lyrata escultural:
+ * - Vaso em ceramica fosca torneada (LatheGeometry) sobre suporte de nogueira
+ * - Tronco e galhos organicos (TubeGeometry) + ~46 folhas reais com variacao de tom
+ * - Todas as folhas mescladas em UMA malha opaca (1 draw call, sem transparencia,
+ *   sem z-fighting e sem geometria com NaN -> fim do piscamento)
  */
 function createDesignerPlant(walnutMat, shadowTex) {
   const group = new THREE.Group()
@@ -702,125 +935,273 @@ function createDesignerPlant(walnutMat, shadowTex) {
 
   // Sombra de contato suave no piso
   const shadow = new THREE.Mesh(
-    new THREE.PlaneGeometry(0.62, 0.62),
+    new THREE.PlaneGeometry(0.7, 0.7),
     new THREE.MeshBasicMaterial({ map: shadowTex, transparent: true, depthWrite: false }),
   )
   shadow.rotation.x = -Math.PI / 2
-  shadow.position.y = 0.004
+  shadow.position.y = 0.003
+  shadow.renderOrder = -1
   group.add(shadow)
 
-  // Suporte moderno em nogueira (4 pernas elegantes + cruzeta inferior)
-  const standLegGeo = new THREE.CylinderGeometry(0.012, 0.01, 0.32, 12)
-  for (let i = 0; i < 4; i += 1) {
-    const a = (i * Math.PI) / 2 + Math.PI / 4
-    const leg = new THREE.Mesh(standLegGeo, walnutMat)
-    leg.position.set(Math.cos(a) * 0.175, 0.16, Math.sin(a) * 0.175)
-    leg.castShadow = true
-    group.add(leg)
-  }
-  const barA = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.018, 0.018), walnutMat)
-  barA.position.y = 0.105
-  barA.rotation.y = Math.PI / 4
-  group.add(barA)
-  const barB = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.016, 0.016), walnutMat)
-  barB.position.y = 0.105
-  barB.rotation.y = -Math.PI / 4
-  group.add(barB)
-
-  // Vaso ceramico UNICO sem emendas nem cilindros sobrepostos (y = 0.115 .. 0.42)
-  const potMat = new THREE.MeshStandardMaterial({
-    color: 0xeae3d8,
-    roughness: 0.42,
-    metalness: 0.03,
-  })
+  // Vaso alto em ceramica fosca off-white com aro superior (cilindro unico torneado)
+  const potMat = new THREE.MeshStandardMaterial({ color: 0xe9e2d6, roughness: 0.62, metalness: 0.0 })
   const potGeo = new THREE.LatheGeometry(
     [
-      new THREE.Vector2(0.0, 0.115),
-      new THREE.Vector2(0.115, 0.115),
-      new THREE.Vector2(0.148, 0.155),
-      new THREE.Vector2(0.166, 0.24),
-      new THREE.Vector2(0.162, 0.375),
-      new THREE.Vector2(0.168, 0.405),
-      new THREE.Vector2(0.154, 0.412),
-      new THREE.Vector2(0.145, 0.385),
+      new THREE.Vector2(0.0, 0.0),
+      new THREE.Vector2(0.118, 0.0),
+      new THREE.Vector2(0.13, 0.012),
+      new THREE.Vector2(0.15, 0.08),
+      new THREE.Vector2(0.168, 0.22),
+      new THREE.Vector2(0.176, 0.36),
+      new THREE.Vector2(0.18, 0.43),
+      new THREE.Vector2(0.172, 0.442),
+      new THREE.Vector2(0.162, 0.436),
+      new THREE.Vector2(0.158, 0.41),
     ],
-    28,
+    40,
   )
   const pot = new THREE.Mesh(potGeo, potMat)
   pot.castShadow = true
   pot.receiveShadow = true
   group.add(pot)
 
-  // Substrato/pedriscos bem abaixo da borda (sem tocar a parede interna!)
-  const soil = new THREE.Mesh(
-    new THREE.CircleGeometry(0.138, 22),
-    new THREE.MeshStandardMaterial({ color: 0x4b3b2c, roughness: 0.96 }),
-  )
-  soil.rotation.x = -Math.PI / 2
-  soil.position.y = 0.375
+  // Base de nogueira discreta sob o vaso (prato), levemente acima do piso
+  const saucer = new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.142, 0.022, 36), walnutMat)
+  saucer.position.y = 0.011
+  saucer.receiveShadow = true
+  group.add(saucer)
+  pot.position.y = 0.022
+
+  // Terra com leve volume (domo achatado), bem abaixo do aro: nada coplanar
+  const soilGeo = new THREE.SphereGeometry(0.156, 24, 8, 0, Math.PI * 2, 0, Math.PI / 2)
+  soilGeo.scale(1, 0.12, 1)
+  const soil = new THREE.Mesh(soilGeo, new THREE.MeshStandardMaterial({ color: 0x3e3024, roughness: 1 }))
+  soil.position.y = 0.022 + 0.395
   group.add(soil)
 
-  // Galhos organicos curvados (TubeGeometry) + folhas 3D curvadas com textura botanica real
-  const stemMat = new THREE.MeshStandardMaterial({ color: 0x5c4632, roughness: 0.88 })
-  const leafTex = makeBotanicalLeafTexture()
-  const leafMat = new THREE.MeshStandardMaterial({
-    map: leafTex,
-    alphaTest: 0.42,
-    roughness: 0.36,
-    metalness: 0.04,
-    side: THREE.DoubleSide,
-  })
-  const leafGeo = createCurvedLeafGeometry()
-
+  // Tronco + galhos
+  const baseY = 0.022 + 0.4
+  const stemMat = new THREE.MeshStandardMaterial({ color: 0x6a5240, roughness: 0.9 })
   const branches = [
-    [
-      new THREE.Vector3(0, 0.37, 0),
-      new THREE.Vector3(-0.02, 0.68, 0.01),
-      new THREE.Vector3(-0.05, 0.98, 0.04),
-      new THREE.Vector3(-0.03, 1.24, 0.02),
-    ],
-    [
-      new THREE.Vector3(0.02, 0.37, -0.02),
-      new THREE.Vector3(0.08, 0.62, -0.05),
-      new THREE.Vector3(0.14, 0.88, -0.09),
-      new THREE.Vector3(0.18, 1.06, -0.07),
-    ],
-    [
-      new THREE.Vector3(-0.02, 0.37, 0.02),
-      new THREE.Vector3(-0.09, 0.58, 0.07),
-      new THREE.Vector3(-0.15, 0.8, 0.11),
-    ],
-    [
-      new THREE.Vector3(0.01, 0.37, 0.03),
-      new THREE.Vector3(0.06, 0.54, 0.08),
-      new THREE.Vector3(0.11, 0.72, 0.12),
-    ],
+    { pts: [[0, 0, 0], [0.01, 0.35, 0], [-0.02, 0.7, 0.02], [0.0, 1.02, 0.01]], r: 0.014, leaves: 16 },
+    { pts: [[0, 0.3, 0], [0.09, 0.48, -0.04], [0.17, 0.66, -0.06], [0.2, 0.8, -0.03]], r: 0.009, leaves: 9 },
+    { pts: [[0, 0.24, 0], [-0.1, 0.4, 0.05], [-0.18, 0.56, 0.1], [-0.2, 0.68, 0.12]], r: 0.009, leaves: 8 },
+    { pts: [[0, 0.46, 0], [0.04, 0.6, 0.11], [0.07, 0.76, 0.18], [0.06, 0.88, 0.2]], r: 0.008, leaves: 7 },
+    { pts: [[0, 0.52, 0], [-0.06, 0.66, -0.1], [-0.1, 0.8, -0.16], [-0.09, 0.9, -0.17]], r: 0.008, leaves: 6 },
   ]
 
-  branches.forEach((pts, bIdx) => {
-    const curve = new THREE.CatmullRomCurve3(pts)
-    const tube = new THREE.Mesh(
-      new THREE.TubeGeometry(curve, 14, bIdx === 0 ? 0.011 : 0.0085, 8, false),
-      stemMat,
-    )
-    tube.castShadow = true
-    group.add(tube)
+  const leafBase = createFiddleLeafGeometry()
+  const leafParts = []
+  const stemParts = []
+  const tones = [0x2f5a35, 0x376a3d, 0x2a4f30, 0x3f7444, 0x325f38, 0x46804b]
+  const m = new THREE.Matrix4()
+  const q = new THREE.Quaternion()
+  const e = new THREE.Euler()
+  const sc = new THREE.Vector3()
+  let seed = 7
+  const rnd = () => {
+    seed = (seed * 16807) % 2147483647
+    return seed / 2147483647
+  }
 
-    const count = bIdx === 0 ? 12 : 8
-    for (let i = 0; i < count; i += 1) {
-      const t = 0.34 + (i / (count - 1)) * 0.66
+  branches.forEach((b, bIdx) => {
+    const curve = new THREE.CatmullRomCurve3(b.pts.map(([x, y, z]) => new THREE.Vector3(x, y + baseY, z)))
+    stemParts.push(paintGeometry(new THREE.TubeGeometry(curve, 16, b.r, 7, false), 0x6a5240))
+    for (let i = 0; i < b.leaves; i += 1) {
+      const t = 0.3 + (i / Math.max(1, b.leaves - 1)) * 0.7
       const p = curve.getPoint(t)
-      const leaf = new THREE.Mesh(leafGeo, leafMat)
-      leaf.position.copy(p)
-      leaf.rotation.order = 'YXZ'
-      leaf.rotation.y = i * 2.38 + bIdx * 1.4
-      leaf.rotation.x = 0.42 + (1 - t) * 0.58
-      leaf.rotation.z = Math.sin(i * 1.7) * 0.18
-      const sc = 0.72 + (1 - t * 0.28) * 0.52
-      leaf.scale.setScalar(sc)
-      group.add(leaf)
+      const tangent = curve.getTangent(t)
+      // Filotaxia espiral (angulo aureo) com folhas inclinadas para fora e para cima
+      const yaw = i * 2.39996 + bIdx * 1.1 + rnd() * 0.3
+      const tilt = 0.55 + (1 - t) * 0.55 + rnd() * 0.2
+      e.set(tilt, yaw, (rnd() - 0.5) * 0.35, 'YXZ')
+      q.setFromEuler(e)
+      const s = (0.78 + (1 - t) * 0.42 + rnd() * 0.12) * (bIdx === 0 ? 1.05 : 0.92)
+      sc.set(s, s, s)
+      // Pequeno afastamento ao longo do tangente evita folhas nascendo no mesmo ponto
+      p.addScaledVector(tangent, 0.004 * i)
+      m.compose(p, q, sc)
+      const g = paintGeometry(leafBase.clone(), tones[(i + bIdx * 2) % tones.length])
+      g.applyMatrix4(m)
+      leafParts.push(g)
     }
   })
+
+  const leaves = new THREE.Mesh(
+    mergeGeometries(leafParts, false),
+    new THREE.MeshStandardMaterial({
+      vertexColors: true,
+      roughness: 0.42,
+      metalness: 0.0,
+      side: THREE.DoubleSide,
+      envMapIntensity: 0.8,
+    }),
+  )
+  leaves.castShadow = true
+  leaves.name = 'FolhasFicus'
+  group.add(leaves)
+
+  const stems = new THREE.Mesh(mergeGeometries(stemParts, false), stemMat)
+  stems.material.vertexColors = true
+  stems.castShadow = true
+  group.add(stems)
+
+  leafBase.dispose()
+  return group
+}
+
+/** Textura sutil para o painel frontal do split (brilho vertical + linha de display). */
+function makeSplitFrontTexture() {
+  const canvas = document.createElement('canvas')
+  canvas.width = 512
+  canvas.height = 128
+  const ctx = canvas.getContext('2d')
+  const g = ctx.createLinearGradient(0, 0, 0, 128)
+  g.addColorStop(0, '#ffffff')
+  g.addColorStop(0.55, '#f6f7f8')
+  g.addColorStop(1, '#e7e9ec')
+  ctx.fillStyle = g
+  ctx.fillRect(0, 0, 512, 128)
+  // Leve reflexo horizontal
+  const sheen = ctx.createLinearGradient(0, 18, 0, 46)
+  sheen.addColorStop(0, 'rgba(255,255,255,0)')
+  sheen.addColorStop(0.5, 'rgba(255,255,255,0.65)')
+  sheen.addColorStop(1, 'rgba(255,255,255,0)')
+  ctx.fillStyle = sheen
+  ctx.fillRect(0, 18, 512, 28)
+  const tex = new THREE.CanvasTexture(canvas)
+  tex.colorSpace = THREE.SRGBColorSpace
+  return tex
+}
+
+/**
+ * Ar-condicionado split hi-wall moderno, montado na parede (frente para +X local).
+ * Corpo com perfil arredondado (ExtrudeGeometry chanfrada), painel frontal, grelha
+ * superior, saida de ar com aletas horizontais, defletor inclinado, display e LED.
+ * Largura 0.9 m x altura 0.29 m x profundidade 0.21 m (proporcoes de um 12.000 BTU).
+ */
+function createSplitAirConditioner() {
+  const group = new THREE.Group()
+  group.name = 'ArCondicionadoSplit'
+
+  const W = 0.9
+  const H = 0.29
+  const D = 0.21
+
+  const bodyMat = new THREE.MeshStandardMaterial({ color: 0xf7f8f9, roughness: 0.34, metalness: 0.02 })
+  const frontMat = new THREE.MeshStandardMaterial({
+    map: makeSplitFrontTexture(),
+    roughness: 0.22,
+    metalness: 0.02,
+  })
+  const darkMat = new THREE.MeshStandardMaterial({ color: 0x2b2f33, roughness: 0.7 })
+  const ventMat = new THREE.MeshStandardMaterial({ color: 0xdfe3e7, roughness: 0.45 })
+
+  // Perfil lateral arredondado (x = profundidade a partir da parede, y = altura)
+  const profile = new THREE.Shape()
+  const r = 0.05
+  profile.moveTo(0, 0.03)
+  profile.lineTo(0, H)
+  profile.lineTo(D - r - 0.02, H)
+  profile.quadraticCurveTo(D - 0.004, H, D, H - r)
+  profile.lineTo(D, 0.09)
+  profile.quadraticCurveTo(D, 0.012, D - 0.07, 0.0)
+  profile.lineTo(0.05, 0.0)
+  profile.quadraticCurveTo(0.0, 0.0, 0, 0.03)
+  const bodyGeo = new THREE.ExtrudeGeometry(profile, {
+    depth: W - 0.024,
+    bevelEnabled: true,
+    bevelThickness: 0.012,
+    bevelSize: 0.01,
+    bevelSegments: 4,
+    curveSegments: 10,
+  })
+  bodyGeo.translate(0, 0, -(W - 0.024) / 2)
+  const body = new THREE.Mesh(bodyGeo, bodyMat)
+  body.castShadow = true
+  body.receiveShadow = true
+  group.add(body)
+
+  // Painel frontal levemente saltado (2 mm a frente do corpo -> sem z-fighting)
+  const panel = new THREE.Mesh(new THREE.BoxGeometry(0.008, H - 0.11, W - 0.03), frontMat)
+  panel.position.set(D + 0.009, H - 0.055 - (H - 0.11) / 2 + 0.005, 0)
+  panel.castShadow = true
+  group.add(panel)
+
+  // Frisos sutis separando painel e corpo
+  const seam = new THREE.Mesh(new THREE.BoxGeometry(0.004, 0.004, W - 0.03), ventMat)
+  seam.position.set(D + 0.012, 0.104, 0)
+  group.add(seam)
+
+  // Grelha de entrada de ar no topo (ripas finas)
+  for (let i = 0; i < 7; i += 1) {
+    const slat = new THREE.Mesh(new THREE.BoxGeometry(0.012, 0.004, W - 0.1), ventMat)
+    slat.position.set(0.04 + i * 0.019, H + 0.0125, 0)
+    group.add(slat)
+  }
+
+  // Saida de ar inferior: fenda escura recuada + aletas horizontais
+  const outlet = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.006, W - 0.11), darkMat)
+  outlet.position.set(D - 0.045, -0.009, 0)
+  group.add(outlet)
+  for (let i = 0; i < 9; i += 1) {
+    const fin = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.012, 0.003), ventMat)
+    fin.position.set(D - 0.045, -0.006, -(W - 0.16) / 2 + i * ((W - 0.16) / 8))
+    group.add(fin)
+  }
+
+  // Defletor (flap) curvo inclinado levemente para baixo, como em operacao
+  const flapGeo = new THREE.CylinderGeometry(0.16, 0.16, W - 0.12, 24, 1, true, Math.PI * 0.42, Math.PI * 0.2)
+  flapGeo.rotateX(Math.PI / 2)
+  const flap = new THREE.Mesh(
+    flapGeo,
+    new THREE.MeshStandardMaterial({ color: 0xf3f4f6, roughness: 0.3, side: THREE.DoubleSide }),
+  )
+  flap.position.set(D - 0.19, 0.115, 0)
+  flap.rotation.z = -0.12
+  flap.castShadow = true
+  group.add(flap)
+
+  // Display discreto + LED azul de funcionamento
+  const display = new THREE.Mesh(
+    new THREE.BoxGeometry(0.003, 0.026, 0.07),
+    new THREE.MeshStandardMaterial({ color: 0x1d2228, roughness: 0.2, metalness: 0.1 }),
+  )
+  display.position.set(D + 0.0145, 0.135, W / 2 - 0.12)
+  group.add(display)
+  const digitMat = new THREE.MeshBasicMaterial({ color: 0x9fd8ff })
+  for (const dz of [-0.012, 0.012]) {
+    const digit = new THREE.Mesh(new THREE.BoxGeometry(0.002, 0.014, 0.012), digitMat)
+    digit.position.set(D + 0.0165, 0.135, W / 2 - 0.12 + dz)
+    group.add(digit)
+  }
+  const led = new THREE.Mesh(new THREE.SphereGeometry(0.0045, 10, 8), new THREE.MeshBasicMaterial({ color: 0x55c8ff }))
+  led.position.set(D + 0.016, 0.135, W / 2 - 0.175)
+  group.add(led)
+
+  // Logo sutil em baixo-relevo cinza claro
+  const logo = new THREE.Mesh(new THREE.BoxGeometry(0.002, 0.012, 0.06), ventMat)
+  logo.position.set(D + 0.0145, 0.2, 0)
+  group.add(logo)
+
+  // Sombra de contato macia na parede logo abaixo e atras do aparelho
+  const wallShadow = new THREE.Mesh(
+    new THREE.PlaneGeometry(W + 0.22, H + 0.26),
+    new THREE.MeshBasicMaterial({
+      map: makeSoftShadowTexture(0.6, 0.22),
+      transparent: true,
+      depthWrite: false,
+    }),
+  )
+  wallShadow.rotation.y = Math.PI / 2
+  wallShadow.position.set(0.002, H / 2 - 0.06, 0)
+  group.add(wallShadow)
+
+  // Canaleta branca discreta descendo pela lateral ate o rodape? Mantem limpo: so um trecho curto
+  const duct = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.22, 0.05), bodyMat)
+  duct.position.set(0.016, H + 0.11 + 0.02, -W / 2 + 0.08)
+  duct.castShadow = true
+  group.add(duct)
 
   return group
 }
@@ -943,7 +1324,7 @@ export function buildCozyBedroom() {
   // Painel horizontal amadeirado com fita de LED ambar quente embutida (assinatura da foto YR!)
   const panelW = 2.68
   const panelH = 0.84
-  const panelY = 1.46
+  const panelY = 1.36 // levemente mais baixo para abrir espaco ao split acima
   const panelZ = 0.16
 
   // Moldura de LED quente recuada (logo atras do painel de madeira)
@@ -1011,7 +1392,7 @@ export function buildCozyBedroom() {
 
   const outdoorView = new THREE.Mesh(
     new THREE.PlaneGeometry(winW - 0.04, winH - 0.04),
-    new THREE.MeshBasicMaterial({ map: makePanoramicWindowViewTexture() }),
+    new THREE.MeshBasicMaterial({ map: makePanoramicWindowViewTexture(), fog: false }),
   )
   outdoorView.position.set(winCenterX, winCenterY, wallZ + 0.01)
   windowWallGroup.add(outdoorView)
@@ -1027,7 +1408,7 @@ export function buildCozyBedroom() {
       opacity: 0.1,
     }),
   )
-  glassPane.position.set(winCenterX, winCenterY, wallZ + 0.026)
+  glassPane.position.set(winCenterX, winCenterY, wallZ + 0.042)
   windowWallGroup.add(glassPane)
 
   // Esquadria slim contemporanea em aluminio fosco
@@ -1081,9 +1462,50 @@ export function buildCozyBedroom() {
   armchair.rotation.y = 0.72
   room.add(armchair)
 
+  // Planta afastada das cortinas (antes as folhas atravessavam o voal translucido)
   const plant = createDesignerPlant(walnutMat, shadowTex)
-  plant.position.set(1.56, 0, -1.22)
+  plant.position.set(1.08, 0, -1.2)
+  plant.rotation.y = 0.6
   room.add(plant)
+
+  // Ar-condicionado split na parede da cabeceira, centralizado acima do painel de LED
+  const airConditioner = createSplitAirConditioner()
+  airConditioner.position.set(wallX + 0.002, 1.92, -0.62)
+  headWallGroup.add(airConditioner)
+
+  // Passaros voando no ceu da janela (entre a vista e o vidro)
+  const flock = createBirdFlock(
+    winCenterX - winW / 2 + 0.06,
+    winCenterX + winW / 2 - 0.06,
+    1.6,
+    2.25,
+    wallZ + 0.024,
+  )
+  windowWallGroup.add(flock.group)
+
+  // Relogio de parede no trecho livre da parede da janela (acima da poltrona)
+  const clock = createWallClock(walnutMat)
+  clock.group.position.set(-1.12, 2.08, wallZ + 0.02)
+  windowWallGroup.add(clock.group)
+
+  // Quadro decorativo na parede da janela, lado direito
+  const art = createFramedArt(walnutMat)
+  art.position.set(2.5, 1.5, wallZ + 0.017)
+  windowWallGroup.add(art)
+
+  // Suporte de soro discreto junto a cabeceira (home care)
+  const ivStand = createIvStand()
+  ivStand.position.set(-0.98, 0, -0.86)
+  room.add(ivStand)
+
+  let lastClock = 0
+  function updateAmbient(time) {
+    flock.update(time)
+    if (time - lastClock > 0.25) {
+      lastClock = time
+      clock.update()
+    }
+  }
 
   function updateVisibility(camera) {
     headWallGroup.visible = camera.position.x > wallX + 0.08
@@ -1096,5 +1518,5 @@ export function buildCozyBedroom() {
     bedContactShadow.material.opacity = 0.92 - lift01 * 0.24
   }
 
-  return { room, updateVisibility, updateBedShadow }
+  return { room, updateVisibility, updateBedShadow, updateAmbient }
 }

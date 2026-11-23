@@ -96,6 +96,9 @@ function BedStage3D({ onContact }) {
   const [arPromptHighlight, setArPromptHighlight] = useState(false)
 
   const iosArLinkRef = useRef(null)
+  const modelViewerRef = useRef(null)
+  const [androidAr, setAndroidAr] = useState(false)
+  const [arSessionActive, setArSessionActive] = useState(false)
   const livePoseRef = useRef({ ...REST_POSE })
   const draggingKeyRef = useRef(null)
   const backInputRef = useRef(null)
@@ -105,6 +108,37 @@ function BedStage3D({ onContact }) {
   const lastHeightCmRef = useRef(Math.round(liftToHeightMeters(REST_POSE.lift) * 100))
 
   const currentModel = AR_MODELS[bedMode] || AR_MODELS.eletrica
+
+  // Android: carrega o <model-viewer> (Google, auto-hospedado em /vendor) so neste aparelho,
+  // para abrir AR por WebXR no Chrome ou pelo Scene Viewer nativo, com fallback seguro.
+  useEffect(() => {
+    if (detectArPlatform() !== 'android') return
+    setAndroidAr(true)
+    if (window.customElements?.get('model-viewer')) return
+    if (document.querySelector('script[data-model-viewer]')) return
+    const script = document.createElement('script')
+    script.type = 'module'
+    script.src = '/vendor/model-viewer-4.4.0.min.js'
+    script.dataset.modelViewer = '1'
+    document.head.appendChild(script)
+  }, [])
+
+  // Acompanha o estado da sessao AR do model-viewer (mostra o elemento so durante o AR)
+  useEffect(() => {
+    const mv = modelViewerRef.current
+    if (!androidAr || !mv) return undefined
+    const onStatus = (event) => {
+      const status = event.detail?.status
+      if (status === 'session-started' || status === 'object-placed') setArSessionActive(true)
+      if (status === 'not-presenting') setArSessionActive(false)
+      if (status === 'failed') {
+        setArSessionActive(false)
+        setArModalOpen(true)
+      }
+    }
+    mv.addEventListener('ar-status', onStatus)
+    return () => mv.removeEventListener('ar-status', onStatus)
+  }, [androidAr])
 
   // Monta o motor 3D apenas no cliente (mantem SSR/prerender instantaneo)
   useEffect(() => {
@@ -192,13 +226,21 @@ function BedStage3D({ onContact }) {
       return
     }
     if (platform === 'android' && typeof window !== 'undefined') {
+      // 1) model-viewer pronto: WebXR no Chrome -> Scene Viewer -> erro tratado (abre o modal)
+      const mv = modelViewerRef.current
+      if (mv && window.customElements?.get('model-viewer') && mv.canActivateAR) {
+        mv.activateAR().catch(() => setArModalOpen(true))
+        return
+      }
+      // 2) Ainda carregando: intent oficial do Scene Viewer pelo app Google (ar_preferred),
+      //    com volta para esta pagina se o aparelho nao suportar.
       const origin = window.location.origin
       const isLocal = ['localhost', '127.0.0.1'].includes(window.location.hostname)
       if (!isLocal) {
         const glbUrl = encodeURIComponent(`${origin}${currentModel.glb}`)
         const title = encodeURIComponent(currentModel.title)
-        const fallback = encodeURIComponent(window.location.href)
-        window.location.href = `intent://arvr.google.com/scene-viewer/1.0?file=${glbUrl}&mode=ar_preferred&resizable=false&title=${title}#Intent;scheme=https;package=com.google.ar.core;action=android.intent.action.VIEW;S.browser_fallback_url=${fallback};end;`
+        const fallback = encodeURIComponent(`${origin}${window.location.pathname}?ar=${bedMode}`)
+        window.location.href = `intent://arvr.google.com/scene-viewer/1.0?file=${glbUrl}&mode=ar_preferred&resizable=false&title=${title}#Intent;scheme=https;package=com.google.android.googlequicksearchbox;action=android.intent.action.VIEW;S.browser_fallback_url=${fallback};end;`
         return
       }
     }
@@ -275,6 +317,28 @@ function BedStage3D({ onContact }) {
             <small>Ver no quarto</small>
           </span>
         </button>
+
+        {/* Android: visualizador AR do Google (WebXR / Scene Viewer), invisivel fora da sessao AR */}
+        {androidAr && (
+          <model-viewer
+            ref={modelViewerRef}
+            className={`herobed-ar-viewer ${arSessionActive ? 'is-presenting' : ''}`}
+            src={currentModel.glb}
+            ios-src={currentModel.usdz}
+            alt={currentModel.title}
+            ar={true}
+            ar-modes="webxr scene-viewer quick-look"
+            ar-scale="fixed"
+            ar-placement="floor"
+            loading="eager"
+            reveal="auto"
+            shadow-intensity="1"
+            interaction-prompt="none"
+            aria-hidden={arSessionActive ? undefined : 'true'}
+          >
+            <span slot="ar-button" hidden />
+          </model-viewer>
+        )}
 
         {/* Link nativo oculto para Apple AR Quick Look (iOS exige <a rel="ar"> com <img>) */}
         <a
